@@ -2,7 +2,7 @@
 
 An Open Hardware design for Aquarium LED lighting.
 
-For more details, see: [1][the ReefCentral thread] and [2][the blog].
+For more details, see: [the ReefCentral thread][1] and [the blog][2].
 
 ## Emitter Board
 
