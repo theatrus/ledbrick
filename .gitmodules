@@ -1,0 +1,3 @@
+[submodule "firmware/ksdk"]
+	path = firmware/ksdk
+	url = https://github.com/theatrus/ksdk.git
