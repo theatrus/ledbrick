@@ -47,10 +47,17 @@ $(abspath ../../../../../../components/drivers_nrf/uart/app_uart.c) \
 $(abspath ../../../../../../components/drivers_nrf/hal/nrf_delay.c) \
 $(abspath ../../../../../../components/drivers_nrf/common/nrf_drv_common.c) \
 $(abspath ../../../../../../components/drivers_nrf/gpiote/nrf_drv_gpiote.c) \
+$(abspath ../../../../../../components/drivers_nrf/ppi/nrf_drv_ppi.c) \
+$(abspath ../../../../../../components/drivers_nrf/timer/nrf_drv_timer.c) \
+$(abspath ../../../../../../components/drivers_nrf/twi_master/incubated/twi_hw_master.c) \
 $(abspath ../../../../../../components/drivers_nrf/pstorage/pstorage.c) \
 $(abspath ../../../../../bsp/bsp.c) \
 $(abspath ../../../../../bsp/bsp_btn_ble.c) \
 $(abspath ../../../main.c) \
+$(abspath ../../../ble_lbs.c) \
+$(abspath ../../../pca9685.c) \
+$(abspath ../../../fan_monitor.c) \
+$(abspath ../../../error_handlers.c) \
 $(abspath ../../../../../../components/ble/common/ble_advdata.c) \
 $(abspath ../../../../../../components/ble/ble_advertising/ble_advertising.c) \
 $(abspath ../../../../../../components/ble/common/ble_conn_params.c) \
@@ -83,6 +90,9 @@ INC_PATHS += -I$(abspath ../../../../../../components/softdevice/common/softdevi
 INC_PATHS += -I$(abspath ../../../../../../components/libraries/timer)
 INC_PATHS += -I$(abspath ../../../../../../components/drivers_nrf/hal)
 INC_PATHS += -I$(abspath ../../../../../../components/libraries/button)
+INC_PATHS += -I$(abspath ../../../../../../components/drivers_nrf/twi_master/incubated)
+INC_PATHS += -I$(abspath ../../../../../../components/drivers_nrf/ppi)
+INC_PATHS += -I$(abspath ../../../../../../components/drivers_nrf/timer)
 
 OBJECT_DIRECTORY = _build
 LISTING_DIRECTORY = $(OBJECT_DIRECTORY)
@@ -100,7 +110,7 @@ CFLAGS += -DS110
 CFLAGS += -DBLE_STACK_SUPPORT_REQD
 CFLAGS += -mcpu=cortex-m0
 CFLAGS += -mthumb -mabi=aapcs --std=gnu99
-CFLAGS += -Wall -Werror -O3
+CFLAGS += -Wall -Werror -Os
 CFLAGS += -mfloat-abi=soft
 # keep every function in separate section. This will allow linker to dump unused functions
 CFLAGS += -ffunction-sections -fdata-sections -fno-strict-aliasing

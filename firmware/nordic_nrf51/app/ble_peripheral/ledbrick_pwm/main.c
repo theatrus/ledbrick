@@ -26,6 +26,7 @@
 
 #include <stdint.h>
 #include <string.h>
+#include <inttypes.h>
 #include "nordic_common.h"
 #include "nrf.h"
 #include "app_error.h"
@@ -123,8 +124,8 @@ static void gap_params_init(void)
     APP_ERROR_CHECK(err_code);
 
     /* YOUR_JOB: Use an appearance value matching the application's use case.
-    err_code = sd_ble_gap_appearance_set(BLE_APPEARANCE_);
-    APP_ERROR_CHECK(err_code); */
+       err_code = sd_ble_gap_appearance_set(BLE_APPEARANCE_);
+       APP_ERROR_CHECK(err_code); */
 
     memset(&gap_conn_params, 0, sizeof(gap_conn_params));
 
@@ -193,51 +194,51 @@ static void conn_params_init(void)
 }
 
 static void led_write_all(uint8_t power) {
-	for (int i = 0; i < 16; i++) {
-		pca9685_write_led(i, 0x0, power << 4);
-	}
+    for (int i = 0; i < 16; i++) {
+        pca9685_write_led(i, 0x0, power << 4);
+    }
 }
 
 static void led_write_handler(ble_lbs_t * p_lbs, uint8_t led, uint8_t power) {
-	nrf_gpio_pin_toggle(LEDBUTTON_LED_PIN_NO);
-	if (error_any()) {
-		led_write_all(0);
-		return;
-	}
-	
-	if (led == 0xFF) { // All LEDs
-		led_write_all(power);
-	} else if (led == 0xFE) {
-		pca9685_enable(power);
-	} else {
-		pca9685_write_led(led, 0x0, power << 4);
-	}
+    nrf_gpio_pin_toggle(LEDBUTTON_LED_PIN_NO);
+    if (error_any()) {
+        led_write_all(0);
+        return;
+    }
+
+    if (led == 0xFF) { // All LEDs
+        led_write_all(power);
+    } else if (led == 0xFE) {
+        pca9685_enable(power);
+    } else {
+        pca9685_write_led(led, 0x0, power << 4);
+    }
 }
 
 static void polled_event_update(void* p) {
-	uint16_t rpm = fantach_rpm();
-	uint8_t rpma[2] = { rpm >> 8, rpm & 0xFF };
-	ble_lbs_update_fan(&m_lbs, rpma);
-	
-	if (error_any()) {
-		led_write_all(0);
-	}
+    uint16_t rpm = fantach_rpm();
+    uint8_t rpma[2] = { rpm >> 8, rpm & 0xFF };
+    ble_lbs_update_fan(&m_lbs, rpma);
+
+    if (error_any()) {
+        led_write_all(0);
+    }
 }
 
 
 static void application_timers_start(void) {
-	app_timer_create(&m_apptimer_id, APP_TIMER_MODE_REPEATED, polled_event_update);
-	app_timer_start(m_apptimer_id, APP_TIMER_TICKS(5000, 0), NULL);
+    app_timer_create(&m_apptimer_id, APP_TIMER_MODE_REPEATED, polled_event_update);
+    app_timer_start(m_apptimer_id, APP_TIMER_TICKS(5000, 0), NULL);
 }
 
 
 static void services_init(void)
 {
-   uint32_t err_code;
+    uint32_t err_code;
     ble_lbs_init_t init;
-    
+
     init.led_write_handler = led_write_handler;
-    
+
     err_code = ble_lbs_init(&m_lbs, &init);
     APP_ERROR_CHECK(err_code);
 }
@@ -274,15 +275,15 @@ static void on_adv_evt(ble_adv_evt_t ble_adv_evt)
 
     switch (ble_adv_evt)
     {
-        case BLE_ADV_EVT_FAST:
-            err_code = bsp_indication_set(BSP_INDICATE_ADVERTISING);
-            APP_ERROR_CHECK(err_code);
-            break;
-        case BLE_ADV_EVT_IDLE:
-            sleep_mode_enter();
-            break;
-        default:
-            break;
+    case BLE_ADV_EVT_FAST:
+        err_code = bsp_indication_set(BSP_INDICATE_ADVERTISING);
+        APP_ERROR_CHECK(err_code);
+        break;
+    case BLE_ADV_EVT_IDLE:
+        sleep_mode_enter();
+        break;
+    default:
+        break;
     }
 }
 
@@ -296,20 +297,20 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
     uint32_t err_code;
 
     switch (p_ble_evt->header.evt_id)
-            {
-        case BLE_GAP_EVT_CONNECTED:
-            err_code = bsp_indication_set(BSP_INDICATE_CONNECTED);
-            APP_ERROR_CHECK(err_code);
-            m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
-            break;
+    {
+    case BLE_GAP_EVT_CONNECTED:
+        err_code = bsp_indication_set(BSP_INDICATE_CONNECTED);
+        APP_ERROR_CHECK(err_code);
+        m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
+        break;
 
-        case BLE_GAP_EVT_DISCONNECTED:
-            m_conn_handle = BLE_CONN_HANDLE_INVALID;
-            break;
-    
-        default:
-            // No implementation needed.
-            break;
+    case BLE_GAP_EVT_DISCONNECTED:
+        m_conn_handle = BLE_CONN_HANDLE_INVALID;
+        break;
+
+    default:
+        // No implementation needed.
+        break;
     }
 }
 
@@ -328,7 +329,7 @@ static void ble_evt_dispatch(ble_evt_t * p_ble_evt)
     bsp_btn_ble_on_ble_evt(p_ble_evt);
     on_ble_evt(p_ble_evt);
     ble_advertising_on_ble_evt(p_ble_evt);
-		ble_lbs_on_ble_evt(&m_lbs, p_ble_evt);
+    ble_lbs_on_ble_evt(&m_lbs, p_ble_evt);
 
 }
 
@@ -389,28 +390,28 @@ void bsp_event_handler(bsp_event_t event)
     uint32_t err_code;
     switch (event)
     {
-        case BSP_EVENT_SLEEP:
-            sleep_mode_enter();
-            break;
+    case BSP_EVENT_SLEEP:
+        sleep_mode_enter();
+        break;
 
-        case BSP_EVENT_DISCONNECT:
-            err_code = sd_ble_gap_disconnect(m_conn_handle, BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
-            if (err_code != NRF_ERROR_INVALID_STATE)
-            {
-                APP_ERROR_CHECK(err_code);
-            }
-            break;
+    case BSP_EVENT_DISCONNECT:
+        err_code = sd_ble_gap_disconnect(m_conn_handle, BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
+        if (err_code != NRF_ERROR_INVALID_STATE)
+        {
+            APP_ERROR_CHECK(err_code);
+        }
+        break;
 
-        case BSP_EVENT_WHITELIST_OFF:
-            err_code = ble_advertising_restart_without_whitelist();
-            if (err_code != NRF_ERROR_INVALID_STATE)
-            {
-                APP_ERROR_CHECK(err_code);
-            }
-            break;
+    case BSP_EVENT_WHITELIST_OFF:
+        err_code = ble_advertising_restart_without_whitelist();
+        if (err_code != NRF_ERROR_INVALID_STATE)
+        {
+            APP_ERROR_CHECK(err_code);
+        }
+        break;
 
-        default:
-            break;
+    default:
+        break;
     }
 }
 
@@ -477,11 +478,11 @@ static void advertising_init(void)
     uint32_t      err_code;
     ble_advdata_t advdata;
 
-	  //ble_uuid_t m_adv_uuids[] = {{BLE_UUID_DEVICE_INFORMATION_SERVICE, BLE_UUID_TYPE_BLE}, {LBS_UUID_SERVICE, m_lbs.uuid_type}};
-	 	//ble_uuid_t m_adv_uuids[] = {{BLE_UUID_DEVICE_INFORMATION_SERVICE, BLE_UUID_TYPE_BLE}};
-		ble_uuid_t m_adv_uuids[] = {{BLE_UUID_DEVICE_INFORMATION_SERVICE, BLE_UUID_TYPE_BLE}, {LBS_UUID_SERVICE, BLE_UUID_TYPE_BLE}}; /**< Universally unique service identifiers. */
+    //ble_uuid_t m_adv_uuids[] = {{BLE_UUID_DEVICE_INFORMATION_SERVICE, BLE_UUID_TYPE_BLE}, {LBS_UUID_SERVICE, m_lbs.uuid_type}};
+    //ble_uuid_t m_adv_uuids[] = {{BLE_UUID_DEVICE_INFORMATION_SERVICE, BLE_UUID_TYPE_BLE}};
+    ble_uuid_t m_adv_uuids[] = {{BLE_UUID_DEVICE_INFORMATION_SERVICE, BLE_UUID_TYPE_BLE}, {LBS_UUID_SERVICE, BLE_UUID_TYPE_BLE}}; /**< Universally unique service identifiers. */
 
-	
+
     // Build advertising data struct to pass into @ref ble_advertising_init.
     memset(&advdata, 0, sizeof(advdata));
 
@@ -510,7 +511,7 @@ static void buttons_leds_init(bool * p_erase_bonds)
     bsp_event_t startup_event;
 
     uint32_t err_code = bsp_init(BSP_INIT_LED | BSP_INIT_BUTTONS,
-                                 APP_TIMER_TICKS(100, APP_TIMER_PRESCALER), 
+                                 APP_TIMER_TICKS(100, APP_TIMER_PRESCALER),
                                  bsp_event_handler);
     APP_ERROR_CHECK(err_code);
 
@@ -532,11 +533,11 @@ static void power_manage(void)
 
 void app_error_handler(uint32_t error_code, uint32_t line_num, const uint8_t * p_file_name)
 {
-	for(;;) {
-		printf("%d", error_code);
-		printf("%d", line_num);
-		printf("%s", p_file_name);
-	}
+    for(;;) {
+        printf( "%"PRIu32"", error_code);
+        printf( "%"PRIu32"", line_num);
+        printf( "%s", p_file_name);
+    }
 }
 
 /**@brief Function for application main entry.
@@ -545,38 +546,38 @@ int main(void)
 {
     uint32_t err_code;
     bool erase_bonds;
-	
+
 
     // Initialize.
     timers_init();
-	
-	  error_init();
-	
+
+    error_init();
+
     buttons_leds_init(&erase_bonds);
-	
-		twi_master_init();
-	
-	  pca9685_init(); 
-	
-	  fantach_init();
-	
+
+    twi_master_init();
+
+    pca9685_init();
+
+    fantach_init();
+
     ble_stack_init();
-	
+
     services_init();
-	
-	  device_manager_init(erase_bonds);
-	
+
+    device_manager_init(erase_bonds);
+
     gap_params_init();
-	  
+
     advertising_init();
 
     conn_params_init();
 
     // Start execution.
     application_timers_start();
-	
+
     err_code = ble_advertising_start(BLE_ADV_MODE_FAST);
-		
+
     APP_ERROR_CHECK(err_code);
 
     // Enter main loop.
