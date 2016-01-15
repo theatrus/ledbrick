@@ -22,6 +22,6 @@ An 8 channel 24VIN + 12VOUT Fan LED dimmer board powered by a Nordic nRF51 basic
 [1]: http://www.reefcentral.com/forums/showthread.php?t=2477205
 [2]: http://yannramin.com/elec/ledbrick-pt1/
 [3]: http://yannramin.com/images/ledbrick/ledbrick-board-top-sm.jpg
-[4]: https://raw.githubusercontent.com/theatrus/ledbrick/pwm/board.png
+[4]: https://raw.githubusercontent.com/theatrus/ledbrick/master/pwm/board.png
 [5]: https://github.com/theatrus/ledbrick/tree/master/firmware
 [6]: https://github.com/theatrus/ledbrick/tree/master/pwm/0.2/
