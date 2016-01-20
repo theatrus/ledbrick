@@ -1,4 +1,2 @@
-GNU_INSTALL_ROOT ?= /usr/local/Cellar/gcc-arm-none-eabi/20140805/
-GNU_VERSION := 4.8.3
 GNU_PREFIX := arm-none-eabi
 
