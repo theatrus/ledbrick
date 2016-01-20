@@ -56,6 +56,7 @@ $(abspath ../../../../../bsp/bsp_btn_ble.c) \
 $(abspath ../../../main.c) \
 $(abspath ../../../ble_lbs.c) \
 $(abspath ../../../pca9685.c) \
+$(abspath ../../../mcp9808.c) \
 $(abspath ../../../fan_monitor.c) \
 $(abspath ../../../error_handlers.c) \
 $(abspath ../../../../../../components/ble/common/ble_advdata.c) \
