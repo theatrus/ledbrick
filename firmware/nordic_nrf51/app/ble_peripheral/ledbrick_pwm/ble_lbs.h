@@ -10,6 +10,7 @@
 #define LBS_UUID_SERVICE 0x1523
 #define LBS_UUID_LED_CHAR 0x1525
 #define LBS_UUID_FAN_CHAR 0x1524
+#define LBS_UUID_TEMP_CHAR 0x1526
 
 // Forward declaration of the ble_lbs_t type. 
 typedef struct ble_lbs_s ble_lbs_t;
@@ -25,7 +26,8 @@ typedef struct ble_lbs_s
 {
     uint16_t                    service_handle;
     ble_gatts_char_handles_t    led_char_handles;
-    ble_gatts_char_handles_t    button_char_handles;
+    ble_gatts_char_handles_t    fan_char_handles;
+	  ble_gatts_char_handles_t    temp_char_handles;
     uint8_t                     uuid_type;
     uint16_t                    conn_handle;
     ble_lbs_led_write_handler_t led_write_handler;
@@ -36,6 +38,8 @@ uint32_t ble_lbs_init(ble_lbs_t * p_lbs, const ble_lbs_init_t * p_lbs_init);
 void ble_lbs_on_ble_evt(ble_lbs_t * p_lbs, ble_evt_t * p_ble_evt);
 
 uint32_t ble_lbs_update_fan(ble_lbs_t* p_lbs, uint8_t* rpm);
+uint32_t ble_lbs_update_temp(ble_lbs_t* p_lbs, uint8_t* temp);
+
 
 #endif // BLE_LBS_H__
 

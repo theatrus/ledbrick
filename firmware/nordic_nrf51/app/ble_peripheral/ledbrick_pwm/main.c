@@ -48,6 +48,7 @@
 #include "ble_lbs.h"
 #include "twi_master.h"
 #include "pca9685.h"
+#include "mcp9808.h"
 #include "fan_monitor.h"
 #include "error_handlers.h"
 
@@ -219,6 +220,9 @@ static void polled_event_update(void* p) {
     uint16_t rpm = fantach_rpm();
     uint8_t rpma[2] = { rpm >> 8, rpm & 0xFF };
     ble_lbs_update_fan(&m_lbs, rpma);
+		uint16_t temp = mcp9808_temp();
+		uint8_t tempa[2] = { temp >> 8, temp & 0XFF };
+		ble_lbs_update_temp(&m_lbs, tempa);
 
     if (error_any()) {
         led_write_all(0);
