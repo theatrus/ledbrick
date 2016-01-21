@@ -4,6 +4,8 @@ addons:
       - debian-sid
     packages:
       - gcc-arm-none-eabi
+      - libnewlib-dev
+
 sudo: false
 script: cd firmware/nordic_nrf51/app/ble_peripheral/ledbrick_pwm/pca10028/s110/armgcc && GNU_INSTALL_PREFIX=/usr make
 language: c
