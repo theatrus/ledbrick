@@ -34,7 +34,7 @@ void pca9685_write_led(uint8_t led, int on, int off) {
 	
 	on += (20 * led);
 	off += (20 * led);
-	if (off >= 0xFFFE) off = 0xFFFE;
+	if (off >= 0xFFFE) off = 0xFFFF;
 	
 	obuf[0] = REG_LED0 + 4*led;
 	obuf[1] = on & 0xFF;
@@ -62,7 +62,7 @@ void pca9685_init(void) {
 	
 	// Do a bus reset
 	pca9685_bus_reset();
-  pca9685_write(REG_PRESCALE, 0x15);
+  pca9685_write(REG_PRESCALE, 0x17);
 
 	pca9685_write(REG_MODE1, (1 << 7) | 1);
 	for(;;) {

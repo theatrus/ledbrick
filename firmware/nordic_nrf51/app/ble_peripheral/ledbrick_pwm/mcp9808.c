@@ -17,10 +17,10 @@ uint16_t mcp9808_temp(void) {
 	
 	ibuf[0] &= 0x1f; // Clear flags
 	
-	return ibuf[0] << 8 | ibuf[1];
-	//if (ibuf[0] & 0x10) {
-	//	return 256 - (((ibuf[0] & 0x0f) * 16) + (ibuf[1] / 16));
-	//} else {
-	//	return (ibuf[0] * 16) + (ibuf[1] / 16);
-	//}
+	//return ibuf[0] << 8 | ibuf[1];
+	if (ibuf[0] & 0x10) {
+		return 256 - (((ibuf[0] & 0x0f) * 16) + (ibuf[1] / 16));
+	} else {
+		return (ibuf[0] * 16) + (ibuf[1] / 16);
+	}
 }

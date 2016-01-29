@@ -7,8 +7,10 @@
 #include <nrf_drv_ppi.h>
 #include <nrf_drv_timer.h>
 #include "error_handlers.h"
+#include "fan_monitor.h"
 
 #define PIN_FANTACH 8
+#define PIN_FANCTRL 9
 
 const nrf_drv_timer_t timer2 = NRF_DRV_TIMER_INSTANCE(2);
 nrf_ppi_channel_t ppi_channel;
@@ -16,20 +18,36 @@ nrf_ppi_channel_t ppi_channel2;
 
 nrf_drv_gpiote_in_config_t gpio_config = GPIOTE_CONFIG_IN_SENSE_HITOLO(true);
 
+static bool fan_enabled = true;
+
 static void pin_handler(nrf_drv_gpiote_pin_t pin, nrf_gpiote_polarity_t action) {
  // Not used
 }
 
 void timer_dummy_handler(nrf_timer_event_t event_type, void * p_context){
-	if (event_type == NRF_TIMER_EVENT_COMPARE1)
+	if (event_type == NRF_TIMER_EVENT_COMPARE1 && fan_enabled)
 		error_raise(ERROR_FAN);
 }
 
 uint16_t fantach_rpm(void) {
 	uint32_t ticks = nrf_drv_timer_capture_get(&timer2, NRF_TIMER_CC_CHANNEL0);
-	if (error_present(ERROR_FAN)) return 0;
+	if (!fan_enabled || error_present(ERROR_FAN)) return 0;
 	uint16_t rpm = (uint16_t)(( (31250.0f / 2.0f) / (float)ticks ) * 60.0f);
 	return rpm;
+}
+
+void fantach_enable(void) {
+	fan_enabled = true;
+	nrf_gpio_pin_set(PIN_FANCTRL);
+}
+
+void fantach_disable(void) {
+	fan_enabled = false;
+	nrf_gpio_pin_clear(PIN_FANCTRL);
+}
+
+bool fantach_enabled(void) {
+	return fan_enabled;
 }
 
 void fantach_init(void) {
@@ -41,6 +59,9 @@ void fantach_init(void) {
 	nrf_drv_timer_extended_compare(&timer2, NRF_TIMER_CC_CHANNEL1, 0xFFFFUL, NRF_TIMER_SHORT_COMPARE1_CLEAR_MASK, true);
 
 	nrf_gpio_pin_dir_set(PIN_FANTACH, NRF_GPIO_PIN_DIR_INPUT);
+	nrf_gpio_pin_dir_set(PIN_FANCTRL, NRF_GPIO_PIN_DIR_OUTPUT);
+	nrf_gpio_pin_set(PIN_FANCTRL);
+
 
 	nrf_drv_ppi_init();
 	nrf_drv_ppi_channel_alloc(&ppi_channel);

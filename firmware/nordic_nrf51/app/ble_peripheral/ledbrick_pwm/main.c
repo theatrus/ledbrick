@@ -57,14 +57,14 @@
 #define DEVICE_NAME                      "LEDBrick-PWM"                               /**< Name of device. Will be included in the advertising data. */
 #define MANUFACTURER_NAME                "theatr.us"                      /**< Manufacturer. Will be passed to Device Information Service. */
 #define APP_ADV_INTERVAL                 300                                        /**< The advertising interval (in units of 0.625 ms. This value corresponds to 25 ms). */
-#define APP_ADV_TIMEOUT_IN_SECONDS       18000000                                        /**< The advertising timeout in units of seconds. */
+#define APP_ADV_TIMEOUT_IN_SECONDS       86400                                        /**< The advertising timeout in units of seconds. */
 
 #define APP_TIMER_PRESCALER              0                                          /**< Value of the RTC1 PRESCALER register. */
 #define APP_TIMER_MAX_TIMERS             (7+BSP_APP_TIMERS_NUMBER)                  /**< Maximum number of simultaneously created timers. */
 #define APP_TIMER_OP_QUEUE_SIZE          8                                          /**< Size of timer operation queues. */
 
-#define MIN_CONN_INTERVAL                MSEC_TO_UNITS(100, UNIT_1_25_MS)           /**< Minimum acceptable connection interval (0.1 seconds). */
-#define MAX_CONN_INTERVAL                MSEC_TO_UNITS(200, UNIT_1_25_MS)           /**< Maximum acceptable connection interval (0.2 second). */
+#define MIN_CONN_INTERVAL                MSEC_TO_UNITS(50, UNIT_1_25_MS)           /**< Minimum acceptable connection interval (0.05 seconds). */
+#define MAX_CONN_INTERVAL                MSEC_TO_UNITS(200, UNIT_1_25_MS)           /**< Maximum acceptable connection interval (.2 second). */
 #define SLAVE_LATENCY                    0                                          /**< Slave latency. */
 #define CONN_SUP_TIMEOUT                 MSEC_TO_UNITS(4000, UNIT_10_MS)            /**< Connection supervisory timeout (4 seconds). */
 
@@ -139,33 +139,17 @@ static void gap_params_init(void)
     APP_ERROR_CHECK(err_code);
 }
 
-
-/**@brief Function for handling the Connection Parameters Module.
- *
- * @details This function will be called for all events in the Connection Parameters Module which
- *          are passed to the application.
- *          @note All this function does is to disconnect. This could have been done by simply
- *                setting the disconnect_on_fail config parameter, but instead we use the event
- *                handler mechanism to demonstrate its use.
- *
- * @param[in] p_evt  Event received from the Connection Parameters Module.
- */
 static void on_conn_params_evt(ble_conn_params_evt_t * p_evt)
 {
-    uint32_t err_code;
+//    uint32_t err_code;
 
     if (p_evt->evt_type == BLE_CONN_PARAMS_EVT_FAILED)
     {
-        err_code = sd_ble_gap_disconnect(m_conn_handle, BLE_HCI_CONN_INTERVAL_UNACCEPTABLE);
-        APP_ERROR_CHECK(err_code);
+        //err_code = sd_ble_gap_disconnect(m_conn_handle, BLE_HCI_CONN_INTERVAL_UNACCEPTABLE);
+        //APP_ERROR_CHECK(err_code);
     }
 }
 
-
-/**@brief Function for handling a Connection Parameters error.
- *
- * @param[in] nrf_error  Error code containing information about what went wrong.
- */
 static void conn_params_error_handler(uint32_t nrf_error)
 {
     APP_ERROR_HANDLER(nrf_error);
@@ -176,7 +160,7 @@ static void conn_params_error_handler(uint32_t nrf_error)
  */
 static void conn_params_init(void)
 {
-    uint32_t               err_code;
+    //uint32_t               err_code;
     ble_conn_params_init_t cp_init;
 
     memset(&cp_init, 0, sizeof(cp_init));
@@ -190,8 +174,11 @@ static void conn_params_init(void)
     cp_init.evt_handler                    = on_conn_params_evt;
     cp_init.error_handler                  = conn_params_error_handler;
 
-    err_code = ble_conn_params_init(&cp_init);
-    APP_ERROR_CHECK(err_code);
+	  // Disabled as this currently makes the Paypal GATT server
+	  // unhappy - it disconnects even though told not to.
+	
+    //err_code = ble_conn_params_init(&cp_init);
+    //APP_ERROR_CHECK(err_code);
 }
 
 static void led_write_all(uint8_t power) {
@@ -218,12 +205,23 @@ static void led_write_handler(ble_lbs_t * p_lbs, uint8_t led, uint8_t power) {
 
 static void polled_event_update(void* p) {
     uint16_t rpm = fantach_rpm();
-    uint8_t rpma[2] = { rpm >> 8, rpm & 0xFF };
+    uint8_t rpma[2] = { rpm & 0xFF, rpm >> 8 };
     ble_lbs_update_fan(&m_lbs, rpma);
 		uint16_t temp = mcp9808_temp();
-		uint8_t tempa[2] = { temp >> 8, temp & 0XFF };
+		uint8_t tempa[2] = { temp & 0XFF, temp >> 8};
 		ble_lbs_update_temp(&m_lbs, tempa);
 
+		// Do fan movement logic
+		if (temp > 0 && temp < 30) {
+			fantach_disable();
+		} else if (temp == 0 || temp > 42) {
+			fantach_enable();
+		}
+		
+		if (temp > 65) {
+			error_raise(ERROR_TEMP);
+		}
+		
     if (error_any()) {
         led_write_all(0);
     }
@@ -284,7 +282,9 @@ static void on_adv_evt(ble_adv_evt_t ble_adv_evt)
         APP_ERROR_CHECK(err_code);
         break;
     case BLE_ADV_EVT_IDLE:
-        sleep_mode_enter();
+			  // Never sleep, always advertise.
+				ble_advertising_start(BLE_ADV_MODE_FAST);
+        //sleep_mode_enter();
         break;
     default:
         break;
