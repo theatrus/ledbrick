@@ -19,6 +19,7 @@ type bleChannel struct {
 	connectedPeriph map[string]blePeriph
 	knownPeriph map[string]bool
 	ignoredPeriph map[string]bool
+	connectingPeriph map[string]gatt.Peripheral
 	idleTicker *time.Ticker
 
 	lock sync.Mutex
@@ -51,7 +52,8 @@ func NewBLEChannel() BLEChannel {
 		connectedPeriph: make(map[string]blePeriph),
 		knownPeriph: make(map[string]bool),
 		ignoredPeriph: make(map[string]bool),
-		idleTicker: time.NewTicker(50 * time.Millisecond),
+		connectingPeriph: make(map[string]gatt.Peripheral),
+		idleTicker: time.NewTicker(100 * time.Millisecond),
 	}
 
 	d.Handle(
@@ -71,8 +73,8 @@ func NewBLEChannel() BLEChannel {
 				i += 0.1
 				ble.lock.Lock()
 				for c := 0; c < 8; c++ {
-					err := p.gp.WriteCharacteristic(p.ledChar, []byte{byte(c), 0x00}, true)
-						//byte(i * float64(c)) % 0x80 + 0x20}, true)
+					err := p.gp.WriteCharacteristic(p.ledChar, []byte{byte(c), //0x00}, true)
+					byte(i * float64(c)) % 0x80 + 0x20}, true)
 					if err != nil {
 						log.Println(err)
 					}
@@ -95,6 +97,7 @@ func (ble *bleChannel) onStateChanged(d gatt.Device, s gatt.State) {
 		d.Scan([]gatt.UUID{}, true)
 		return
 	default:
+		log.Println("Stop scanning")
 		d.StopScanning()
 	}
 }
@@ -102,7 +105,10 @@ func (ble *bleChannel) onStateChanged(d gatt.Device, s gatt.State) {
 func (ble *bleChannel) onPeriphConnected(p gatt.Peripheral, err error) {
 	ble.lock.Lock()
 	defer ble.lock.Unlock()
+
 	log.Println("Connected ", p.ID())
+	// Remove from the connecting pool
+	delete(ble.connectingPeriph, p.ID())
 
 	bp := blePeriph{gp: p}
 
@@ -200,6 +206,9 @@ func (ble *bleChannel) onPeriphConnected(p gatt.Peripheral, err error) {
 
 
 func (ble *bleChannel) onPeriphDiscovered(p gatt.Peripheral, a *gatt.Advertisement, rssi int) {
+	ble.lock.Lock()
+	defer ble.lock.Unlock()
+
 
 	if _, ok := ble.ignoredPeriph[p.ID()]; ok {
 		return
@@ -219,7 +228,21 @@ func (ble *bleChannel) onPeriphDiscovered(p gatt.Peripheral, a *gatt.Advertiseme
 	}
 
 	ble.knownPeriph[p.ID()] = true
-
+	if _, ok := ble.connectingPeriph[p.ID()]; ok {
+		log.Printf("Peripheral is in connecting state: %s", p.ID())
+		return
+	}
+	log.Printf("Connecting to %s", p.ID())
+	ble.connectingPeriph[p.ID()] = p
+	go func() {
+		time.Sleep(30 * time.Second)
+		if _, ok := ble.connectedPeriph[p.ID()]; ok {
+			return
+		} else {
+			delete(ble.connectingPeriph, p.ID())
+			log.Printf("Haven't heard back about connection to  %s", p.ID())
+		}
+	}()
 	p.Device().Connect(p)
 }
 
