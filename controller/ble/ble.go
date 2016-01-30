@@ -30,6 +30,9 @@ type blePeriph struct {
 	ledChar  *gatt.Characteristic
 	fanChar  *gatt.Characteristic
 	tempChar *gatt.Characteristic
+
+	temperature int
+	fanRpm int
 }
 
 type BLEChannel interface {
@@ -187,7 +190,17 @@ func (ble *bleChannel) onPeriphConnected(p gatt.Peripheral, err error) {
 			// Subscribe the characteristic, if possible.
 			if (c.Properties() & (gatt.CharNotify | gatt.CharIndicate)) != 0 {
 				f := func(c *gatt.Characteristic, b []byte, err error) {
-					log.Printf("notified: % X | %q\n", b, b)
+					//log.Printf("%s: % X | %q\n", p.ID(), b, b)
+					switch c.UUID().String() {
+					case pwmTempChar:
+						bp.temperature = int(b[0])
+						log.Printf("%s: temperature: %d C", p.ID(), bp.temperature)
+					case pwmFanChar:
+						bp.fanRpm = int(b[0]) | (int(b[1]) << 8)
+						log.Printf("%s: fan speed: %d rpm", p.ID(), bp.fanRpm)
+					default:
+						log.Printf("unknown notification from %s", p.ID())
+					}
 				}
 				if err := p.SetNotifyValue(c, f); err != nil {
 					log.Printf("Failed to subscribe characteristic, err: %s\n", err)
