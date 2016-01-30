@@ -1,26 +1,26 @@
 package ble
 
 import (
+	"github.com/paypal/gatt"
 	"log"
 	"sync"
 	"time"
-	"github.com/paypal/gatt"
 )
 
 const (
-	pwmService = "000015231212efde1523785feabcd123"
-	pwmLedChar = "000015251212efde1523785feabcd123"
+	pwmService  = "000015231212efde1523785feabcd123"
+	pwmLedChar  = "000015251212efde1523785feabcd123"
 	pwmTempChar = "000015261212efde1523785feabcd123"
-	pwmFanChar = "000015241212efde1523785feabcd123"
+	pwmFanChar  = "000015241212efde1523785feabcd123"
 )
 
 type bleChannel struct {
-	device gatt.Device
-	connectedPeriph map[string]blePeriph
-	knownPeriph map[string]bool
-	ignoredPeriph map[string]bool
+	device           gatt.Device
+	connectedPeriph  map[string]blePeriph
+	knownPeriph      map[string]bool
+	ignoredPeriph    map[string]bool
 	connectingPeriph map[string]gatt.Peripheral
-	idleTicker *time.Ticker
+	idleTicker       *time.Ticker
 
 	lock sync.Mutex
 }
@@ -33,7 +33,6 @@ type blePeriph struct {
 }
 
 type BLEChannel interface {
-
 }
 
 var DefaultClientOptions = []gatt.Option{
@@ -49,11 +48,11 @@ func NewBLEChannel() BLEChannel {
 	}
 
 	ble := &bleChannel{device: d,
-		connectedPeriph: make(map[string]blePeriph),
-		knownPeriph: make(map[string]bool),
-		ignoredPeriph: make(map[string]bool),
+		connectedPeriph:  make(map[string]blePeriph),
+		knownPeriph:      make(map[string]bool),
+		ignoredPeriph:    make(map[string]bool),
 		connectingPeriph: make(map[string]gatt.Peripheral),
-		idleTicker: time.NewTicker(100 * time.Millisecond),
+		idleTicker:       time.NewTicker(500 * time.Millisecond),
 	}
 
 	d.Handle(
@@ -61,7 +60,6 @@ func NewBLEChannel() BLEChannel {
 		gatt.PeripheralConnected(ble.onPeriphConnected),
 		gatt.PeripheralDisconnected(ble.onPeriphDisconnected),
 	)
-
 
 	d.Init(ble.onStateChanged)
 
@@ -72,9 +70,9 @@ func NewBLEChannel() BLEChannel {
 			for _, p := range ble.connectedPeriph {
 				i += 0.1
 				ble.lock.Lock()
-				for c := 0; c < 8; c++ {
-					err := p.gp.WriteCharacteristic(p.ledChar, []byte{byte(c), //0x00}, true)
-					byte(i * float64(c)) % 0x80 + 0x20}, true)
+				for c := 0; c <= 8; c++ {
+					value := int(i) % 0x80
+					err := p.gp.WriteCharacteristic(p.ledChar, []byte{byte(c), byte(value)}, true)
 					if err != nil {
 						log.Println(err)
 					}
@@ -111,7 +109,6 @@ func (ble *bleChannel) onPeriphConnected(p gatt.Peripheral, err error) {
 	delete(ble.connectingPeriph, p.ID())
 
 	bp := blePeriph{gp: p}
-
 
 	// Discovery services
 	ss, err := p.DiscoverServices(nil)
@@ -204,11 +201,9 @@ func (ble *bleChannel) onPeriphConnected(p gatt.Peripheral, err error) {
 	ble.connectedPeriph[p.ID()] = bp
 }
 
-
 func (ble *bleChannel) onPeriphDiscovered(p gatt.Peripheral, a *gatt.Advertisement, rssi int) {
 	ble.lock.Lock()
 	defer ble.lock.Unlock()
-
 
 	if _, ok := ble.ignoredPeriph[p.ID()]; ok {
 		return
@@ -230,8 +225,8 @@ func (ble *bleChannel) onPeriphDiscovered(p gatt.Peripheral, a *gatt.Advertiseme
 	ble.knownPeriph[p.ID()] = true
 	if _, ok := ble.connectingPeriph[p.ID()]; ok {
 		log.Printf("Peripheral is in connecting state: %s", p.ID())
-		return
 	}
+
 	log.Printf("Connecting to %s", p.ID())
 	ble.connectingPeriph[p.ID()] = p
 	go func() {
