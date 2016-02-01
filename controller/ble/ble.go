@@ -1,6 +1,7 @@
 package ble
 
 import (
+	"errors"
 	"github.com/paypal/gatt"
 	"log"
 	"sync"
@@ -14,33 +15,48 @@ const (
 	pwmFanChar  = "000015241212efde1523785feabcd123"
 )
 
+var DefaultClientOptions = []gatt.Option{
+	gatt.LnxMaxConnections(10),
+	gatt.LnxDeviceID(-1, true),
+}
+
 type bleChannel struct {
 	device           gatt.Device
-	connectedPeriph  map[string]blePeriph
+	connectedPeriph  map[string]*blePeriph
 	knownPeriph      map[string]bool
 	ignoredPeriph    map[string]bool
 	connectingPeriph map[string]gatt.Peripheral
 	idleTicker       *time.Ticker
 
+	channelSetting map[int]float64
+
 	lock sync.Mutex
 }
 
 type blePeriph struct {
+	active   bool
 	gp       gatt.Peripheral
 	ledChar  *gatt.Characteristic
 	fanChar  *gatt.Characteristic
 	tempChar *gatt.Characteristic
 
 	temperature int
-	fanRpm int
+	fanRpm      int
 }
+
+type BLEPeripheral interface {
+	Active() bool
+	Temperature() int
+	FanRPM() int
+}
+
+func (p *blePeriph) Active() bool     { return p.active }
+func (p *blePeriph) Temperature() int { return p.temperature }
+func (p *blePeriph) FanRPM() int      { return p.fanRpm }
 
 type BLEChannel interface {
-}
-
-var DefaultClientOptions = []gatt.Option{
-	gatt.LnxMaxConnections(10),
-	gatt.LnxDeviceID(-1, true),
+	Perhipherals() []BLEPeripheral
+	SetChannel(channel int, percent float64) error
 }
 
 func NewBLEChannel() BLEChannel {
@@ -51,11 +67,12 @@ func NewBLEChannel() BLEChannel {
 	}
 
 	ble := &bleChannel{device: d,
-		connectedPeriph:  make(map[string]blePeriph),
+		connectedPeriph:  make(map[string]*blePeriph),
 		knownPeriph:      make(map[string]bool),
 		ignoredPeriph:    make(map[string]bool),
 		connectingPeriph: make(map[string]gatt.Peripheral),
 		idleTicker:       time.NewTicker(500 * time.Millisecond),
+		channelSetting:   make(map[int]float64),
 	}
 
 	d.Handle(
@@ -74,7 +91,7 @@ func NewBLEChannel() BLEChannel {
 				i += 0.1
 				ble.lock.Lock()
 				for c := 0; c <= 8; c++ {
-					value := int(i) % 0xe0
+					value := int(i) % 0x80
 					err := p.gp.WriteCharacteristic(p.ledChar, []byte{byte(c), byte(value)}, true)
 					if err != nil {
 						log.Println(err)
@@ -87,6 +104,43 @@ func NewBLEChannel() BLEChannel {
 	}()
 
 	return &bleChannel{device: d}
+}
+
+func (ble *bleChannel) writeLedState() error {
+
+	ble.lock.Lock()
+	defer ble.lock.Unlock()
+
+	for _, p := range ble.connectedPeriph {
+		for channel := 0; channel <= 8; channel++ {
+			// Max intensity limit is about 0xfa
+			value := int((ble.channelSetting[channel] / 100.0) * 0xfa)
+			err := p.gp.WriteCharacteristic(p.ledChar,
+				[]byte{byte(channel), byte(value)}, true)
+			if err != nil {
+				log.Println("Command send error: %s", err)
+				return err
+			}
+		}
+
+	}
+	return nil
+}
+
+func (ble *bleChannel) Perhipherals() []BLEPeripheral {
+	p := make([]BLEPeripheral, 0)
+	for _, periph := range ble.connectedPeriph {
+		p = append(p, periph)
+	}
+	return p
+}
+
+func (ble *bleChannel) SetChannel(channel int, percent float64) error {
+	if percent < 0 || percent > 100 {
+		return errors.New("Out of range percent (0-100)")
+	}
+	ble.channelSetting[channel] = percent
+	return ble.writeLedState()
 }
 
 // Force Gatt to enter scanning mode
@@ -104,14 +158,10 @@ func (ble *bleChannel) onStateChanged(d gatt.Device, s gatt.State) {
 }
 
 func (ble *bleChannel) onPeriphConnected(p gatt.Peripheral, err error) {
-	ble.lock.Lock()
-	defer ble.lock.Unlock()
 
-	log.Println("Connected ", p.ID())
-	// Remove from the connecting pool
-	delete(ble.connectingPeriph, p.ID())
-
-	bp := blePeriph{gp: p}
+	log.Println("Connected, starting interrogation of ", p.ID())
+	bp := blePeriph{gp: p,
+		active: true}
 
 	// Discovery services
 	ss, err := p.DiscoverServices(nil)
@@ -211,7 +261,14 @@ func (ble *bleChannel) onPeriphConnected(p gatt.Peripheral, err error) {
 		}
 	}
 
-	ble.connectedPeriph[p.ID()] = bp
+	ble.lock.Lock()
+	defer ble.lock.Unlock()
+
+	// Remove from the connecting pool
+	delete(ble.connectingPeriph, p.ID())
+
+	ble.connectedPeriph[p.ID()] = &bp
+	log.Printf("Peripheral connection conomplete: %s", p.ID())
 }
 
 func (ble *bleChannel) onPeriphDiscovered(p gatt.Peripheral, a *gatt.Advertisement, rssi int) {
@@ -238,6 +295,7 @@ func (ble *bleChannel) onPeriphDiscovered(p gatt.Peripheral, a *gatt.Advertiseme
 	ble.knownPeriph[p.ID()] = true
 	if _, ok := ble.connectingPeriph[p.ID()]; ok {
 		log.Printf("Peripheral is in connecting state: %s", p.ID())
+		return
 	}
 
 	log.Printf("Connecting to %s", p.ID())
@@ -248,7 +306,7 @@ func (ble *bleChannel) onPeriphDiscovered(p gatt.Peripheral, a *gatt.Advertiseme
 			return
 		} else {
 			delete(ble.connectingPeriph, p.ID())
-			log.Printf("Haven't heard back about connection to  %s", p.ID())
+			log.Printf("Haven't heard back about connection to %s, removing from pending pool", p.ID())
 		}
 	}()
 	p.Device().Connect(p)
@@ -259,6 +317,15 @@ func (ble *bleChannel) onPeriphDisconnected(p gatt.Peripheral, err error) {
 	defer ble.lock.Unlock()
 
 	log.Println("Disconnected ", p.ID())
+
+	localPeriph := ble.connectedPeriph[p.ID()]
+	// If the API has given an active handle to this peripheral out,
+	// we need to be able to flag it as no longer active. A simple
+	// boolean suffices.
+	localPeriph.active = false
+
 	delete(ble.connectedPeriph, p.ID())
+	// We re-cancel the connection here, which will free any associated
+	// channels if this disconnect is due to the peripheral initiating the disconnect
 	p.Device().CancelConnection(p)
 }
