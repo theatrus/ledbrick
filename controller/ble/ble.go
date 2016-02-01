@@ -74,7 +74,7 @@ func NewBLEChannel() BLEChannel {
 				i += 0.1
 				ble.lock.Lock()
 				for c := 0; c <= 8; c++ {
-					value := int(i) % 0x80
+					value := int(i) % 0xe0
 					err := p.gp.WriteCharacteristic(p.ledChar, []byte{byte(c), byte(value)}, true)
 					if err != nil {
 						log.Println(err)
@@ -131,7 +131,7 @@ func (ble *bleChannel) onPeriphConnected(p gatt.Peripheral, err error) {
 		cs, err := p.DiscoverCharacteristics(nil, s)
 		if err != nil {
 			log.Printf("Failed to discover characteristics, err: %s\n", err)
-			continue
+			return
 		}
 
 		for _, c := range cs {
@@ -159,7 +159,7 @@ func (ble *bleChannel) onPeriphConnected(p gatt.Peripheral, err error) {
 				b, err := p.ReadCharacteristic(c)
 				if err != nil {
 					log.Printf("Failed to read characteristic, err: %s\n", err)
-					continue
+					return
 				}
 				log.Printf("    value         %x | %q\n", b, b)
 			}
@@ -168,7 +168,7 @@ func (ble *bleChannel) onPeriphConnected(p gatt.Peripheral, err error) {
 			ds, err := p.DiscoverDescriptors(nil, c)
 			if err != nil {
 				log.Printf("Failed to discover descriptors, err: %s\n", err)
-				continue
+				return
 			}
 
 			for _, d := range ds {
@@ -182,7 +182,7 @@ func (ble *bleChannel) onPeriphConnected(p gatt.Peripheral, err error) {
 				b, err := p.ReadDescriptor(d)
 				if err != nil {
 					log.Printf("Failed to read descriptor, err: %s\n", err)
-					continue
+					return
 				}
 				log.Printf("    value         %x | %q\n", b, b)
 			}
@@ -204,7 +204,7 @@ func (ble *bleChannel) onPeriphConnected(p gatt.Peripheral, err error) {
 				}
 				if err := p.SetNotifyValue(c, f); err != nil {
 					log.Printf("Failed to subscribe characteristic, err: %s\n", err)
-					continue
+					return
 				}
 			}
 
