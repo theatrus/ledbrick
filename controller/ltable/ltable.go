@@ -61,6 +61,55 @@ func (s settingPoints) Less(i, j int) bool {
 	return s[i].TimeAt().Before(s[j].TimeAt())
 }
 
+func (ld settingPoints) percentForTime(t time.Time, channel int) float64 {
+	if timeLocation == nil {
+		initLtables() // Lazy init
+	}
+
+	// All the math is done in "local" time which may not be system
+	// local time, so adjust everything to our location
+	lt := t.In(timeLocation)
+	// Grab a zero m/d/y version for comparison
+	compareTime := time.Date(0, 0, 0, lt.Hour(), lt.Minute(), 0, 0, timeLocation)
+
+	var iBefore int = len(ld) - 1 // Allow time to wrap
+	var iAfter int = len(ld) - 1
+	for i, v := range ld {
+		if v.TimeAt().Equal(compareTime) {
+			return v.Percents[channel]
+		}
+
+		if v.TimeAt().Before(compareTime) {
+			iBefore = i
+		} else {
+			iAfter = i
+			break
+		}
+	}
+
+	valueBefore := ld[iBefore].Percents[channel]
+	valueAfter := ld[iAfter].Percents[channel]
+
+	// Don't interpolate
+	if valueBefore == valueAfter {
+		return valueAfter
+	}
+
+	difference := ld[iAfter].TimeAt().Sub(ld[iBefore].TimeAt()) / time.Second
+	if difference < 0 {
+		difference = difference * -1
+	}
+	nowDifference := compareTime.Sub(ld[iBefore].TimeAt()) / time.Second
+	if nowDifference < 0 {
+		nowDifference = nowDifference * -1
+	}
+
+	lerpMult := float64(nowDifference) / float64(difference)
+	log.Printf("Lerp mult: %f, difference %f, now difference %f", lerpMult, difference, nowDifference)
+	return valueBefore + lerpMult * (valueAfter - valueBefore)
+}
+
+
 type LightDriver struct {
 	ble ble.BLEChannel
 	settings settingPoints
@@ -86,8 +135,4 @@ func (ld *LightDriver) run() {
 	for _ = range ld.ticker.C {
 		log.Println("Updating channel settings")
 	}
-}
-
-func (ld *LightDriver) percentForTime(t time.Time, channel int) float64 {
-	return 0.0
 }
