@@ -105,7 +105,6 @@ func (ld settingPoints) percentForTime(t time.Time, channel int) float64 {
 	}
 
 	lerpMult := float64(nowDifference) / float64(difference)
-	log.Printf("Lerp mult: %f, difference %f, now difference %f", lerpMult, difference, nowDifference)
 	return valueBefore + lerpMult * (valueAfter - valueBefore)
 }
 
@@ -118,7 +117,7 @@ type LightDriver struct {
 
 func NewLightDriverFromJson(ble ble.BLEChannel, data []byte) (*LightDriver, error) {
 	var settings settingPoints
-	err := json.Unmarshal(data, settings)
+	err := json.Unmarshal(data, &settings)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +131,18 @@ func NewLightDriverFromJson(ble ble.BLEChannel, data []byte) (*LightDriver, erro
 }
 
 func (ld *LightDriver) run() {
+	if timeLocation == nil {
+		initLtables() // Lazy init
+	}
+
 	for _ = range ld.ticker.C {
 		log.Println("Updating channel settings")
+		now := time.Now().In(timeLocation)
+		for i := 0; i < 8; i++ {
+			percent := ld.settings.percentForTime(now, i)
+			log.Printf("    ---- channel %d percent %f", i, percent)
+			ld.ble.SetChannel(i, percent)
+		}
+
 	}
 }

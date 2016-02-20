@@ -96,7 +96,7 @@ func NewBLEChannel() BLEChannel {
 		}
 	}()
 
-	return &bleChannel{device: d}
+	return ble
 }
 
 func (ble *bleChannel) writeLedState() error {
