@@ -83,23 +83,16 @@ func NewBLEChannel() BLEChannel {
 
 	d.Init(ble.onStateChanged)
 
+	// Green CYan PCAmber Blue Red DeepBlue White UV
+	// Percents
+	initPower := []int{10, 30, 10, 40, 10, 40, 30, 40}
+	for i, v := range initPower {
+		ble.channelSetting[i] = float64(v)
+	}
+
 	go func() {
-		var i = 0.0
-
 		for _ = range ble.idleTicker.C {
-			for _, p := range ble.connectedPeriph {
-				i += 0.1
-				ble.lock.Lock()
-				for c := 0; c <= 8; c++ {
-					value := int(i) % 0x80
-					err := p.gp.WriteCharacteristic(p.ledChar, []byte{byte(c), byte(value)}, true)
-					if err != nil {
-						log.Println(err)
-					}
-
-				}
-				ble.lock.Unlock()
-			}
+			_ = ble.writeLedState()
 		}
 	}()
 
@@ -112,14 +105,13 @@ func (ble *bleChannel) writeLedState() error {
 	defer ble.lock.Unlock()
 
 	for _, p := range ble.connectedPeriph {
-		for channel := 0; channel <= 8; channel++ {
+		for channel := 0; channel <= 7; channel++ {
 			// Max intensity limit is about 0xfa
 			value := int((ble.channelSetting[channel] / 100.0) * 0xfa)
 			err := p.gp.WriteCharacteristic(p.ledChar,
 				[]byte{byte(channel), byte(value)}, true)
 			if err != nil {
 				log.Println("Command send error: %s", err)
-				return err
 			}
 		}
 
@@ -268,7 +260,7 @@ func (ble *bleChannel) onPeriphConnected(p gatt.Peripheral, err error) {
 	delete(ble.connectingPeriph, p.ID())
 
 	ble.connectedPeriph[p.ID()] = &bp
-	log.Printf("Peripheral connection conomplete: %s", p.ID())
+	log.Printf("Peripheral connection complete: %s", p.ID())
 }
 
 func (ble *bleChannel) onPeriphDiscovered(p gatt.Peripheral, a *gatt.Advertisement, rssi int) {
@@ -276,6 +268,12 @@ func (ble *bleChannel) onPeriphDiscovered(p gatt.Peripheral, a *gatt.Advertiseme
 	defer ble.lock.Unlock()
 
 	if _, ok := ble.ignoredPeriph[p.ID()]; ok {
+		return
+	}
+
+	ble.knownPeriph[p.ID()] = true
+	if _, ok := ble.connectingPeriph[p.ID()]; ok {
+		log.Printf("Peripheral is in connecting state: %s", p.ID())
 		return
 	}
 
@@ -292,11 +290,6 @@ func (ble *bleChannel) onPeriphDiscovered(p gatt.Peripheral, a *gatt.Advertiseme
 		return
 	}
 
-	ble.knownPeriph[p.ID()] = true
-	if _, ok := ble.connectingPeriph[p.ID()]; ok {
-		log.Printf("Peripheral is in connecting state: %s", p.ID())
-		return
-	}
 
 	log.Printf("Connecting to %s", p.ID())
 	ble.connectingPeriph[p.ID()] = p
