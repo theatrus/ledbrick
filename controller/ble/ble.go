@@ -71,7 +71,7 @@ func NewBLEChannel() BLEChannel {
 		knownPeriph:      make(map[string]bool),
 		ignoredPeriph:    make(map[string]bool),
 		connectingPeriph: make(map[string]gatt.Peripheral),
-		idleTicker:       time.NewTicker(1500 * time.Millisecond),
+		idleTicker:       time.NewTicker(1000 * time.Millisecond),
 		channelSetting:   make(map[int]float64),
 	}
 
@@ -107,7 +107,7 @@ func (ble *bleChannel) writeLedState() error {
 	for _, p := range ble.connectedPeriph {
 		for channel := 0; channel <= 7; channel++ {
 			// Max intensity limit is about 0xfa
-			value := int((ble.channelSetting[channel] / 100.0) * 0xfa)
+			value := int((ble.channelSetting[channel] / 100.0) * 250.0)
 			err := p.gp.WriteCharacteristic(p.ledChar,
 				[]byte{byte(channel), byte(value)}, true)
 			if err != nil {
@@ -132,7 +132,7 @@ func (ble *bleChannel) SetChannel(channel int, percent float64) error {
 		return errors.New("Out of range percent (0-100)")
 	}
 	ble.channelSetting[channel] = percent
-	return ble.writeLedState()
+	return nil
 }
 
 // Force Gatt to enter scanning mode

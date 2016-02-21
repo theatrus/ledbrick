@@ -70,7 +70,7 @@ func (ld settingPoints) percentForTime(t time.Time, channel int) float64 {
 	// local time, so adjust everything to our location
 	lt := t.In(timeLocation)
 	// Grab a zero m/d/y version for comparison
-	compareTime := time.Date(0, 0, 0, lt.Hour(), lt.Minute(), 0, 0, timeLocation)
+	compareTime := time.Date(0, 0, 0, lt.Hour(), lt.Minute(), lt.Second(), 0, timeLocation)
 
 	var iBefore int = len(ld) - 1 // Allow time to wrap
 	var iAfter int = len(ld) - 1
