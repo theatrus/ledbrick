@@ -1,13 +1,13 @@
 package ltable
 
 import (
-	"flag"
 	"encoding/json"
-	"time"
+	"flag"
 	"fmt"
 	"log"
-	"strings"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/theatrus/ledbrick/controller/ble"
 )
@@ -30,7 +30,7 @@ func initLtables() {
 }
 
 type settingPoint struct {
-	At string `json:"at"`
+	At       string    `json:"at"`
 	Percents []float64 `json:"percents"`
 }
 
@@ -55,7 +55,7 @@ func (sp settingPoint) TimeAt() time.Time {
 
 type settingPoints []settingPoint
 
-func (s settingPoints) Len() int { return len(s) }
+func (s settingPoints) Len() int      { return len(s) }
 func (s settingPoints) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
 func (s settingPoints) Less(i, j int) bool {
 	return s[i].TimeAt().Before(s[j].TimeAt())
@@ -105,17 +105,20 @@ func (ld settingPoints) percentForTime(t time.Time, channel int) float64 {
 	}
 
 	lerpMult := float64(nowDifference) / float64(difference)
-	return valueBefore + lerpMult * (valueAfter - valueBefore)
+	return valueBefore + lerpMult*(valueAfter-valueBefore)
 }
 
-
 type LightDriver struct {
-	ble ble.BLEChannel
+	ble      ble.BLEChannel
 	settings settingPoints
-	ticker *time.Ticker
+	ticker   *time.Ticker
 }
 
 func NewLightDriverFromJson(ble ble.BLEChannel, data []byte) (*LightDriver, error) {
+	if timeLocation == nil {
+		initLtables() // Lazy init
+	}
+
 	var settings settingPoints
 	err := json.Unmarshal(data, &settings)
 	if err != nil {
@@ -123,26 +126,27 @@ func NewLightDriverFromJson(ble ble.BLEChannel, data []byte) (*LightDriver, erro
 	}
 	ld := &LightDriver{ble: ble,
 		settings: settings,
-		ticker: time.NewTicker(10 * time.Second),
+		ticker:   time.NewTicker(10 * time.Second),
 	}
 
 	go ld.run()
+	ld.updateChannels()
 	return ld, nil
 }
 
-func (ld *LightDriver) run() {
-	if timeLocation == nil {
-		initLtables() // Lazy init
+func (ld *LightDriver) updateChannels() {
+	log.Println("Updating channel settings")
+	now := time.Now().In(timeLocation)
+	for i := 0; i < 8; i++ {
+		percent := ld.settings.percentForTime(now, i)
+		log.Printf("    ---- channel %d percent %f", i, percent)
+		ld.ble.SetChannel(i, percent)
 	}
 
-	for _ = range ld.ticker.C {
-		log.Println("Updating channel settings")
-		now := time.Now().In(timeLocation)
-		for i := 0; i < 8; i++ {
-			percent := ld.settings.percentForTime(now, i)
-			log.Printf("    ---- channel %d percent %f", i, percent)
-			ld.ble.SetChannel(i, percent)
-		}
+}
 
+func (ld *LightDriver) run() {
+	for _ = range ld.ticker.C {
+		ld.updateChannels()
 	}
 }

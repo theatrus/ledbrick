@@ -1,11 +1,11 @@
 package main
 
 import (
+	"flag"
 	"github.com/theatrus/ledbrick/controller/ble"
 	"github.com/theatrus/ledbrick/controller/ltable"
-	"log"
-	"flag"
 	"io/ioutil"
+	"log"
 )
 
 var done = make(chan struct{})

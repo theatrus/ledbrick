@@ -1,8 +1,8 @@
 package ltable
 
 import (
-	"testing"
 	"sort"
+	"testing"
 	"time"
 )
 
@@ -23,7 +23,7 @@ func TestSortTimes(t *testing.T) {
 		[]settingPoint{
 			settingPoint{At: "10:11", Percents: percents},
 			settingPoint{At: "9:23", Percents: percents},
-	})
+		})
 	sort.Sort(sps)
 	if sps[0].At != "9:23" {
 		t.Error("Sorting failed")
@@ -38,7 +38,7 @@ func TestPercentForTime(t *testing.T) {
 			settingPoint{At: "10:00", Percents: percents1},
 			settingPoint{At: "11:00", Percents: percents2},
 			settingPoint{At: "12:00", Percents: percents1},
-	})
+		})
 	sort.Sort(sps)
 
 	now := time.Date(2016, 1, 1, 10, 0, 0, 0, timeLocation)

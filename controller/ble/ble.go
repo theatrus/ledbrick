@@ -71,7 +71,7 @@ func NewBLEChannel() BLEChannel {
 		knownPeriph:      make(map[string]bool),
 		ignoredPeriph:    make(map[string]bool),
 		connectingPeriph: make(map[string]gatt.Peripheral),
-		idleTicker:       time.NewTicker(500 * time.Millisecond),
+		idleTicker:       time.NewTicker(1500 * time.Millisecond),
 		channelSetting:   make(map[int]float64),
 	}
 
@@ -290,7 +290,6 @@ func (ble *bleChannel) onPeriphDiscovered(p gatt.Peripheral, a *gatt.Advertiseme
 		return
 	}
 
-
 	log.Printf("Connecting to %s", p.ID())
 	ble.connectingPeriph[p.ID()] = p
 	go func() {
@@ -315,7 +314,9 @@ func (ble *bleChannel) onPeriphDisconnected(p gatt.Peripheral, err error) {
 	// If the API has given an active handle to this peripheral out,
 	// we need to be able to flag it as no longer active. A simple
 	// boolean suffices.
-	localPeriph.active = false
+	if localPeriph != nil {
+		localPeriph.active = false
+	}
 
 	delete(ble.connectedPeriph, p.ID())
 	// We re-cancel the connection here, which will free any associated
