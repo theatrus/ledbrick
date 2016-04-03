@@ -1,0 +1,8 @@
+[Unit]
+Description=ledbrick
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/ledbrick  -config=/etc/ledbrick-ltable.json
+Restart=always
+Type=simple
