@@ -6,3 +6,6 @@ After=network.target
 ExecStart=/usr/local/bin/ledbrick  -config=/etc/ledbrick-ltable.json
 Restart=always
 Type=simple
+
+[Install]
+WantedBy=multi-user.target

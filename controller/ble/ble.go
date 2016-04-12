@@ -6,6 +6,7 @@ import (
 	"log"
 	"sync"
 	"time"
+	"fmt"
 )
 
 const (
@@ -42,6 +43,7 @@ type blePeriph struct {
 
 	temperature int
 	fanRpm      int
+	lastUpdate  time.Time
 }
 
 type BLEPeripheral interface {
@@ -91,7 +93,21 @@ func NewBLEChannel() BLEChannel {
 	}
 
 	go func() {
+		startTime := time.Now()
 		for _ = range ble.idleTicker.C {
+			// Check for four units (hack)
+			if startTime.Add(5 * time.Minute).Before(time.Now()) {
+				if len(ble.connectedPeriph) < 4 {
+					panic(fmt.Sprintf("PANIC: Not four lights connected"))
+				}
+			}
+			// Check for active units
+			for _, bp := range ble.connectedPeriph {
+				if bp.lastUpdate.Add(5 * time.Minute).Before(time.Now()) {
+					// Uhoh, no update
+					panic(fmt.Sprintf("PANIC: No updates from %v", bp.gp))
+				}
+			}
 			_ = ble.writeLedState()
 		}
 	}()
@@ -153,7 +169,9 @@ func (ble *bleChannel) onPeriphConnected(p gatt.Peripheral, err error) {
 
 	log.Println("Connected, starting interrogation of ", p.ID())
 	bp := blePeriph{gp: p,
-		active: true}
+		active: true,
+		lastUpdate: time.Now(),
+	}
 
 	// Discovery services
 	ss, err := p.DiscoverServices(nil)
@@ -233,6 +251,7 @@ func (ble *bleChannel) onPeriphConnected(p gatt.Peripheral, err error) {
 			if (c.Properties() & (gatt.CharNotify | gatt.CharIndicate)) != 0 {
 				f := func(c *gatt.Characteristic, b []byte, err error) {
 					//log.Printf("%s: % X | %q\n", p.ID(), b, b)
+					bp.lastUpdate = time.Now()
 					switch c.UUID().String() {
 					case pwmTempChar:
 						bp.temperature = int(b[0])
