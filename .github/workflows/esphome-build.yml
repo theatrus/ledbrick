@@ -18,12 +18,11 @@ jobs:
       uses: actions/checkout@v4
     
     - name: Build ESPHome Binary
-      uses: esphome/build-action@v3.1.0
+      uses: esphome/build-action@v6
       id: esphome-build
       with:
         yaml-file: firmware/ledbrick-plus.yaml
         version: 'latest'
-        cache: true
       env:
         # Mock secrets for compilation - valid format required for build
         SECRETS_api_encryption_key: "0InzFsPpuTBIm6B6HVhVupBRBwBTY2oT3fRnc3JATdM="
