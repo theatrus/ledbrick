@@ -32,11 +32,10 @@ wifi:
 captive_portal:
     
 external_components:
-  # use rtttl and dfplayer from ESPHome's dev branch in GitHub
   - source:
       type: git
       url: https://github.com/theatrus/mcpwm_unified
-      ref: fc7ecf2e6ddb8cf20c55560c3e42ebc1a1756ed3
+      ref: ebfcc0a743dfe2ccbdd7d582cc5bd97225980ee2
     components: [ mcpwm_unified ]
 
 status_led:
