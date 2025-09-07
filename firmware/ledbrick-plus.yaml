@@ -1,6 +1,13 @@
 esphome:
   name: ledbrickplus
   friendly_name: ledbrickplus
+  project:
+    name: "ledbrick.plus"
+    version: "1.0.0"
+
+dashboard_import:
+  package_import_url: github://theatrus/ledbrick/firmware/ledbrick-plus.yaml@master
+  import_full_config: true
 
 esp32:
   board: esp32-s3-devkitc-1
@@ -41,71 +48,19 @@ external_components:
 status_led:
   pin: GPIO1
 
+# Channel definitions using packages
+packages:
+  channel1: !include { file: packages/channel.yaml, vars: { channel_number: "1", pwm_pin: "GPIO5", current_pin: "GPIO6" } }
+  channel2: !include { file: packages/channel.yaml, vars: { channel_number: "2", pwm_pin: "GPIO7", current_pin: "GPIO8" } }
+  channel3: !include { file: packages/channel.yaml, vars: { channel_number: "3", pwm_pin: "GPIO9", current_pin: "GPIO10" } }
+  channel4: !include { file: packages/channel.yaml, vars: { channel_number: "4", pwm_pin: "GPIO11", current_pin: "GPIO12" } }
+  channel5: !include { file: packages/channel.yaml, vars: { channel_number: "5", pwm_pin: "GPIO13", current_pin: "GPIO14" } }
+  channel6: !include { file: packages/channel.yaml, vars: { channel_number: "6", pwm_pin: "GPIO15", current_pin: "GPIO16" } }
+  channel7: !include { file: packages/channel.yaml, vars: { channel_number: "7", pwm_pin: "GPIO17", current_pin: "GPIO18" } }
+  channel8: !include { file: packages/channel.yaml, vars: { channel_number: "8", pwm_pin: "GPIO33", current_pin: "GPIO34" } }
+
 output:
-  - platform: mcpwm_unified
-    id: pwm_output_1
-    pin: GPIO5
-    frequency: 39khz
-  - platform: mcpwm_unified
-    id: pwm_output_ao1
-    pin: GPIO6
-    frequency: 39kHz  
-  - platform: mcpwm_unified
-    id: pwm_output_2
-    pin: GPIO7
-    frequency: 39khz
-  - platform: mcpwm_unified
-    id: pwm_output_ao2
-    pin: GPIO8
-    frequency: 39khz
-  - platform: mcpwm_unified
-    id: pwm_output_3
-    pin: GPIO9
-    frequency: 39khz
-  - platform: mcpwm_unified
-    id: pwm_output_ao3
-    pin: GPIO10
-    frequency: 39khz
-  - platform: mcpwm_unified
-    id: pwm_output_4
-    pin: GPIO11
-    frequency: 39khz
-  - platform: mcpwm_unified
-    id: pwm_output_ao4
-    pin: GPIO12
-    frequency: 39khz
-  - platform: mcpwm_unified
-    id: pwm_output_5
-    pin: GPIO13
-    frequency: 39khz
-  - platform: mcpwm_unified
-    id: pwm_output_ao5
-    pin: GPIO14
-    frequency: 39khz
-  - platform: mcpwm_unified
-    id: pwm_output_6
-    pin: GPIO15
-    frequency: 39khz
-  - platform: mcpwm_unified
-    id: pwm_output_ao6
-    pin: GPIO16
-    frequency: 39khz
-  - platform: mcpwm_unified
-    id: pwm_output_7
-    pin: GPIO17
-    frequency: 39khz
-  - platform: mcpwm_unified
-    id: pwm_output_ao7
-    pin: GPIO18
-    frequency: 39khz
-  - platform: mcpwm_unified
-    id: pwm_output_8
-    pin: GPIO33
-    frequency: 39khz
-  - platform: mcpwm_unified
-    id: pwm_output_ao8
-    pin: GPIO34
-    frequency: 39khz
+  # Fan PWM output - separate from channel packages
   - platform: mcpwm_unified
     id: fan_pwm
     pin: GPIO37
@@ -128,87 +83,7 @@ fan:
     restore_mode: RESTORE_DEFAULT_ON
 
 
-light:
-  - platform: monochromatic
-    id: lpwm1
-    output: pwm_output_1
-    name: "Ch1 PWM"
-    gamma_correct: 1
-  - platform: monochromatic
-    id: lcur1
-    output: pwm_output_ao1
-    name: "Ch1 Current"
-    gamma_correct: 1
-  - platform: monochromatic
-    id: lpwm2
-    output: pwm_output_2
-    name: "Ch2 PWM"
-    gamma_correct: 1
-  - platform: monochromatic
-    id: lcur2
-    output: pwm_output_ao2
-    name: "Ch2 Current"
-    gamma_correct: 1
-  - platform: monochromatic
-    id: lpwm3
-    output: pwm_output_3
-    name: "Ch3 PWM"
-    gamma_correct: 1
-  - platform: monochromatic
-    id: lcur3
-    output: pwm_output_ao3
-    name: "Ch3 Current"
-    gamma_correct: 1
-  - platform: monochromatic
-    id: lpwm4
-    output: pwm_output_4
-    name: "Ch4 PWM"
-    gamma_correct: 1
-  - platform: monochromatic
-    id: lcur4
-    output: pwm_output_ao4
-    name: "Ch4 Current"
-    gamma_correct: 1
-  - platform: monochromatic
-    id: lpwm5
-    output: pwm_output_5
-    name: "Ch5 PWM"
-    gamma_correct: 1
-  - platform: monochromatic
-    id: lcur5
-    output: pwm_output_ao5
-    name: "Ch5 Current"
-    gamma_correct: 1
-  - platform: monochromatic
-    id: lpwm6
-    output: pwm_output_6
-    name: "Ch6 PWM"
-    gamma_correct: 1
-  - platform: monochromatic
-    id: lcur6
-    output: pwm_output_ao6
-    name: "Ch6 Current"
-    gamma_correct: 1
-  - platform: monochromatic
-    id: lpwm7
-    output: pwm_output_7
-    name: "Ch7 PWM"
-    gamma_correct: 1
-  - platform: monochromatic
-    id: lcur7
-    output: pwm_output_ao7
-    name: "Ch7 Current"
-    gamma_correct: 1
-  - platform: monochromatic
-    id: lpwm8
-    output: pwm_output_8
-    name: "Ch8 PWM"
-    gamma_correct: 1
-  - platform: monochromatic
-    id: lcur8
-    output: pwm_output_ao8
-    name: "Ch8 Current"
-    gamma_correct: 1
+# Light entities are now defined in the channel package
 
 i2c:
   sda: GPIO3
