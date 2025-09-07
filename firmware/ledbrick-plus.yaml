@@ -35,7 +35,7 @@ external_components:
   - source:
       type: git
       url: https://github.com/theatrus/mcpwm_unified
-      ref: 950020a416ad65383f01da4ed65e16e47769badd
+      ref: f9a8fc77272d0f75f84c7a8d28a84d7694fbe786
     components: [ mcpwm_unified ]
 
 status_led:
@@ -236,5 +236,6 @@ sensor:
     id: fan_speed
     name: Fan Speed
     accuracy_decimals: 0
+    update_interval: 5s
     filters:
       - multiply: 0.5
