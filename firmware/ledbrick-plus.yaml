@@ -9,6 +9,7 @@ esp32:
 
 # Enable logging
 logger:
+  level: DEBUG
 
 # Enable Home Assistant API
 api:
@@ -35,7 +36,7 @@ external_components:
   - source:
       type: git
       url: https://github.com/theatrus/mcpwm_unified
-      ref: f9a8fc77272d0f75f84c7a8d28a84d7694fbe786
+      ref: fc7ecf2e6ddb8cf20c55560c3e42ebc1a1756ed3
     components: [ mcpwm_unified ]
 
 status_led:
@@ -45,72 +46,73 @@ output:
   - platform: mcpwm_unified
     id: pwm_output_1
     pin: GPIO5
-    frequency: 500000Hz
+    frequency: 39khz
   - platform: mcpwm_unified
     id: pwm_output_ao1
     pin: GPIO6
-    frequency: 500000Hz  
+    frequency: 39kHz  
   - platform: mcpwm_unified
     id: pwm_output_2
     pin: GPIO7
-    frequency: 500000Hz
+    frequency: 39khz
   - platform: mcpwm_unified
     id: pwm_output_ao2
     pin: GPIO8
-    frequency: 500000Hz
+    frequency: 39khz
   - platform: mcpwm_unified
     id: pwm_output_3
     pin: GPIO9
-    frequency: 500000Hz
+    frequency: 39khz
   - platform: mcpwm_unified
     id: pwm_output_ao3
     pin: GPIO10
-    frequency: 500000Hz
+    frequency: 39khz
   - platform: mcpwm_unified
     id: pwm_output_4
     pin: GPIO11
-    frequency: 500000Hz
+    frequency: 39khz
   - platform: mcpwm_unified
     id: pwm_output_ao4
     pin: GPIO12
-    frequency: 500000Hz
+    frequency: 39khz
   - platform: mcpwm_unified
     id: pwm_output_5
     pin: GPIO13
-    frequency: 500000Hz
+    frequency: 39khz
   - platform: mcpwm_unified
     id: pwm_output_ao5
     pin: GPIO14
-    frequency: 500000Hz
+    frequency: 39khz
   - platform: mcpwm_unified
     id: pwm_output_6
     pin: GPIO15
-    frequency: 500000Hz
+    frequency: 39khz
   - platform: mcpwm_unified
     id: pwm_output_ao6
     pin: GPIO16
-    frequency: 500000Hz
+    frequency: 39khz
   - platform: mcpwm_unified
     id: pwm_output_7
     pin: GPIO17
-    frequency: 500000Hz
+    frequency: 39khz
   - platform: mcpwm_unified
     id: pwm_output_ao7
     pin: GPIO18
-    frequency: 500000Hz
+    frequency: 39khz
   - platform: mcpwm_unified
     id: pwm_output_8
     pin: GPIO33
-    frequency: 500000Hz
+    frequency: 39khz
   - platform: mcpwm_unified
     id: pwm_output_ao8
     pin: GPIO34
-    frequency: 500000Hz
+    frequency: 39khz
   - platform: mcpwm_unified
     id: fan_pwm
     pin: GPIO37
-    frequency: 50000Hz
+    frequency: 16000Hz
     inverted: true
+    driver: ledc
 
 switch:
   - platform: gpio
