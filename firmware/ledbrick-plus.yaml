@@ -3,7 +3,7 @@ esphome:
   friendly_name: ledbrickplus
   project:
     name: "ledbrick.plus"
-    version: "1.0.0"
+    version: "__VERSION__"
 
 dashboard_import:
   package_import_url: github://theatrus/ledbrick/firmware/ledbrick-plus.yaml@master
