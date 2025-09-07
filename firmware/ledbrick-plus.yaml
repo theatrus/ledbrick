@@ -110,18 +110,21 @@ output:
     id: fan_pwm
     pin: GPIO37
     frequency: 50000Hz
+    inverted: true
 
 switch:
   - platform: gpio
     pin: GPIO36
     name: "Fan power"
     id: fan_pwr
+    restore_mode: RESTORE_DEFAULT_ON
 
 fan:
   - platform: speed
     output: fan_pwm
     name: Fan Speed
     id: fan_output
+    restore_mode: RESTORE_DEFAULT_ON
 
 
 light:
