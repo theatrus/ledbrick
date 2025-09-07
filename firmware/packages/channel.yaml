@@ -1,0 +1,71 @@
+# ESPHome package for LED channel (PWM + Current control pair)
+# Provides PWM light control and current control sliders with limiting
+esphome:
+  project:
+    name: "ledbrick.channel"
+    version: "2.0.0"
+
+# Required substitutions:
+# - channel_number: Channel identifier (e.g., "1", "2", etc.)
+# - pwm_pin: GPIO pin for PWM output
+# - current_pin: GPIO pin for current control output
+
+output:
+  - platform: mcpwm_unified
+    id: pwm_output_${channel_number}
+    pin: ${pwm_pin}
+    frequency: 39khz
+  - platform: mcpwm_unified
+    id: pwm_output_ao${channel_number}
+    pin: ${current_pin}
+    frequency: 39khz
+
+light:
+  - platform: monochromatic
+    id: lpwm${channel_number}
+    output: pwm_output_${channel_number}
+    name: "Ch${channel_number} PWM"
+    gamma_correct: 1
+
+number:
+  # Current control slider (0-2A)
+  - platform: template
+    id: current_${channel_number}
+    name: "Ch${channel_number} Current"
+    optimistic: true
+    min_value: 0.0
+    max_value: 2.0
+    step: 0.01
+    unit_of_measurement: "A"
+    mode: slider
+    restore_value: true
+    initial_value: 0.0
+    on_value:
+      then:
+        - lambda: |-
+            float max_current = id(max_current_${channel_number}).state;
+            float requested_current = x;
+            float limited_current = min(requested_current, max_current);
+            
+            // Update the output (0-2A maps to 0-100% PWM)
+            float pwm_value = limited_current / 2.0;
+            id(pwm_output_ao${channel_number}).set_level(pwm_value);
+            
+            // If we had to limit, update the slider to show actual value
+            if (limited_current != requested_current) {
+              id(current_${channel_number}).publish_state(limited_current);
+            }
+  
+  # Maximum current limit slider
+  - platform: template
+    id: max_current_${channel_number}
+    name: "Ch${channel_number} Max Current"
+    optimistic: true
+    min_value: 0.0
+    max_value: 2.0
+    step: 0.01
+    unit_of_measurement: "A"
+    mode: slider
+    restore_value: true
+    initial_value: 1.0
+    entity_category: config
