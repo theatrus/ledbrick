@@ -1,3 +1,49 @@
-_build
+# Build directories
+_build/
 *.uvguix*
 *.uvoptx*
+
+# ESPHome build artifacts
+.esphome/
+**/.pioenvs/
+**/.piolibdeps/
+
+# IDE/Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*.tmp
+
+# Secrets and credentials
+firmware/secrets.yaml
+**/secrets.yaml
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+
+# Node.js (if used for any tooling)
+node_modules/
+npm-debug.log*
+
+# Temporary files
+*.log
+*.backup
+*.bak

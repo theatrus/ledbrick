@@ -7,7 +7,7 @@ esphome:
 
 dashboard_import:
   package_import_url: github://theatrus/ledbrick/firmware/ledbrick-plus.yaml@master
-  import_full_config: true
+  import_full_config: false
 
 esp32:
   board: esp32-s3-devkitc-1
