@@ -1,6 +1,7 @@
 # LEDBrick Project
 
 [![Build and Test](https://github.com/theatrus/ledbrick/actions/workflows/esphome-build.yml/badge.svg)](https://github.com/theatrus/ledbrick/actions/workflows/esphome-build.yml)
+[![Unit Tests](https://github.com/theatrus/ledbrick/actions/workflows/unit-tests.yml/badge.svg)](https://github.com/theatrus/ledbrick/actions/workflows/unit-tests.yml)
 [![Publish Firmware](https://github.com/theatrus/ledbrick/actions/workflows/publish.yml/badge.svg)](https://github.com/theatrus/ledbrick/actions/workflows/publish.yml)
 
 Open Hardware design for professional aquarium LED lighting systems.
