@@ -7,9 +7,8 @@
 #include <cmath>
 #include <cstdlib>
 
-// Include the standalone implementations
-#include "astronomical_calculator.cpp"
-#include "scheduler.cpp"
+// The standalone implementations are compiled separately by ESPHome
+// No need to include the .cpp files here
 
 namespace esphome {
 namespace ledbrick_scheduler {
