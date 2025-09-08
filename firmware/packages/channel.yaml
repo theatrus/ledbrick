@@ -1,5 +1,5 @@
 # ESPHome package for LED channel (PWM + Current control pair)
-# Provides PWM light control and current control sliders with limiting
+# Provides PWM light control, current control sliders with limiting, and scheduler integration
 esphome:
   project:
     name: "ledbrick.channel"
@@ -69,3 +69,5 @@ number:
     restore_value: true
     initial_value: 1.0
     entity_category: config
+
+# Scheduler functionality is handled globally in the main config

@@ -38,6 +38,22 @@ wifi:
 
 captive_portal:
     
+# Time synchronization
+time:
+  - platform: sntp
+    id: sntp_time
+    servers:
+      - pool.ntp.org
+      - time.nist.gov
+    timezone: UTC
+    on_time_sync:
+      - logger.log: "Time synchronized via SNTP"
+  - platform: homeassistant
+    id: homeassistant_time
+    timezone: UTC
+    on_time_sync:
+      - logger.log: "Time synchronized via Home Assistant"
+
 external_components:
   - source:
       type: git
