@@ -75,6 +75,13 @@ ledbrick_scheduler:
   timezone: America/Los_Angeles     # Set your local timezone or leave default to match Home Assistant
   latitude: 37.7749                # San Francisco latitude (set to your location)
   longitude: -122.4194             # San Francisco longitude (set to your location)
+  
+  # Optional: Astronomical Time Projection
+  # Projects sunrise/sunset times from the configured location to your local timezone
+  # Example: Tahiti sunrise at 6:15 AM becomes 6:15 AM Pacific Time (with optional shift)
+  astronomical_projection: false   # Enable to map remote sunrise/sunset to local time
+  time_shift_hours: 0             # Optional: Additional shift in hours (+/- 12)
+  time_shift_minutes: 0           # Optional: Additional shift in minutes (+/- 59)
 
 
 status_led:

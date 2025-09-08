@@ -48,6 +48,11 @@ class LEDBrickScheduler : public PollingComponent {
     latitude_ = latitude; 
     longitude_ = longitude; 
   }
+  void set_astronomical_projection(bool enabled) { astronomical_projection_ = enabled; }
+  void set_time_shift(int hours, int minutes) { 
+    time_shift_hours_ = hours; 
+    time_shift_minutes_ = minutes; 
+  }
 
   // Schedule management
   void add_schedule_point(const SchedulePoint &point);
@@ -79,6 +84,10 @@ class LEDBrickScheduler : public PollingComponent {
   float get_moon_intensity() const;  // Returns 0.0-1.0 based on altitude (0=below horizon, 1=overhead)
   float get_sun_intensity() const;   // Returns 0.0-1.0 based on altitude (0=below horizon, 1=overhead)
   
+  // Projected astronomical functions (with time shift mapping)
+  float get_projected_sun_intensity() const;  // Sun intensity with optional time projection
+  float get_projected_moon_intensity() const; // Moon intensity with optional time projection
+  
   struct MoonTimes {
     bool rise_valid = false;
     bool set_valid = false;
@@ -102,6 +111,11 @@ class LEDBrickScheduler : public PollingComponent {
   // Geographic location for astronomical calculations
   double latitude_{37.7749};   // Default: San Francisco
   double longitude_{-122.4194};
+  
+  // Astronomical time projection settings
+  bool astronomical_projection_{false};  // Enable time projection mode
+  int time_shift_hours_{0};              // Additional time shift in hours
+  int time_shift_minutes_{0};            // Additional time shift in minutes
   
   time::RealTimeClock *time_source_{nullptr};
   
@@ -138,6 +152,10 @@ class LEDBrickScheduler : public PollingComponent {
   CelestialPosition calculate_moon_position() const;
   CelestialPosition calculate_moon_position_at_time(double julian_day) const;
   CelestialPosition calculate_sun_position() const;
+  CelestialPosition calculate_sun_position_at_time(double julian_day) const;
+  
+  // Time projection helper
+  double get_projected_julian_day() const;
   
   // Built-in presets
   void initialize_presets();
