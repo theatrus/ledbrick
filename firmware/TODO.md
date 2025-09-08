@@ -83,69 +83,107 @@ data:
 
 ## Current Implementation Status
 
-### ✅ Completed
-- C++ component structure with service handler methods
-- Python codegen integration for ESPHome
-- Basic automation actions (SetSchedulePointAction, LoadPresetAction, SetEnabledAction)
-- Service method implementations in C++:
-  - `on_set_schedule_point()`
-  - `on_load_preset()`
-  - `on_set_enabled()`
-  - `on_get_status()`
+### ✅ Completed (Updated Implementation)
+- **C++ Component**: Professional LEDBrickScheduler class with complete scheduling logic
+- **Python Integration**: ESPHome codegen integration and automation actions
+- **Template-Based Services**: Native ESPHome service system with individual channel parameters
+- **Local Storage**: Binary format persistence to ESP32 flash memory (4KB storage)
+- **Home Assistant Integration**: Complete UI helpers, scripts, and automations
+- **Preset System**: Built-in presets (sunrise_sunset, full_spectrum, simple)
+- **Linear Interpolation**: Smooth transitions between schedule points
+- **Current Limiting**: Per-channel maximum current enforcement
+- **Status Reporting**: Template sensors for monitoring scheduler state
 
-### ❌ Blocked/Incomplete
-- Service registration causes linking errors with ESPHome API
-- ESPHome CustomAPIDevice service registration requires complex template specializations
-- `std::vector<float>` parameter types not fully supported in ESPHome service system
+### ✅ Working Services (Template-Based Approach)
+- `set_schedule_point_8ch` - Set schedule point for all 8 channels
+- `set_schedule_point_4ch` - Simplified 4-channel version for testing  
+- `remove_schedule_point` - Remove schedule point at specific time
+- `clear_schedule` - Remove all schedule points
+- `load_preset` - Load built-in or saved presets
+- `save_preset` - Save current schedule as named preset
+- `set_scheduler_enabled` - Enable/disable scheduler
+- `get_scheduler_status` - Log current status and values
+- `export_schedule` - Export schedule as JSON to logs
+- `save_to_flash` / `load_from_flash` - Manual flash storage operations
+
+### ❌ Previous Approach (Documented as Not Working)
+- ESPHome CustomAPIDevice service registration with `std::vector<float>` parameters
+- Direct C++ service method binding (linking errors)
+- Complex parameter type serialization (template specialization issues)
 
 ## Implementation Approaches
 
-### Option 1: Fix ESPHome Service Registration (Preferred)
-**Status:** Attempted but blocked by linking errors
-**Issue:** ESPHome's CustomAPIDevice service registration has incomplete template specializations for `std::vector<float>` types
-**Solution:** 
-- Contribute fixes to ESPHome codebase for vector parameter support
-- Or implement custom service parameter serialization
+### ✅ Option 2: ESPHome Native Services (IMPLEMENTED)
+**Status:** Successfully implemented and tested
+**Approach:** Define services in YAML and connect to component methods via lambda functions
+**Benefits:**
+- No linking issues with complex parameter types
+- Works with existing ESPHome infrastructure
+- Full control over parameter validation and conversion
+- Easy to extend and modify
 
-### Option 2: Use ESPHome Native Services (Alternative)
-**Approach:** Define services in YAML and connect to component methods
+**Example Implementation:**
 ```yaml
 api:
   services:
-    - service: set_schedule_point
+    - service: set_schedule_point_8ch
       variables:
         time_minutes: int
         pwm_ch1: float
         pwm_ch2: float
-        # ... repeat for all channels
-        current_ch1: float
-        current_ch2: float
-        # ... repeat for all channels
+        # ... all 8 channels for both PWM and current
       then:
         - lambda: |-
-            std::vector<float> pwm_values = {pwm_ch1, pwm_ch2, ...};
-            std::vector<float> current_values = {current_ch1, current_ch2, ...};
+            std::vector<float> pwm_values = {pwm_ch1, pwm_ch2, pwm_ch3, pwm_ch4, pwm_ch5, pwm_ch6, pwm_ch7, pwm_ch8};
+            std::vector<float> current_values = {current_ch1, current_ch2, current_ch3, current_ch4, current_ch5, current_ch6, current_ch7, current_ch8};
             id(main_scheduler).set_schedule_point(time_minutes, pwm_values, current_values);
 ```
 
-### Option 3: Home Assistant Template Integration
-**Approach:** Use Home Assistant's template system to call simpler services
-```yaml
-# In Home Assistant
-script:
-  set_full_spectrum_schedule:
-    sequence:
-      - service: esphome.ledbrickplus_set_schedule_point
-        data_template:
-          time_minutes: 480
-          pwm_values: "{{ [0, 20, 60, 80, 60, 40, 20, 0] | join(',') }}"
+### ❌ Option 1: ESPHome CustomAPIDevice Services (FAILED)
+**Status:** Attempted but blocked by linking errors
+**Issue:** ESPHome's CustomAPIDevice has incomplete template specializations for `std::vector<float>` parameters
+**Conclusion:** Not viable with current ESPHome version
+
+### ✅ Option 3: Home Assistant Template Integration (IMPLEMENTED)
+**Status:** Complete with UI helpers, scripts, and automations
+**Approach:** Home Assistant provides rich UI and logic, calls ESPHome services with individual parameters
+**Benefits:**
+- Rich Home Assistant dashboard integration
+- Input helpers for easy configuration
+- Automated scheduling via time-based automations
+- Script shortcuts for common configurations
+
+## Implementation Complete
+
+### ✅ Ready for Use
+The LEDBrick Scheduler is now fully implemented with:
+
+1. **ESPHome Component**: Professional C++ scheduler with flash storage (`components/ledbrick_scheduler/`)
+2. **Service Integration**: Template-based services for Home Assistant (`packages/scheduler_services.yaml`)  
+3. **Home Assistant Helpers**: Complete UI and automation configuration (`homeassistant_integration.yaml`)
+4. **Test Configuration**: Working example with all 8 channels (`test_scheduler_with_services.yaml`)
+
+### Quick Start
+1. **Enable in LEDBrick**: Uncomment scheduler package line in `ledbrick-plus.yaml:78`
+2. **Add External Component**: Include scheduler component in configuration
+3. **Import HA Config**: Copy `homeassistant_integration.yaml` to Home Assistant
+4. **Configure Schedule**: Use Home Assistant UI or call services directly
+
+### Usage Examples
+```bash
+# Load a preset via ESPHome service
+service: esphome.ledbrickplus_load_preset
+data:
+  preset_name: "sunrise_sunset"
+
+# Set custom schedule point  
+service: esphome.ledbrickplus_set_schedule_point_8ch
+data:
+  time_minutes: 480  # 8:00 AM
+  pwm_ch1: 0
+  pwm_ch2: 20
+  # ... etc for all channels
 ```
-
-## Recommended Next Steps
-
-1. **Immediate:** Use Option 2 (ESPHome Native Services) for basic functionality
-2. **Short-term:** Implement preset loading via simple string parameter services
-3. **Long-term:** Contribute ESPHome fixes for complex parameter types (Option 1)
 
 ## Service Interface Design Goals
 

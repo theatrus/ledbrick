@@ -3,7 +3,7 @@
 #include "esphome/core/component.h"
 #include "esphome/core/automation.h"
 #include "esphome/core/time.h"
-#include "esphome/components/api/custom_api_device.h"
+#include "esphome/core/preferences.h"
 #include "esphome/components/time/real_time_clock.h"
 #include "esphome/components/output/float_output.h"
 #include "esphome/components/number/number.h"
@@ -29,7 +29,7 @@ struct InterpolationResult {
   std::vector<float> current_values;
 };
 
-class LEDBrickScheduler : public PollingComponent, public api::CustomAPIDevice {
+class LEDBrickScheduler : public PollingComponent {
  public:
   LEDBrickScheduler() : PollingComponent() {}
   explicit LEDBrickScheduler(uint32_t update_interval) : PollingComponent(update_interval) {}
@@ -43,6 +43,7 @@ class LEDBrickScheduler : public PollingComponent, public api::CustomAPIDevice {
   void set_num_channels(uint8_t channels) { num_channels_ = channels; }
   void set_update_interval(uint32_t interval_ms) { update_interval_ = interval_ms; }
   void set_time_source(time::RealTimeClock *time_source) { time_source_ = time_source; }
+  void set_timezone(const std::string &timezone) { timezone_ = timezone; }
 
   // Schedule management
   void add_schedule_point(const SchedulePoint &point);
@@ -54,6 +55,12 @@ class LEDBrickScheduler : public PollingComponent, public api::CustomAPIDevice {
   // Preset management
   void load_preset(const std::string &preset_name);
   void save_preset(const std::string &preset_name);
+  
+  // Persistent storage
+  void save_schedule_to_flash();
+  void load_schedule_from_flash();
+  void export_schedule_json(std::string &json_output) const;
+  bool import_schedule_json(const std::string &json_input);
   
   // Control
   void set_enabled(bool enabled) { enabled_ = enabled; }
@@ -72,8 +79,18 @@ class LEDBrickScheduler : public PollingComponent, public api::CustomAPIDevice {
   uint8_t num_channels_{8};
   uint32_t update_interval_{30000}; // 30 seconds
   bool enabled_{true};
+  std::string timezone_{"UTC"};
   
   time::RealTimeClock *time_source_{nullptr};
+  
+  // Persistent storage
+  ESPPreferenceObject schedule_pref_;
+  static constexpr uint32_t SCHEDULE_HASH = 0x12345678;  // Storage identifier
+  
+  struct ScheduleStorage {
+    uint16_t num_points;
+    uint8_t data[3800];  // Flexible storage for points
+  };
   
   // Schedule storage
   std::vector<SchedulePoint> schedule_points_;
@@ -88,13 +105,6 @@ class LEDBrickScheduler : public PollingComponent, public api::CustomAPIDevice {
   InterpolationResult interpolate_values(uint16_t current_time) const;
   void apply_values(const InterpolationResult &values);
   void sort_schedule_points();
-  void register_services();
-  
-  // Service handlers
-  void on_set_schedule_point(int time_minutes, std::vector<float> pwm_values, std::vector<float> current_values);
-  void on_load_preset(std::string preset_name);
-  void on_set_enabled(bool enabled);
-  void on_get_status();
   
   // Built-in presets
   void initialize_presets();

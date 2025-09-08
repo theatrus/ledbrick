@@ -1,0 +1,222 @@
+# LEDBrick Scheduler Services Package
+# Template-based Home Assistant integration for the LEDBrick Scheduler
+
+api:
+  services:
+    # === Schedule Point Management ===
+    
+    # Set a schedule point for all 8 channels
+    - service: set_schedule_point_8ch
+      variables:
+        time_minutes: int
+        pwm_ch1: float
+        pwm_ch2: float
+        pwm_ch3: float
+        pwm_ch4: float
+        pwm_ch5: float
+        pwm_ch6: float
+        pwm_ch7: float
+        pwm_ch8: float
+        current_ch1: float
+        current_ch2: float
+        current_ch3: float
+        current_ch4: float
+        current_ch5: float
+        current_ch6: float
+        current_ch7: float
+        current_ch8: float
+      then:
+        - lambda: |-
+            std::vector<float> pwm_values = {pwm_ch1, pwm_ch2, pwm_ch3, pwm_ch4, pwm_ch5, pwm_ch6, pwm_ch7, pwm_ch8};
+            std::vector<float> current_values = {current_ch1, current_ch2, current_ch3, current_ch4, current_ch5, current_ch6, current_ch7, current_ch8};
+            id(main_scheduler).set_schedule_point(time_minutes, pwm_values, current_values);
+        - logger.log:
+            format: "Schedule point set at %02d:%02d for all channels"
+            args: [ 'time_minutes / 60', 'time_minutes % 60' ]
+
+    # Simplified 4-channel version for testing
+    - service: set_schedule_point_4ch
+      variables:
+        time_minutes: int
+        pwm_ch1: float
+        pwm_ch2: float
+        pwm_ch3: float
+        pwm_ch4: float
+        current_ch1: float
+        current_ch2: float
+        current_ch3: float
+        current_ch4: float
+      then:
+        - lambda: |-
+            std::vector<float> pwm_values = {pwm_ch1, pwm_ch2, pwm_ch3, pwm_ch4, 0, 0, 0, 0};
+            std::vector<float> current_values = {current_ch1, current_ch2, current_ch3, current_ch4, 0, 0, 0, 0};
+            id(main_scheduler).set_schedule_point(time_minutes, pwm_values, current_values);
+        - logger.log:
+            format: "Schedule point set at %02d:%02d for channels 1-4"
+            args: [ 'time_minutes / 60', 'time_minutes % 60' ]
+
+    # Remove a schedule point
+    - service: remove_schedule_point
+      variables:
+        time_minutes: int
+      then:
+        - lambda: |-
+            id(main_scheduler).remove_schedule_point(time_minutes);
+        - logger.log:
+            format: "Removed schedule point at %02d:%02d"
+            args: [ 'time_minutes / 60', 'time_minutes % 60' ]
+
+    # Clear all schedule points
+    - service: clear_schedule
+      then:
+        - lambda: |-
+            id(main_scheduler).clear_schedule();
+        - logger.log: "Cleared all schedule points"
+
+    # === Preset Management ===
+    
+    # Load a preset schedule
+    - service: load_preset
+      variables:
+        preset_name: string
+      then:
+        - lambda: |-
+            id(main_scheduler).load_preset(preset_name);
+        - logger.log:
+            format: "Loaded preset: %s"
+            args: [ 'preset_name.c_str()' ]
+
+    # Save current schedule as preset (custom presets saved in memory only)
+    - service: save_preset
+      variables:
+        preset_name: string
+      then:
+        - lambda: |-
+            id(main_scheduler).save_preset(preset_name);
+        - logger.log:
+            format: "Saved current schedule as preset: %s"
+            args: [ 'preset_name.c_str()' ]
+
+    # === Control Services ===
+    
+    # Enable/disable the scheduler
+    - service: set_scheduler_enabled
+      variables:
+        enabled: bool
+      then:
+        - lambda: |-
+            id(main_scheduler).set_enabled(enabled);
+        - logger.log:
+            format: "Scheduler %s"
+            args: [ 'enabled ? "enabled" : "disabled"' ]
+
+    # Get current scheduler status (logs current state)
+    - service: get_scheduler_status
+      then:
+        - lambda: |-
+            auto current_time = id(main_scheduler).get_current_time_minutes();
+            auto values = id(main_scheduler).get_current_values();
+            ESP_LOGI("main", "Scheduler Status - Enabled: %s, Time: %02d:%02d, Channels: %d", 
+                     id(main_scheduler).is_enabled() ? "YES" : "NO",
+                     current_time / 60, current_time % 60,
+                     values.pwm_values.size());
+            for (size_t i = 0; i < values.pwm_values.size() && i < 8; i++) {
+              ESP_LOGI("main", "  Ch%d: PWM=%.1f%%, Current=%.2fA", 
+                       (int)i+1, values.pwm_values[i], values.current_values[i]);
+            }
+
+    # === Data Export/Import Services ===
+    
+    # Export current schedule as JSON (to logs)
+    - service: export_schedule
+      then:
+        - lambda: |-
+            std::string json_output;
+            id(main_scheduler).export_schedule_json(json_output);
+            ESP_LOGI("main", "Schedule Export: %s", json_output.c_str());
+
+    # Get schedule as JSON (logs the JSON data)
+    - service: get_schedule_json
+      then:
+        - lambda: |-
+            std::string json_output;
+            id(main_scheduler).export_schedule_json(json_output);
+            ESP_LOGI("main", "Schedule JSON Export: %s", json_output.c_str());
+
+    # Force save schedule to flash
+    - service: save_to_flash
+      then:
+        - lambda: |-
+            id(main_scheduler).save_schedule_to_flash();
+        - logger.log: "Schedule saved to flash memory"
+
+    # Force reload schedule from flash
+    - service: load_from_flash
+      then:
+        - lambda: |-
+            id(main_scheduler).load_schedule_from_flash();
+        - logger.log: "Schedule loaded from flash memory"
+
+# === Status Sensors ===
+# These sensors report the current state to Home Assistant
+
+sensor:
+  # Current scheduler time in minutes
+  - platform: template
+    name: "Scheduler Current Time Minutes"
+    id: scheduler_time_minutes
+    accuracy_decimals: 0
+    unit_of_measurement: "min"
+    lambda: |-
+      return id(main_scheduler).get_current_time_minutes();
+    update_interval: 60s
+
+  # Current PWM values for monitoring (channel 1 as example)
+  - platform: template
+    name: "Scheduler PWM Channel 1"
+    id: scheduler_pwm_ch1
+    accuracy_decimals: 1
+    unit_of_measurement: "%"
+    lambda: |-
+      auto values = id(main_scheduler).get_current_values();
+      return values.pwm_values.size() > 0 ? values.pwm_values[0] : 0.0f;
+    update_interval: 30s
+
+  # Current values for monitoring (channel 1 as example)
+  - platform: template
+    name: "Scheduler Current Channel 1"
+    id: scheduler_current_ch1
+    accuracy_decimals: 2
+    unit_of_measurement: "A"
+    lambda: |-
+      auto values = id(main_scheduler).get_current_values();
+      return values.current_values.size() > 0 ? values.current_values[0] : 0.0f;
+    update_interval: 30s
+
+# === Control Entities ===
+
+switch:
+  # Global scheduler enable/disable
+  - platform: template
+    name: "Scheduler Enabled"
+    id: scheduler_enable_switch
+    lambda: |-
+      return id(main_scheduler).is_enabled();
+    turn_on_action:
+      - lambda: |-
+          id(main_scheduler).set_enabled(true);
+    turn_off_action:
+      - lambda: |-
+          id(main_scheduler).set_enabled(false);
+
+text_sensor:
+  # Current time as human-readable string
+  - platform: template
+    name: "Scheduler Current Time"
+    id: scheduler_time_display
+    lambda: |-
+      auto time_minutes = id(main_scheduler).get_current_time_minutes();
+      char time_str[10];
+      sprintf(time_str, "%02d:%02d", time_minutes / 60, time_minutes % 60);
+      return std::string(time_str);
+    update_interval: 60s

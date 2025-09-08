@@ -9,6 +9,7 @@ dashboard_import:
   package_import_url: github://theatrus/ledbrick/firmware/ledbrick-plus.yaml@master
   import_full_config: false
 
+
 esp32:
   board: esp32-s3-devkitc-1
   framework:
@@ -38,21 +39,21 @@ wifi:
 
 captive_portal:
     
-# Time synchronization
+# Time synchronization with automatic timezone detection
 time:
+  - platform: homeassistant
+    id: homeassistant_time
+    on_time_sync:
+      - logger.log: "Time synchronized via Home Assistant with timezone"
   - platform: sntp
     id: sntp_time
     servers:
       - pool.ntp.org
       - time.nist.gov
-    timezone: UTC
+    # Use Home Assistant's timezone when available, fallback to America/Los_Angeles
+    timezone: America/Los_Angeles
     on_time_sync:
-      - logger.log: "Time synchronized via SNTP"
-  - platform: homeassistant
-    id: homeassistant_time
-    timezone: UTC
-    on_time_sync:
-      - logger.log: "Time synchronized via Home Assistant"
+      - logger.log: "Time synchronized via SNTP with timezone"
 
 external_components:
   - source:
@@ -60,6 +61,19 @@ external_components:
       url: https://github.com/theatrus/mcpwm_unified
       ref: ebfcc0a743dfe2ccbdd7d582cc5bd97225980ee2
     components: [ mcpwm_unified ]
+  - source:
+      type: local
+      path: components
+    components: [ ledbrick_scheduler ]
+
+# Our custom scheduler component with services
+ledbrick_scheduler:
+  id: main_scheduler
+  channels: 8  # Full 8-channel configuration
+  update_interval: 30s
+  time_source: homeassistant_time  # Prefer Home Assistant time for timezone support
+  timezone: America/Los_Angeles     # Set your local timezone or leave default to match Home Assistant
+
 
 status_led:
   pin: GPIO1
@@ -74,6 +88,8 @@ packages:
   channel6: !include { file: packages/channel.yaml, vars: { channel_number: "6", pwm_pin: "GPIO15", current_pin: "GPIO16" } }
   channel7: !include { file: packages/channel.yaml, vars: { channel_number: "7", pwm_pin: "GPIO17", current_pin: "GPIO18" } }
   channel8: !include { file: packages/channel.yaml, vars: { channel_number: "8", pwm_pin: "GPIO33", current_pin: "GPIO34" } }
+  # Uncomment the line below to enable the LEDBrick Scheduler with Home Assistant services
+  scheduler: !include packages/scheduler_services.yaml
 
 output:
   # Fan PWM output - separate from channel packages

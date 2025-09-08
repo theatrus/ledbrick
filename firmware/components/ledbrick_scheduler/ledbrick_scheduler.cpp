@@ -14,16 +14,22 @@ static const char *const TAG = "ledbrick_scheduler";
 void LEDBrickScheduler::setup() {
   ESP_LOGCONFIG(TAG, "Setting up LEDBrick Scheduler...");
   
+  // Initialize persistent storage
+  schedule_pref_ = global_preferences->make_preference<ScheduleStorage>(SCHEDULE_HASH);
+  
   // Initialize presets
   initialize_presets();
   
+  // Load schedule from flash storage
+  load_schedule_from_flash();
+  
   // Load default sunrise/sunset schedule if no points exist
   if (schedule_points_.empty()) {
+    ESP_LOGI(TAG, "No saved schedule found, loading default preset");
     load_preset("sunrise_sunset");
+    save_schedule_to_flash();  // Save the default schedule
   }
   
-  // Register Home Assistant services
-  register_services();
   
   ESP_LOGCONFIG(TAG, "LEDBrick Scheduler setup complete");
 }
@@ -43,12 +49,13 @@ void LEDBrickScheduler::dump_config() {
   ESP_LOGCONFIG(TAG, "  Channels: %u", num_channels_);
   ESP_LOGCONFIG(TAG, "  Update Interval: %u ms", update_interval_);
   ESP_LOGCONFIG(TAG, "  Enabled: %s", enabled_ ? "YES" : "NO");
+  ESP_LOGCONFIG(TAG, "  Timezone: %s", timezone_.c_str());
   ESP_LOGCONFIG(TAG, "  Schedule Points: %zu", schedule_points_.size());
   ESP_LOGCONFIG(TAG, "  Time Source: %s", time_source_ ? "CONFIGURED" : "NOT SET");
   
   if (time_source_) {
     uint16_t current_time = get_current_time_minutes();
-    ESP_LOGCONFIG(TAG, "  Current Time: %02u:%02u (%u minutes)", 
+    ESP_LOGCONFIG(TAG, "  Current Local Time: %02u:%02u (%u minutes)", 
                   current_time / 60, current_time % 60, current_time);
   }
 }
@@ -66,6 +73,9 @@ void LEDBrickScheduler::add_schedule_point(const SchedulePoint &point) {
   // Add new point
   schedule_points_.push_back(point);
   sort_schedule_points();
+  
+  // Save to flash automatically
+  save_schedule_to_flash();
   
   ESP_LOGD(TAG, "Added schedule point at %02u:%02u", 
            point.time_minutes / 60, point.time_minutes % 60);
@@ -261,56 +271,6 @@ void LEDBrickScheduler::add_max_current_control(uint8_t channel, number::Number 
   ESP_LOGD(TAG, "Added max current control for channel %u", channel);
 }
 
-void LEDBrickScheduler::register_services() {
-  // Register Home Assistant services
-  register_service(&LEDBrickScheduler::on_set_schedule_point, "set_schedule_point",
-                  {"time_minutes", "pwm_values", "current_values"});
-  
-  register_service(&LEDBrickScheduler::on_load_preset, "load_preset", {"preset_name"});
-  
-  register_service(&LEDBrickScheduler::on_set_enabled, "set_enabled", {"enabled"});
-  
-  register_service(&LEDBrickScheduler::on_get_status, "get_status");
-}
-
-void LEDBrickScheduler::on_set_schedule_point(int time_minutes, std::vector<float> pwm_values, 
-                                             std::vector<float> current_values) {
-  if (time_minutes < 0 || time_minutes >= 1440) {
-    ESP_LOGW(TAG, "Invalid time_minutes: %d", time_minutes);
-    return;
-  }
-  
-  // Resize vectors to match channel count
-  pwm_values.resize(num_channels_, 0.0f);
-  current_values.resize(num_channels_, 0.0f);
-  
-  set_schedule_point(static_cast<uint16_t>(time_minutes), pwm_values, current_values);
-}
-
-void LEDBrickScheduler::on_load_preset(std::string preset_name) {
-  load_preset(preset_name);
-}
-
-void LEDBrickScheduler::on_set_enabled(bool enabled) {
-  set_enabled(enabled);
-  ESP_LOGI(TAG, "Scheduler %s", enabled ? "enabled" : "disabled");
-}
-
-void LEDBrickScheduler::on_get_status() {
-  uint16_t current_time = get_current_time_minutes();
-  auto values = get_current_values();
-  
-  // Send status back via Home Assistant event  
-  std::map<std::string, std::string> data;
-  data["enabled"] = enabled_ ? "true" : "false";
-  data["current_time"] = std::to_string(current_time);
-  data["schedule_points"] = std::to_string(schedule_points_.size());
-  data["channels"] = std::to_string(num_channels_);
-  
-  // Note: fire_homeassistant_event may need different implementation
-  ESP_LOGI(TAG, "Status: enabled=%s, time=%u, points=%zu, channels=%u", 
-           data["enabled"].c_str(), current_time, schedule_points_.size(), num_channels_);
-}
 
 void LEDBrickScheduler::initialize_presets() {
   presets_["sunrise_sunset"] = create_sunrise_sunset_preset();
@@ -386,6 +346,191 @@ std::vector<SchedulePoint> LEDBrickScheduler::create_simple_preset() const {
                      std::vector<float>(num_channels_, 0.0f));
   
   return points;
+}
+
+void LEDBrickScheduler::save_schedule_to_flash() {
+  ScheduleStorage storage;
+  memset(&storage, 0, sizeof(storage));
+  
+  storage.num_points = std::min((size_t)50, schedule_points_.size()); // Limit to 50 points
+  
+  size_t data_pos = 0;
+  for (size_t i = 0; i < storage.num_points && data_pos < sizeof(storage.data) - 100; i++) {
+    const auto &point = schedule_points_[i];
+    
+    // Write time_minutes (2 bytes)
+    if (data_pos + 2 >= sizeof(storage.data)) break;
+    storage.data[data_pos++] = point.time_minutes & 0xFF;
+    storage.data[data_pos++] = (point.time_minutes >> 8) & 0xFF;
+    
+    // Write PWM count and values
+    if (data_pos + 1 >= sizeof(storage.data)) break;
+    uint8_t pwm_count = std::min((size_t)num_channels_, point.pwm_values.size());
+    storage.data[data_pos++] = pwm_count;
+    
+    for (uint8_t j = 0; j < pwm_count && data_pos + 4 < sizeof(storage.data); j++) {
+      uint32_t float_bits = *reinterpret_cast<const uint32_t*>(&point.pwm_values[j]);
+      storage.data[data_pos++] = (float_bits >> 0) & 0xFF;
+      storage.data[data_pos++] = (float_bits >> 8) & 0xFF;
+      storage.data[data_pos++] = (float_bits >> 16) & 0xFF;
+      storage.data[data_pos++] = (float_bits >> 24) & 0xFF;
+    }
+    
+    // Write current count and values
+    if (data_pos + 1 >= sizeof(storage.data)) break;
+    uint8_t current_count = std::min((size_t)num_channels_, point.current_values.size());
+    storage.data[data_pos++] = current_count;
+    
+    for (uint8_t j = 0; j < current_count && data_pos + 4 < sizeof(storage.data); j++) {
+      uint32_t float_bits = *reinterpret_cast<const uint32_t*>(&point.current_values[j]);
+      storage.data[data_pos++] = (float_bits >> 0) & 0xFF;
+      storage.data[data_pos++] = (float_bits >> 8) & 0xFF;
+      storage.data[data_pos++] = (float_bits >> 16) & 0xFF;
+      storage.data[data_pos++] = (float_bits >> 24) & 0xFF;
+    }
+  }
+  
+  if (schedule_pref_.save(&storage)) {
+    ESP_LOGD(TAG, "Saved schedule to flash (%u points, %zu bytes)", storage.num_points, data_pos);
+  } else {
+    ESP_LOGW(TAG, "Failed to save schedule to flash");
+  }
+}
+
+void LEDBrickScheduler::load_schedule_from_flash() {
+  ScheduleStorage storage;
+  
+  if (!schedule_pref_.load(&storage)) {
+    ESP_LOGD(TAG, "No saved schedule found in flash");
+    return;
+  }
+  
+  ESP_LOGD(TAG, "Loading schedule from flash (%u points)", storage.num_points);
+  
+  if (storage.num_points > 100) {  // Sanity check
+    ESP_LOGW(TAG, "Invalid schedule data: too many points (%u)", storage.num_points);
+    return;
+  }
+  
+  schedule_points_.clear();
+  
+  size_t data_pos = 0;
+  
+  // Read each schedule point
+  for (uint16_t i = 0; i < storage.num_points && data_pos < sizeof(storage.data) - 10; i++) {
+    SchedulePoint point;
+    
+    // Read time (2 bytes)
+    if (data_pos + 2 > sizeof(storage.data)) break;
+    point.time_minutes = storage.data[data_pos] | (storage.data[data_pos + 1] << 8);
+    data_pos += 2;
+    
+    // Read PWM values
+    if (data_pos + 1 > sizeof(storage.data)) break;
+    uint8_t pwm_count = storage.data[data_pos++];
+    if (pwm_count > 16) {
+      ESP_LOGW(TAG, "Invalid PWM count: %u", pwm_count);
+      break;
+    }
+    
+    for (uint8_t j = 0; j < pwm_count && data_pos + 4 <= sizeof(storage.data); j++) {
+      uint32_t float_bits = storage.data[data_pos] | (storage.data[data_pos + 1] << 8) | 
+                           (storage.data[data_pos + 2] << 16) | (storage.data[data_pos + 3] << 24);
+      float val = *reinterpret_cast<const float*>(&float_bits);
+      point.pwm_values.push_back(val);
+      data_pos += 4;
+    }
+    
+    // Read current values
+    if (data_pos + 1 > sizeof(storage.data)) break;
+    uint8_t current_count = storage.data[data_pos++];
+    if (current_count > 16) {
+      ESP_LOGW(TAG, "Invalid current count: %u", current_count);
+      break;
+    }
+    
+    for (uint8_t j = 0; j < current_count && data_pos + 4 <= sizeof(storage.data); j++) {
+      uint32_t float_bits = storage.data[data_pos] | (storage.data[data_pos + 1] << 8) | 
+                           (storage.data[data_pos + 2] << 16) | (storage.data[data_pos + 3] << 24);
+      float val = *reinterpret_cast<const float*>(&float_bits);
+      point.current_values.push_back(val);
+      data_pos += 4;
+    }
+    
+    schedule_points_.push_back(point);
+  }
+  
+  sort_schedule_points();
+  ESP_LOGI(TAG, "Loaded %zu schedule points from flash", schedule_points_.size());
+}
+
+void LEDBrickScheduler::export_schedule_json(std::string &json_output) const {
+  uint16_t current_time = get_current_time_minutes();
+  auto current_values = get_current_values();
+  
+  json_output = "{";
+  json_output += "\"timezone\":\"" + timezone_ + "\",";
+  json_output += "\"current_time_minutes\":" + std::to_string(current_time) + ",";
+  json_output += "\"current_time_display\":\"";
+  
+  // Add human-readable time
+  char time_str[10];
+  sprintf(time_str, "%02d:%02d", current_time / 60, current_time % 60);
+  json_output += std::string(time_str) + "\",";
+  
+  json_output += "\"enabled\":" + std::string(enabled_ ? "true" : "false") + ",";
+  json_output += "\"channels\":" + std::to_string(num_channels_) + ",";
+  
+  // Current interpolated values
+  json_output += "\"current_pwm_values\":[";
+  for (size_t i = 0; i < current_values.pwm_values.size(); i++) {
+    if (i > 0) json_output += ",";
+    json_output += std::to_string(current_values.pwm_values[i]);
+  }
+  json_output += "],\"current_current_values\":[";
+  for (size_t i = 0; i < current_values.current_values.size(); i++) {
+    if (i > 0) json_output += ",";
+    json_output += std::to_string(current_values.current_values[i]);
+  }
+  json_output += "],";
+  
+  // Schedule points
+  json_output += "\"schedule_points\":[";
+  for (size_t i = 0; i < schedule_points_.size(); i++) {
+    const auto &point = schedule_points_[i];
+    
+    if (i > 0) json_output += ",";
+    json_output += "{\"time_minutes\":" + std::to_string(point.time_minutes);
+    
+    // Add human-readable time for each point
+    sprintf(time_str, "%02d:%02d", point.time_minutes / 60, point.time_minutes % 60);
+    json_output += ",\"time_display\":\"" + std::string(time_str) + "\"";
+    
+    json_output += ",\"pwm_values\":[";
+    
+    for (size_t j = 0; j < point.pwm_values.size(); j++) {
+      if (j > 0) json_output += ",";
+      json_output += std::to_string(point.pwm_values[j]);
+    }
+    
+    json_output += "],\"current_values\":[";
+    
+    for (size_t j = 0; j < point.current_values.size(); j++) {
+      if (j > 0) json_output += ",";
+      json_output += std::to_string(point.current_values[j]);
+    }
+    
+    json_output += "]}";
+  }
+  
+  json_output += "]}";
+}
+
+bool LEDBrickScheduler::import_schedule_json(const std::string &json_input) {
+  // Simple JSON parsing for schedule import
+  // This is a basic implementation - in production you'd want a proper JSON library
+  ESP_LOGW(TAG, "JSON import not yet fully implemented");
+  return false;
 }
 
 } // namespace ledbrick_scheduler

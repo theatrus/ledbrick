@@ -12,14 +12,10 @@ from esphome.const import (
 from esphome import automation
 from esphome.automation import maybe_simple_id
 
-AUTO_LOAD = ["api"]
 CODEOWNERS = ["@theatrus"]
 
-api_ns = cg.esphome_ns.namespace("api")
-CustomAPIDevice = api_ns.class_("CustomAPIDevice")
-
 ledbrick_scheduler_ns = cg.esphome_ns.namespace("ledbrick_scheduler")
-LEDBrickScheduler = ledbrick_scheduler_ns.class_("LEDBrickScheduler", cg.Component, CustomAPIDevice)
+LEDBrickScheduler = ledbrick_scheduler_ns.class_("LEDBrickScheduler", cg.Component)
 
 # Actions
 SetSchedulePointAction = ledbrick_scheduler_ns.class_("SetSchedulePointAction", automation.Action)
@@ -28,6 +24,7 @@ SetEnabledAction = ledbrick_scheduler_ns.class_("SetEnabledAction", automation.A
 
 CONF_CHANNELS = "channels"
 CONF_TIME_SOURCE = "time_source"
+CONF_TIMEZONE = "timezone"
 CONF_TIMEPOINT = "timepoint"
 CONF_PWM_VALUES = "pwm_values"
 CONF_CURRENT_VALUES = "current_values"
@@ -41,6 +38,7 @@ CONFIG_SCHEMA = cv.Schema({
     cv.Optional(CONF_CHANNELS, default=8): cv.int_range(min=1, max=16),
     cv.Optional(CONF_UPDATE_INTERVAL, default=DEFAULT_UPDATE_INTERVAL): cv.update_interval,
     cv.Optional(CONF_TIME_SOURCE): cv.use_id(time_.RealTimeClock),
+    cv.Optional(CONF_TIMEZONE, default="UTC"): cv.string_strict,
 }).extend(cv.COMPONENT_SCHEMA)
 
 
@@ -49,6 +47,7 @@ async def to_code(config):
     await cg.register_component(var, config)
     
     cg.add(var.set_num_channels(config[CONF_CHANNELS]))
+    cg.add(var.set_timezone(config[CONF_TIMEZONE]))
     
     if CONF_TIME_SOURCE in config:
         time_source = await cg.get_variable(config[CONF_TIME_SOURCE])
