@@ -54,6 +54,7 @@ class LEDBrickScheduler : public PollingComponent {
     time_shift_hours_ = hours; 
     time_shift_minutes_ = minutes; 
   }
+  void set_timezone_offset_hours(double hours) { timezone_offset_hours_ = hours; }
 
   // Schedule management
   void add_schedule_point(const SchedulePoint &point);
@@ -93,6 +94,9 @@ class LEDBrickScheduler : public PollingComponent {
   AstronomicalCalculator::MoonTimes get_moon_rise_set_times() const;
   AstronomicalCalculator::SunTimes get_sun_rise_set_times() const;
   
+  // Projected rise/set times (with time shift if projection enabled)
+  AstronomicalCalculator::SunTimes get_projected_sun_rise_set_times() const;
+  
   // External entity references
   void add_light(uint8_t channel, light::LightState *light);
   void add_current_control(uint8_t channel, number::Number *control);
@@ -112,6 +116,7 @@ class LEDBrickScheduler : public PollingComponent {
   bool astronomical_projection_{false};  // Enable time projection mode
   int time_shift_hours_{0};              // Additional time shift in hours
   int time_shift_minutes_{0};            // Additional time shift in minutes
+  double timezone_offset_hours_{0.0};    // Timezone offset from UTC in hours
   
   // Standalone astronomical calculator instance
   mutable AstronomicalCalculator astro_calc_;  // Mutable to allow updates from const methods

@@ -7,6 +7,9 @@
 #include <cmath>
 #include <cstdlib>
 
+// Include the astronomical calculator implementation
+#include "astronomical_calculator.cpp"
+
 namespace esphome {
 namespace ledbrick_scheduler {
 
@@ -352,7 +355,7 @@ std::vector<SchedulePoint> LEDBrickScheduler::create_sunrise_sunset_preset() con
   // Calculate actual sunrise and sunset times (with potential projection/offset)
   update_astro_calculator_settings();
   auto dt = esphome_time_to_datetime();
-  auto sun_times = astro_calc_.get_sun_rise_set_times(dt);
+  auto sun_times = astro_calc_.get_projected_sun_rise_set_times(dt);
   
   // Use calculated times or fallback to defaults
   uint16_t sunrise_minutes = sun_times.rise_valid ? sun_times.rise_minutes : 360;  // Default 6:00 AM
@@ -803,6 +806,12 @@ AstronomicalCalculator::SunTimes LEDBrickScheduler::get_sun_rise_set_times() con
   return astro_calc_.get_sun_rise_set_times(dt);
 }
 
+AstronomicalCalculator::SunTimes LEDBrickScheduler::get_projected_sun_rise_set_times() const {
+  update_astro_calculator_settings();
+  auto dt = esphome_time_to_datetime();
+  return astro_calc_.get_projected_sun_rise_set_times(dt);
+}
+
 
 
 float LEDBrickScheduler::get_moon_intensity() const {
@@ -849,8 +858,9 @@ AstronomicalCalculator::DateTime LEDBrickScheduler::esphome_time_to_datetime() c
 }
 
 void LEDBrickScheduler::update_astro_calculator_settings() const {
-  // Update location and projection settings in the calculator
+  // Update location, timezone, and projection settings in the calculator
   astro_calc_.set_location(latitude_, longitude_);
+  astro_calc_.set_timezone_offset(timezone_offset_hours_);
   astro_calc_.set_projection_settings(astronomical_projection_, time_shift_hours_, time_shift_minutes_);
 }
 

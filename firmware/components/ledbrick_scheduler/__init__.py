@@ -11,6 +11,7 @@ from esphome.const import (
 )
 from esphome import automation
 from esphome.automation import maybe_simple_id
+from esphome.cpp_generator import MockObj
 
 CODEOWNERS = ["@theatrus"]
 
@@ -53,6 +54,9 @@ CONFIG_SCHEMA = cv.Schema({
 
 
 async def to_code(config):
+    # Add the astronomical calculator source file
+    cg.add_define("LEDBRICK_ASTRONOMICAL_CALCULATOR")
+    
     var = cg.new_Pvariable(config[CONF_ID], config[CONF_UPDATE_INTERVAL])
     await cg.register_component(var, config)
     
