@@ -1,0 +1,265 @@
+# Home Assistant Moon Simulation Example for LEDBrick Scheduler
+# 
+# This example demonstrates how to configure moon simulation
+# to provide realistic moonlight when the main lights are off.
+
+# Moon Simulation Overview:
+# - Automatically activates when all channels are at 0% (lights off)
+# - Intensity scales with moon phase (new moon = dim, full moon = bright)
+# - Only active when moon is above horizon (based on calculated moonrise/moonset)
+# - Can be enabled/disabled independently of main scheduler
+
+# Basic Moon Simulation Setup
+# This enables moon simulation with blue/white moonlight
+automation:
+  - alias: "Aquarium Moon Simulation Setup"
+    trigger:
+      - platform: homeassistant
+        event: start
+    action:
+      # Configure moon base intensity for each channel
+      # These are maximum values at full moon (will be scaled by moon phase)
+      - service: esphome.ledbrick_plus_set_moon_base_intensity_8ch
+        data:
+          intensity_ch1: 3.0   # Blue channel - primary moonlight color
+          intensity_ch2: 0.0   # Red - not used for moonlight
+          intensity_ch3: 0.0   # Green - not used for moonlight
+          intensity_ch4: 1.5   # Cool white - subtle moonlight accent
+          intensity_ch5: 0.0   # Warm white - not used
+          intensity_ch6: 0.0   # UV - not used
+          intensity_ch7: 0.0   # Royal blue - optional
+          intensity_ch8: 0.0   # Spare - not used
+      
+      # Enable moon simulation with phase scaling
+      - service: esphome.ledbrick_plus_configure_moon_simulation
+        data:
+          enabled: true
+          phase_scaling: true  # Scale intensity based on moon phase
+
+# Simple 4-channel setup for basic systems
+automation:
+  - alias: "Simple Moon Simulation Setup"
+    trigger:
+      - platform: homeassistant
+        event: start
+    action:
+      - service: esphome.ledbrick_plus_set_moon_base_intensity_4ch
+        data:
+          intensity_ch1: 2.5   # Blue
+          intensity_ch2: 0.0   # Red
+          intensity_ch3: 0.0   # Green
+          intensity_ch4: 1.0   # White
+
+# Toggle moon simulation on/off
+script:
+  toggle_moon_simulation:
+    sequence:
+      - service: switch.toggle
+        target:
+          entity_id: switch.ledbrick_plus_moon_simulation_enabled
+
+# Advanced: Different moon intensities based on tank type
+automation:
+  - alias: "Configure Moon Simulation by Tank Type"
+    trigger:
+      - platform: state
+        entity_id: input_select.tank_type
+    action:
+      - choose:
+          # Reef tank - brighter blue moonlight
+          - conditions:
+              - condition: state
+                entity_id: input_select.tank_type
+                state: "Reef"
+            sequence:
+              - service: esphome.ledbrick_plus_set_moon_base_intensity_8ch
+                data:
+                  intensity_ch1: 4.0   # Blue
+                  intensity_ch2: 0.0   # Red
+                  intensity_ch3: 0.0   # Green
+                  intensity_ch4: 2.0   # Cool white
+                  intensity_ch5: 0.0   # Warm white
+                  intensity_ch6: 0.5   # UV (some corals fluoresce)
+                  intensity_ch7: 3.0   # Royal blue
+                  intensity_ch8: 0.0   # Spare
+          
+          # Freshwater planted - dimmer, warmer moonlight
+          - conditions:
+              - condition: state
+                entity_id: input_select.tank_type
+                state: "Planted"
+            sequence:
+              - service: esphome.ledbrick_plus_set_moon_base_intensity_8ch
+                data:
+                  intensity_ch1: 1.5   # Blue
+                  intensity_ch2: 0.0   # Red
+                  intensity_ch3: 0.0   # Green
+                  intensity_ch4: 0.5   # Cool white
+                  intensity_ch5: 0.3   # Warm white (tiny bit)
+                  intensity_ch6: 0.0   # UV
+                  intensity_ch7: 0.0   # Royal blue
+                  intensity_ch8: 0.0   # Spare
+          
+          # Fish only - minimal moonlight
+          - conditions:
+              - condition: state
+                entity_id: input_select.tank_type
+                state: "Fish Only"
+            sequence:
+              - service: esphome.ledbrick_plus_set_moon_base_intensity_8ch
+                data:
+                  intensity_ch1: 1.0   # Blue
+                  intensity_ch2: 0.0   # Red
+                  intensity_ch3: 0.0   # Green
+                  intensity_ch4: 0.5   # Cool white
+                  intensity_ch5: 0.0   # Warm white
+                  intensity_ch6: 0.0   # UV
+                  intensity_ch7: 0.0   # Royal blue
+                  intensity_ch8: 0.0   # Spare
+
+# Monitor moon phase
+sensor:
+  - platform: template
+    sensors:
+      moon_phase_description:
+        friendly_name: "Moon Phase Description"
+        value_template: >
+          {% set phase = states('sensor.ledbrick_plus_moon_phase') | float %}
+          {% if phase < 12.5 %}
+            New Moon
+          {% elif phase < 37.5 %}
+            Waxing Crescent
+          {% elif phase < 62.5 %}
+            First Quarter
+          {% elif phase < 87.5 %}
+            Waxing Gibbous
+          {% elif phase < 100 %}
+            Full Moon
+          {% else %}
+            Invalid
+          {% endif %}
+
+# Notification when moon simulation activates
+automation:
+  - alias: "Notify Moon Simulation Active"
+    trigger:
+      - platform: state
+        entity_id: sensor.ledbrick_plus_scheduler_pwm_channel_1
+        to: '0.0'
+    condition:
+      - condition: state
+        entity_id: switch.ledbrick_plus_moon_simulation_enabled
+        state: 'on'
+      - condition: sun
+        after: sunset
+        before: sunrise
+    action:
+      - service: notify.mobile_app_phone
+        data:
+          title: "Aquarium Moonlight"
+          message: "Moon simulation active - Phase: {{ states('sensor.moon_phase_description') }}"
+
+# Create a Lovelace card for moon simulation control
+# Add this to your dashboard configuration:
+#
+# type: entities
+# title: Moon Simulation
+# entities:
+#   - entity: switch.ledbrick_plus_moon_simulation_enabled
+#     name: Enable Moon Simulation
+#   - entity: sensor.ledbrick_plus_moon_phase
+#     name: Current Moon Phase
+#   - entity: sensor.moon_phase_description
+#     name: Phase Description
+#   - type: section
+#     label: Moon Intensity Settings
+#   - type: custom:slider-entity-row
+#     entity: input_number.moon_blue_intensity
+#     name: Blue Channel
+#   - type: custom:slider-entity-row
+#     entity: input_number.moon_white_intensity
+#     name: White Channel
+
+# Input numbers for easy moon intensity adjustment
+input_number:
+  moon_blue_intensity:
+    name: Moon Blue Intensity
+    min: 0
+    max: 10
+    step: 0.5
+    unit_of_measurement: "%"
+    icon: mdi:moon-waning-crescent
+  
+  moon_white_intensity:
+    name: Moon White Intensity
+    min: 0
+    max: 5
+    step: 0.25
+    unit_of_measurement: "%"
+    icon: mdi:moon-full
+
+# Update moon intensity when sliders change
+automation:
+  - alias: "Update Moon Intensity from Sliders"
+    trigger:
+      - platform: state
+        entity_id: 
+          - input_number.moon_blue_intensity
+          - input_number.moon_white_intensity
+    action:
+      - service: esphome.ledbrick_plus_set_moon_base_intensity_4ch
+        data:
+          intensity_ch1: "{{ states('input_number.moon_blue_intensity') | float }}"
+          intensity_ch2: 0.0
+          intensity_ch3: 0.0
+          intensity_ch4: "{{ states('input_number.moon_white_intensity') | float }}"
+
+# Example: Disable moon simulation during water changes
+automation:
+  - alias: "Disable Moon During Maintenance"
+    trigger:
+      - platform: state
+        entity_id: input_boolean.maintenance_mode
+        to: 'on'
+    action:
+      - service: esphome.ledbrick_plus_set_moon_simulation_enabled
+        data:
+          enabled: false
+  
+  - alias: "Re-enable Moon After Maintenance"
+    trigger:
+      - platform: state
+        entity_id: input_boolean.maintenance_mode
+        to: 'off'
+    action:
+      - service: esphome.ledbrick_plus_set_moon_simulation_enabled
+        data:
+          enabled: true
+
+# Testing moon simulation
+# This script simulates nighttime to test moon simulation
+script:
+  test_moon_simulation:
+    alias: "Test Moon Simulation"
+    sequence:
+      # Clear all schedule points temporarily
+      - service: esphome.ledbrick_plus_clear_schedule
+      
+      # Wait for lights to turn off
+      - delay:
+          seconds: 2
+      
+      # The moon simulation should now be active if enabled
+      - service: notify.mobile_app_phone
+        data:
+          title: "Moon Test"
+          message: "Moon simulation should be active. Current phase: {{ states('sensor.ledbrick_plus_moon_phase') }}%"
+      
+      # Wait 30 seconds to observe
+      - delay:
+          seconds: 30
+      
+      # Reload the normal schedule
+      - service: esphome.ledbrick_plus_load_preset
+        data:
+          preset_name: "dynamic_sunrise_sunset"

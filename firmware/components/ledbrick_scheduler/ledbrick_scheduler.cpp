@@ -78,6 +78,7 @@ void LEDBrickScheduler::dump_config() {
   ESP_LOGCONFIG(TAG, "  Channels: %u", num_channels_);
   ESP_LOGCONFIG(TAG, "  Update Interval: %u ms", update_interval_);
   ESP_LOGCONFIG(TAG, "  Enabled: %s", enabled_ ? "YES" : "NO");
+  ESP_LOGCONFIG(TAG, "  PWM Scale: %.2f (%.0f%%)", pwm_scale_, pwm_scale_ * 100.0f);
   ESP_LOGCONFIG(TAG, "  Timezone: %s", timezone_.c_str());
   ESP_LOGCONFIG(TAG, "  Location: %.4f°N, %.4f°W", latitude_, -longitude_);
   ESP_LOGCONFIG(TAG, "  Schedule Points: %zu", scheduler_.get_schedule_size());
@@ -193,6 +194,22 @@ InterpolationResult LEDBrickScheduler::get_current_values() const {
   return scheduler_.get_values_at_time(current_time);
 }
 
+void LEDBrickScheduler::set_pwm_scale(float scale) {
+  if (scale < 0.0f) {
+    scale = 0.0f;
+  } else if (scale > 1.0f) {
+    scale = 1.0f;
+  }
+  
+  if (abs(pwm_scale_ - scale) > 0.001f) {
+    pwm_scale_ = scale;
+    ESP_LOGI(TAG, "PWM scale set to %.2f (%.0f%%)", pwm_scale_, pwm_scale_ * 100.0f);
+    
+    // Force immediate update to apply new scale
+    update();
+  }
+}
+
 void LEDBrickScheduler::create_sunrise_sunset_preset_with_astro_data() const {
   // Calculate actual sunrise and sunset times using astronomical calculator
   update_astro_calculator_settings();
@@ -219,7 +236,9 @@ void LEDBrickScheduler::apply_values(const InterpolationResult &values) {
     // Apply PWM to light entity
     auto light_it = lights_.find(channel);
     if (light_it != lights_.end() && light_it->second) {
-      float brightness = values.pwm_values[channel] / 100.0f; // Convert percentage to 0-1
+      // Apply PWM scale factor before converting to 0-1 range
+      float scaled_pwm = values.pwm_values[channel] * pwm_scale_;
+      float brightness = scaled_pwm / 100.0f; // Convert percentage to 0-1
       
       // Only update if value has changed significantly (reduce unnecessary calls)
       if (last_pwm_values_.size() <= channel || 
@@ -238,8 +257,8 @@ void LEDBrickScheduler::apply_values(const InterpolationResult &values) {
         }
         last_pwm_values_[channel] = brightness;
         
-        ESP_LOGV(TAG, "Updated light %u brightness to %.3f (%.1f%%)", 
-                 channel, brightness, values.pwm_values[channel]);
+        ESP_LOGV(TAG, "Updated light %u brightness to %.3f (%.1f%% * %.2f scale = %.1f%%)", 
+                 channel, brightness, values.pwm_values[channel], pwm_scale_, scaled_pwm);
       }
     } else {
       ESP_LOGVV(TAG, "No light entity found for channel %u", channel);
@@ -508,6 +527,14 @@ void LEDBrickScheduler::update_astronomical_times_for_scheduler() {
   astro_times.nautical_dusk_minutes = civil_dusk < 1410 ? civil_dusk + 30 : 1439;
   astro_times.astronomical_dawn_minutes = civil_dawn > 60 ? civil_dawn - 60 : 0;
   astro_times.astronomical_dusk_minutes = civil_dusk < 1380 ? civil_dusk + 60 : 1439;
+  
+  // Get moon data
+  auto moon_times = astro_calc_.get_moon_rise_set_times(dt);
+  float moon_phase = astro_calc_.get_moon_phase(dt);
+  
+  astro_times.moonrise_minutes = moon_times.rise_valid ? moon_times.rise_minutes : 0;
+  astro_times.moonset_minutes = moon_times.set_valid ? moon_times.set_minutes : 0;
+  astro_times.moon_phase = moon_phase;
   astro_times.valid = true;
   
   // Update the scheduler with new astronomical times
@@ -517,6 +544,13 @@ void LEDBrickScheduler::update_astronomical_times_for_scheduler() {
            astro_times.sunrise_minutes / 60, astro_times.sunrise_minutes % 60,
            astro_times.sunset_minutes / 60, astro_times.sunset_minutes % 60,
            astro_times.solar_noon_minutes / 60, astro_times.solar_noon_minutes % 60);
+  
+  if (moon_times.rise_valid || moon_times.set_valid) {
+    ESP_LOGD(TAG, "Moon data - Rise: %02u:%02u, Set: %02u:%02u, Phase: %.1f%%",
+             astro_times.moonrise_minutes / 60, astro_times.moonrise_minutes % 60,
+             astro_times.moonset_minutes / 60, astro_times.moonset_minutes % 60,
+             moon_phase * 100.0f);
+  }
 }
 
 } // namespace ledbrick_scheduler

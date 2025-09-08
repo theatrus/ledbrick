@@ -72,7 +72,21 @@ public:
         uint16_t nautical_dusk_minutes = 1140; // Default 7:00 PM
         uint16_t astronomical_dawn_minutes = 330;  // Default 5:30 AM
         uint16_t astronomical_dusk_minutes = 1170; // Default 7:30 PM
+        uint16_t moonrise_minutes = 0;      // Moon rise time (0-1439)
+        uint16_t moonset_minutes = 0;       // Moon set time (0-1439)
+        float moon_phase = 0.0f;            // Moon phase (0=new, 0.5=full, 1=new)
         bool valid = false;  // Whether times have been calculated
+    };
+
+    // Moon simulation configuration
+    struct MoonSimulation {
+        bool enabled = false;
+        std::vector<float> base_intensity;  // Base moonlight intensity per channel (0-100%)
+        bool phase_scaling = true;         // Scale intensity by moon phase
+        
+        MoonSimulation() = default;
+        MoonSimulation(bool enable, std::vector<float> intensity, bool scale = true)
+            : enabled(enable), base_intensity(std::move(intensity)), phase_scaling(scale) {}
     };
 
     // Constructor
@@ -97,6 +111,12 @@ public:
     InterpolationResult get_values_at_time(uint16_t current_time_minutes) const;
     InterpolationResult get_values_at_time_with_astro(uint16_t current_time_minutes, 
                                                       const AstronomicalTimes& astro_times) const;
+    
+    // Moon simulation
+    void set_moon_simulation(const MoonSimulation& config);
+    MoonSimulation get_moon_simulation() const { return moon_simulation_; }
+    void enable_moon_simulation(bool enabled);
+    void set_moon_base_intensity(const std::vector<float>& intensity);
     
     // Astronomical time management
     void set_astronomical_times(const AstronomicalTimes& times);
@@ -139,10 +159,14 @@ private:
     std::vector<SchedulePoint> schedule_points_;
     std::map<std::string, std::vector<SchedulePoint>> presets_;
     AstronomicalTimes astronomical_times_;
+    MoonSimulation moon_simulation_;
     
     // Internal methods
     InterpolationResult interpolate_values(uint16_t current_time) const;
     InterpolationResult interpolate_values_with_astro(uint16_t current_time, const AstronomicalTimes& astro_times) const;
+    InterpolationResult apply_moon_simulation(const InterpolationResult& base_result, uint16_t current_time, 
+                                             const AstronomicalTimes& astro_times) const;
+    bool is_moon_visible(uint16_t current_time, const AstronomicalTimes& astro_times) const;
     void sort_schedule_points();
     void sort_schedule_points_with_astro(const AstronomicalTimes& astro_times);
     bool validate_point(const SchedulePoint& point) const;

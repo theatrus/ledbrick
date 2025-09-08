@@ -178,6 +178,67 @@ api:
             format: "Saved current schedule as preset: %s"
             args: [ 'preset_name.c_str()' ]
 
+    # === Moon Simulation Services ===
+    
+    # Enable/disable moon simulation
+    - service: set_moon_simulation_enabled
+      variables:
+        enabled: bool
+      then:
+        - lambda: |-
+            id(main_scheduler).enable_moon_simulation(enabled);
+        - logger.log:
+            format: "Moon simulation %s"
+            args: [ 'enabled ? "enabled" : "disabled"' ]
+    
+    # Set moon base intensity for all 8 channels
+    - service: set_moon_base_intensity_8ch
+      variables:
+        intensity_ch1: float
+        intensity_ch2: float
+        intensity_ch3: float
+        intensity_ch4: float
+        intensity_ch5: float
+        intensity_ch6: float
+        intensity_ch7: float
+        intensity_ch8: float
+      then:
+        - lambda: |-
+            std::vector<float> intensity = {intensity_ch1, intensity_ch2, intensity_ch3, intensity_ch4, 
+                                          intensity_ch5, intensity_ch6, intensity_ch7, intensity_ch8};
+            id(main_scheduler).set_moon_base_intensity(intensity);
+        - logger.log: "Moon base intensity set for all channels"
+    
+    # Simplified 4-channel moon intensity
+    - service: set_moon_base_intensity_4ch
+      variables:
+        intensity_ch1: float
+        intensity_ch2: float
+        intensity_ch3: float
+        intensity_ch4: float
+      then:
+        - lambda: |-
+            std::vector<float> intensity = {intensity_ch1, intensity_ch2, intensity_ch3, intensity_ch4, 
+                                          0, 0, 0, 0};
+            id(main_scheduler).set_moon_base_intensity(intensity);
+        - logger.log: "Moon base intensity set for channels 1-4"
+    
+    # Configure moon simulation with phase scaling
+    - service: configure_moon_simulation
+      variables:
+        enabled: bool
+        phase_scaling: bool
+      then:
+        - lambda: |-
+            LEDScheduler::MoonSimulation config;
+            config.enabled = enabled;
+            config.phase_scaling = phase_scaling;
+            // Use default base_intensity values if not set
+            // The set_moon_simulation method will handle the configuration
+            id(main_scheduler).set_moon_simulation(config);
+            ESP_LOGI("main", "Moon simulation configured - Enabled: %s, Phase scaling: %s",
+                     enabled ? "YES" : "NO", phase_scaling ? "YES" : "NO");
+    
     # === Control Services ===
     
     # Enable/disable the scheduler
@@ -190,6 +251,7 @@ api:
         - logger.log:
             format: "Scheduler %s"
             args: [ 'enabled ? "enabled" : "disabled"' ]
+    
 
     # Get current scheduler status (logs current state)
     - service: get_scheduler_status
@@ -286,6 +348,44 @@ sensor:
       auto values = id(main_scheduler).get_current_values();
       return values.current_values.size() > 0 ? values.current_values[0] : 0.0f;
     update_interval: 30s
+  
+  # Moon phase percentage
+  - platform: template
+    name: "Moon Phase"
+    id: moon_phase_sensor
+    accuracy_decimals: 1
+    unit_of_measurement: "%"
+    lambda: |-
+      return id(main_scheduler).get_moon_phase() * 100.0f;
+    update_interval: 3600s  # Update every hour
+  
+
+# === Number Entities ===
+
+number:
+  # PWM scale control (0-100%)
+  - platform: template
+    name: "PWM Scale"
+    id: pwm_scale_number
+    optimistic: false
+    min_value: 0
+    max_value: 100
+    step: 1
+    unit_of_measurement: "%"
+    mode: slider
+    restore_value: true
+    initial_value: 100
+    lambda: |-
+      return id(main_scheduler).get_pwm_scale() * 100.0f;
+    set_action:
+      - lambda: |-
+          float scale = x / 100.0f;
+          id(main_scheduler).set_pwm_scale(scale);
+          ESP_LOGI("main", "PWM scale set to %.0f%%", x);
+    on_value:
+      - logger.log:
+          format: "PWM scale changed to %.0f%%"
+          args: [ 'x' ]
 
 # === Entity Setup ===
 # Connect scheduler to actual lights and number entities
@@ -385,6 +485,19 @@ switch:
     turn_off_action:
       - lambda: |-
           id(main_scheduler).set_enabled(false);
+  
+  # Moon simulation enable/disable
+  - platform: template
+    name: "Moon Simulation Enabled"
+    id: moon_sim_enable_switch
+    lambda: |-
+      return id(main_scheduler).is_moon_simulation_enabled();
+    turn_on_action:
+      - lambda: |-
+          id(main_scheduler).enable_moon_simulation(true);
+    turn_off_action:
+      - lambda: |-
+          id(main_scheduler).enable_moon_simulation(false);
 
 text_sensor:
   # Current time as human-readable string
@@ -397,3 +510,4 @@ text_sensor:
       sprintf(time_str, "%02d:%02d", time_minutes / 60, time_minutes % 60);
       return std::string(time_str);
     update_interval: 60s
+

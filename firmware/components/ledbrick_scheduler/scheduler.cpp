@@ -401,6 +401,11 @@ LEDScheduler::InterpolationResult LEDScheduler::interpolate_values_with_astro(ui
         result.valid = true;
     }
     
+    // Apply moon simulation if enabled
+    if (moon_simulation_.enabled && astro_times.valid) {
+        result = apply_moon_simulation(result, current_time, astro_times);
+    }
+    
     return result;
 }
 
@@ -435,6 +440,94 @@ bool LEDScheduler::validate_point(const SchedulePoint& point) const {
     }
     
     return true;
+}
+
+void LEDScheduler::set_moon_simulation(const MoonSimulation& config) {
+    moon_simulation_ = config;
+    // Resize base_intensity to match channel count
+    moon_simulation_.base_intensity.resize(num_channels_, 0.0f);
+}
+
+void LEDScheduler::enable_moon_simulation(bool enabled) {
+    moon_simulation_.enabled = enabled;
+}
+
+void LEDScheduler::set_moon_base_intensity(const std::vector<float>& intensity) {
+    moon_simulation_.base_intensity = intensity;
+    moon_simulation_.base_intensity.resize(num_channels_, 0.0f);
+}
+
+bool LEDScheduler::is_moon_visible(uint16_t current_time, const AstronomicalTimes& astro_times) const {
+    // Check if moon is above horizon
+    if (astro_times.moonrise_minutes == 0 && astro_times.moonset_minutes == 0) {
+        return false; // No moon data available
+    }
+    
+    // Handle cases where moon rise/set crosses midnight
+    if (astro_times.moonrise_minutes < astro_times.moonset_minutes) {
+        // Moon rises and sets on same day
+        return current_time >= astro_times.moonrise_minutes && current_time <= astro_times.moonset_minutes;
+    } else {
+        // Moon rise/set crosses midnight
+        return current_time >= astro_times.moonrise_minutes || current_time <= astro_times.moonset_minutes;
+    }
+}
+
+LEDScheduler::InterpolationResult LEDScheduler::apply_moon_simulation(const InterpolationResult& base_result, 
+                                                                     uint16_t current_time, 
+                                                                     const AstronomicalTimes& astro_times) const {
+    InterpolationResult result = base_result;
+    
+    // Check if moon should be visible
+    if (!is_moon_visible(current_time, astro_times)) {
+        return result; // Moon not visible, return original result
+    }
+    
+    // Check if all channels are at or near zero
+    bool all_channels_dark = true;
+    const float threshold = 0.1f; // Consider values below 0.1% as "off"
+    
+    for (size_t i = 0; i < num_channels_; i++) {
+        if (result.pwm_values[i] > threshold) {
+            all_channels_dark = false;
+            break;
+        }
+    }
+    
+    // If main lights are on, don't apply moonlight
+    if (!all_channels_dark) {
+        return result;
+    }
+    
+    // Apply moonlight based on moon phase
+    float moon_brightness = astro_times.moon_phase;
+    
+    // Convert moon phase (0=new, 0.5=full, 1=new) to brightness
+    // Peak brightness at full moon (0.5)
+    if (moon_brightness > 0.5f) {
+        moon_brightness = 1.0f - moon_brightness;
+    }
+    moon_brightness *= 2.0f; // Scale 0-0.5 to 0-1.0
+    
+    // Apply moon simulation
+    for (size_t i = 0; i < num_channels_; i++) {
+        if (i < moon_simulation_.base_intensity.size()) {
+            float moon_intensity = moon_simulation_.base_intensity[i];
+            
+            // Scale by moon phase if enabled
+            if (moon_simulation_.phase_scaling) {
+                moon_intensity *= moon_brightness;
+            }
+            
+            // Apply moonlight (additive to ensure it shows even if base is 0)
+            result.pwm_values[i] = moon_intensity;
+            
+            // Scale current proportionally (moonlight uses much less current)
+            result.current_values[i] = moon_intensity * 0.02f; // 2% of PWM value as current
+        }
+    }
+    
+    return result;
 }
 
 void LEDScheduler::load_preset(const std::string& preset_name) {

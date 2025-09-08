@@ -71,6 +71,16 @@ class LEDBrickScheduler : public PollingComponent {
   void set_enabled(bool enabled) { enabled_ = enabled; }
   bool is_enabled() const { return enabled_; }
   
+  // PWM scaling
+  void set_pwm_scale(float scale);
+  float get_pwm_scale() const { return pwm_scale_; }
+  
+  // Moon simulation
+  void enable_moon_simulation(bool enabled) { scheduler_.enable_moon_simulation(enabled); }
+  void set_moon_base_intensity(const std::vector<float>& intensity) { scheduler_.set_moon_base_intensity(intensity); }
+  void set_moon_simulation(const LEDScheduler::MoonSimulation& config) { scheduler_.set_moon_simulation(config); }
+  bool is_moon_simulation_enabled() const { return scheduler_.get_moon_simulation().enabled; }
+  
   // Current state
   uint16_t get_current_time_minutes() const;
   InterpolationResult get_current_values() const;
@@ -101,6 +111,7 @@ class LEDBrickScheduler : public PollingComponent {
   uint32_t update_interval_{1000}; // 1 second for smooth transitions
   bool enabled_{true};
   std::string timezone_{"UTC"};
+  float pwm_scale_{1.0f};  // Global PWM scaling factor (0.0-1.0)
   
   // Geographic location for astronomical calculations
   double latitude_{37.7749};   // Default: San Francisco

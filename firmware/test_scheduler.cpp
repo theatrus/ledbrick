@@ -489,6 +489,162 @@ void test_dynamic_schedule_seasons(TestRunner& runner) {
     runner.assert_equals(50.0f, winter_noon.pwm_values[0], 0.01f, "Winter noon intensity (expected: 50.0, actual: " + std::to_string(winter_noon.pwm_values[0]) + ")");
 }
 
+void test_pwm_scaling(TestRunner& runner) {
+    runner.start_suite("PWM Scaling Tests");
+    
+    LEDScheduler scheduler(2);  // 2 channels for testing
+    
+    // Create a simple schedule
+    scheduler.set_schedule_point(720, {80.0f, 60.0f}, {1.6f, 1.2f}); // 12:00 PM
+    
+    // Test 1: Normal values without scaling
+    auto normal_result = scheduler.get_values_at_time(720);
+    runner.assert_equals(80.0f, normal_result.pwm_values[0], 0.01f, 
+                        "Normal Ch1 PWM (expected: 80.0, actual: " + std::to_string(normal_result.pwm_values[0]) + ")");
+    runner.assert_equals(60.0f, normal_result.pwm_values[1], 0.01f, 
+                        "Normal Ch2 PWM (expected: 60.0, actual: " + std::to_string(normal_result.pwm_values[1]) + ")");
+    
+    // Note: PWM scaling is applied in the ESPHome component, not in the scheduler itself
+    // The scheduler always returns unscaled values
+    // This test verifies the scheduler continues to work correctly
+    
+    // Test 2: Values remain consistent
+    auto result2 = scheduler.get_values_at_time(720);
+    runner.assert_equals(80.0f, result2.pwm_values[0], 0.01f, 
+                        "Consistent Ch1 PWM (expected: 80.0, actual: " + std::to_string(result2.pwm_values[0]) + ")");
+    runner.assert_equals(60.0f, result2.pwm_values[1], 0.01f, 
+                        "Consistent Ch2 PWM (expected: 60.0, actual: " + std::to_string(result2.pwm_values[1]) + ")");
+    
+    // Test 3: Interpolation still works correctly
+    scheduler.set_schedule_point(840, {40.0f, 30.0f}, {0.8f, 0.6f}); // 2:00 PM
+    auto interp_result = scheduler.get_values_at_time(780); // 1:00 PM (midpoint)
+    runner.assert_equals(60.0f, interp_result.pwm_values[0], 0.01f, 
+                        "Interpolated Ch1 PWM (expected: 60.0, actual: " + std::to_string(interp_result.pwm_values[0]) + ")");
+    runner.assert_equals(45.0f, interp_result.pwm_values[1], 0.01f, 
+                        "Interpolated Ch2 PWM (expected: 45.0, actual: " + std::to_string(interp_result.pwm_values[1]) + ")");
+}
+
+void test_moon_simulation(TestRunner& runner) {
+    runner.start_suite("Moon Simulation Tests");
+    
+    LEDScheduler scheduler(4);  // 4 channels for moon testing
+    
+    // Configure moon simulation
+    LEDScheduler::MoonSimulation moon_config;
+    moon_config.enabled = true;
+    moon_config.base_intensity = {3.0f, 0.0f, 0.0f, 1.5f};  // Blue and white channels
+    moon_config.phase_scaling = true;
+    scheduler.set_moon_simulation(moon_config);
+    
+    // Verify moon config was set
+    auto verify_config = scheduler.get_moon_simulation();
+    runner.assert_true(verify_config.enabled, "Moon simulation should be enabled");
+    runner.assert_equals(4, static_cast<int>(verify_config.base_intensity.size()), "Moon base intensity should have 4 values");
+    
+    // Create simple schedule - on during day, off at night
+    scheduler.clear_schedule();
+    scheduler.set_schedule_point(480, {50.0f, 50.0f, 50.0f, 50.0f}, {1.0f, 1.0f, 1.0f, 1.0f}); // 8 AM - lights on
+    scheduler.set_schedule_point(1200, {0.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f, 0.0f});   // 8 PM - lights off
+    
+    // Set up astronomical times with moon data
+    LEDScheduler::AstronomicalTimes astro_times;
+    astro_times.sunrise_minutes = 360;
+    astro_times.sunset_minutes = 1200;
+    astro_times.moonrise_minutes = 1140;  // 7:00 PM
+    astro_times.moonset_minutes = 420;    // 7:00 AM (next day - this crosses midnight)
+    astro_times.moon_phase = 0.5f;        // Full moon
+    astro_times.valid = true;
+    
+    // Test 1: During day with lights on - no moon
+    auto day_result = scheduler.get_values_at_time_with_astro(720, astro_times);  // Noon
+    runner.assert_equals(50.0f, day_result.pwm_values[0], 0.01f, 
+                        "Noon Ch1 - regular light (expected: 50.0, actual: " + std::to_string(day_result.pwm_values[0]) + ")");
+    runner.assert_equals(50.0f, day_result.pwm_values[3], 0.01f, 
+                        "Noon Ch4 - regular light (expected: 50.0, actual: " + std::to_string(day_result.pwm_values[3]) + ")");
+    
+    // Test 2: Night with moon visible and lights off - moonlight active
+    
+    auto night_result = scheduler.get_values_at_time_with_astro(1320, astro_times);  // 10 PM
+    // Debug: Check if result is valid
+    runner.assert_true(night_result.valid, "Night result should be valid");
+    runner.assert_equals(4, static_cast<int>(night_result.pwm_values.size()), "Night result should have 4 channels");
+    
+    runner.assert_equals(3.0f, night_result.pwm_values[0], 0.01f, 
+                        "10 PM Ch1 - full moon blue (expected: 3.0, actual: " + std::to_string(night_result.pwm_values[0]) + ")");
+    runner.assert_equals(0.0f, night_result.pwm_values[1], 0.01f, 
+                        "10 PM Ch2 - no red moon (expected: 0.0, actual: " + std::to_string(night_result.pwm_values[1]) + ")");
+    runner.assert_equals(1.5f, night_result.pwm_values[3], 0.01f, 
+                        "10 PM Ch4 - full moon white (expected: 1.5, actual: " + std::to_string(night_result.pwm_values[3]) + ")");
+    
+    // Test 3: New moon phase - dimmer moonlight
+    astro_times.moon_phase = 0.0f;  // New moon
+    auto new_moon_result = scheduler.get_values_at_time_with_astro(1320, astro_times);  // 10 PM
+    runner.assert_equals(0.0f, new_moon_result.pwm_values[0], 0.01f, 
+                        "New moon Ch1 - no light (expected: 0.0, actual: " + std::to_string(new_moon_result.pwm_values[0]) + ")");
+    runner.assert_equals(0.0f, new_moon_result.pwm_values[3], 0.01f, 
+                        "New moon Ch4 - no light (expected: 0.0, actual: " + std::to_string(new_moon_result.pwm_values[3]) + ")");
+    
+    // Test 4: Quarter moon phase
+    astro_times.moon_phase = 0.25f;  // Quarter moon
+    auto quarter_moon_result = scheduler.get_values_at_time_with_astro(1320, astro_times);
+    runner.assert_equals(1.5f, quarter_moon_result.pwm_values[0], 0.01f, 
+                        "Quarter moon Ch1 - half intensity (expected: 1.5, actual: " + std::to_string(quarter_moon_result.pwm_values[0]) + ")");
+    runner.assert_equals(0.75f, quarter_moon_result.pwm_values[3], 0.01f, 
+                        "Quarter moon Ch4 - half intensity (expected: 0.75, actual: " + std::to_string(quarter_moon_result.pwm_values[3]) + ")");
+    
+    // Test 5: Moon below horizon at night - no moonlight  
+    // Update moon times so moon is NOT visible at night (rises at 6 AM, sets at 6 PM)
+    astro_times.moonrise_minutes = 360;   // 6:00 AM
+    astro_times.moonset_minutes = 1080;   // 6:00 PM
+    astro_times.moon_phase = 0.5f;        // Full moon
+    auto no_moon_result = scheduler.get_values_at_time_with_astro(1320, astro_times);  // 10 PM (moon has set)
+    runner.assert_equals(0.0f, no_moon_result.pwm_values[0], 0.01f, 
+                        "Moon set Ch1 - no moonlight (expected: 0.0, actual: " + std::to_string(no_moon_result.pwm_values[0]) + ")");
+    runner.assert_equals(0.0f, no_moon_result.pwm_values[3], 0.01f, 
+                        "Moon set Ch4 - no moonlight (expected: 0.0, actual: " + std::to_string(no_moon_result.pwm_values[3]) + ")");
+    
+    // Restore original moon times for remaining tests
+    astro_times.moonrise_minutes = 1140;  // 7:00 PM
+    astro_times.moonset_minutes = 420;    // 7:00 AM (next day)
+    
+    // Test 6: Disable moon simulation
+    scheduler.enable_moon_simulation(false);
+    auto disabled_result = scheduler.get_values_at_time_with_astro(1320, astro_times);  // 10 PM
+    runner.assert_equals(0.0f, disabled_result.pwm_values[0], 0.01f, 
+                        "Moon disabled Ch1 - no light (expected: 0.0, actual: " + std::to_string(disabled_result.pwm_values[0]) + ")");
+    runner.assert_equals(0.0f, disabled_result.pwm_values[3], 0.01f, 
+                        "Moon disabled Ch4 - no light (expected: 0.0, actual: " + std::to_string(disabled_result.pwm_values[3]) + ")");
+    
+    // Test 7: Phase scaling disabled
+    scheduler.enable_moon_simulation(true);
+    moon_config.phase_scaling = false;
+    scheduler.set_moon_simulation(moon_config);
+    astro_times.moon_phase = 0.25f;  // Quarter moon
+    auto no_scale_result = scheduler.get_values_at_time_with_astro(1320, astro_times);
+    runner.assert_equals(3.0f, no_scale_result.pwm_values[0], 0.01f, 
+                        "No phase scaling Ch1 - full intensity (expected: 3.0, actual: " + std::to_string(no_scale_result.pwm_values[0]) + ")");
+    runner.assert_equals(1.5f, no_scale_result.pwm_values[3], 0.01f, 
+                        "No phase scaling Ch4 - full intensity (expected: 1.5, actual: " + std::to_string(no_scale_result.pwm_values[3]) + ")");
+    
+    // Test 8: Moon rise/set crossing midnight
+    astro_times.moonrise_minutes = 1380;  // 11:00 PM
+    astro_times.moonset_minutes = 360;    // 6:00 AM (next day)
+    astro_times.moon_phase = 0.5f;
+    // Add schedule points for nighttime
+    scheduler.set_schedule_point(60, {0.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f, 0.0f});   // 1 AM - lights off
+    auto midnight_moon_result = scheduler.get_values_at_time_with_astro(60, astro_times);  // 1:00 AM
+    runner.assert_equals(3.0f, midnight_moon_result.pwm_values[0], 0.01f, 
+                        "Midnight crossing Ch1 - moon visible (expected: 3.0, actual: " + std::to_string(midnight_moon_result.pwm_values[0]) + ")");
+    
+    // Test 9: Very low main light threshold
+    scheduler.set_schedule_point(1320, {0.05f, 0.0f, 0.0f, 0.0f}, {0.001f, 0.0f, 0.0f, 0.0f});  // 10 PM
+    auto threshold_result = scheduler.get_values_at_time_with_astro(1320, astro_times);
+    runner.assert_equals(0.05f, threshold_result.pwm_values[0], 0.01f, 
+                        "Below threshold Ch1 - main light preserved (expected: 0.05, actual: " + std::to_string(threshold_result.pwm_values[0]) + ")");
+    runner.assert_equals(0.0f, threshold_result.pwm_values[3], 0.01f, 
+                        "Below threshold Ch4 - no moon added (expected: 0.0, actual: " + std::to_string(threshold_result.pwm_values[3]) + ")");
+}
+
 int main() {
     TestResults results;
     TestRunner runner;
@@ -526,6 +682,12 @@ int main() {
     results.add_suite_results(runner);
     
     test_dynamic_schedule_seasons(runner);
+    results.add_suite_results(runner);
+    
+    test_pwm_scaling(runner);
+    results.add_suite_results(runner);
+    
+    test_moon_simulation(runner);
     results.add_suite_results(runner);
     
     results.print_final_summary("LED Scheduler");
