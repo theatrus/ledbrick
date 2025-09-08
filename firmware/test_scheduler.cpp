@@ -543,8 +543,12 @@ void test_moon_simulation(TestRunner& runner) {
     
     // Create simple schedule - on during day, off at night
     scheduler.clear_schedule();
+    scheduler.set_schedule_point(0, {0.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f, 0.0f});       // Midnight - lights off
+    scheduler.set_schedule_point(360, {0.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f, 0.0f});     // 6 AM - lights still off
     scheduler.set_schedule_point(480, {50.0f, 50.0f, 50.0f, 50.0f}, {1.0f, 1.0f, 1.0f, 1.0f}); // 8 AM - lights on
-    scheduler.set_schedule_point(1200, {0.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f, 0.0f});   // 8 PM - lights off
+    scheduler.set_schedule_point(720, {50.0f, 50.0f, 50.0f, 50.0f}, {1.0f, 1.0f, 1.0f, 1.0f}); // 12 PM - lights still on
+    scheduler.set_schedule_point(1200, {50.0f, 50.0f, 50.0f, 50.0f}, {1.0f, 1.0f, 1.0f, 1.0f}); // 8 PM - lights still on
+    scheduler.set_schedule_point(1260, {0.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f, 0.0f});    // 9 PM - lights off
     
     // Set up astronomical times with moon data
     LEDScheduler::AstronomicalTimes astro_times;
@@ -630,8 +634,8 @@ void test_moon_simulation(TestRunner& runner) {
     astro_times.moonrise_minutes = 1380;  // 11:00 PM
     astro_times.moonset_minutes = 360;    // 6:00 AM (next day)
     astro_times.moon_phase = 0.5f;
-    // Add schedule points for nighttime
-    scheduler.set_schedule_point(60, {0.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f, 0.0f});   // 1 AM - lights off
+    moon_config.phase_scaling = true;  // Re-enable phase scaling
+    scheduler.set_moon_simulation(moon_config);
     auto midnight_moon_result = scheduler.get_values_at_time_with_astro(60, astro_times);  // 1:00 AM
     runner.assert_equals(3.0f, midnight_moon_result.pwm_values[0], 0.01f, 
                         "Midnight crossing Ch1 - moon visible (expected: 3.0, actual: " + std::to_string(midnight_moon_result.pwm_values[0]) + ")");

@@ -373,8 +373,6 @@ number:
     step: 1
     unit_of_measurement: "%"
     mode: slider
-    restore_value: true
-    initial_value: 100
     lambda: |-
       return id(main_scheduler).get_pwm_scale() * 100.0f;
     set_action:
