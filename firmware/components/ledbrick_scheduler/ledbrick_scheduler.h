@@ -44,6 +44,10 @@ class LEDBrickScheduler : public PollingComponent {
   void set_update_interval(uint32_t interval_ms) { update_interval_ = interval_ms; }
   void set_time_source(time::RealTimeClock *time_source) { time_source_ = time_source; }
   void set_timezone(const std::string &timezone) { timezone_ = timezone; }
+  void set_location(double latitude, double longitude) { 
+    latitude_ = latitude; 
+    longitude_ = longitude; 
+  }
 
   // Schedule management
   void add_schedule_point(const SchedulePoint &point);
@@ -70,6 +74,20 @@ class LEDBrickScheduler : public PollingComponent {
   uint16_t get_current_time_minutes() const;
   InterpolationResult get_current_values() const;
   
+  // Astronomical functions
+  float get_moon_phase() const;  // Returns 0.0-1.0 (0=new moon, 0.5=full moon)
+  float get_moon_intensity() const;  // Returns 0.0-1.0 based on altitude (0=below horizon, 1=overhead)
+  float get_sun_intensity() const;   // Returns 0.0-1.0 based on altitude (0=below horizon, 1=overhead)
+  
+  struct MoonTimes {
+    bool rise_valid = false;
+    bool set_valid = false;
+    uint16_t rise_minutes = 0;  // Minutes from midnight
+    uint16_t set_minutes = 0;   // Minutes from midnight
+  };
+  
+  MoonTimes get_moon_rise_set_times() const;
+  
   // External entity references
   void add_light(uint8_t channel, light::LightState *light);
   void add_current_control(uint8_t channel, number::Number *control);
@@ -80,6 +98,10 @@ class LEDBrickScheduler : public PollingComponent {
   uint32_t update_interval_{1000}; // 1 second for smooth transitions
   bool enabled_{true};
   std::string timezone_{"UTC"};
+  
+  // Geographic location for astronomical calculations
+  double latitude_{37.7749};   // Default: San Francisco
+  double longitude_{-122.4194};
   
   time::RealTimeClock *time_source_{nullptr};
   
@@ -106,6 +128,16 @@ class LEDBrickScheduler : public PollingComponent {
   void apply_values(const InterpolationResult &values);
   void sort_schedule_points();
   void parse_float_array(const std::string &array_str, std::vector<float> &values) const;
+  
+  // Astronomical calculation helpers
+  struct CelestialPosition {
+    double altitude;   // Degrees above horizon (-90 to +90)
+    double azimuth;    // Degrees from north (0-360)
+  };
+  
+  CelestialPosition calculate_moon_position() const;
+  CelestialPosition calculate_moon_position_at_time(double julian_day) const;
+  CelestialPosition calculate_sun_position() const;
   
   // Built-in presets
   void initialize_presets();

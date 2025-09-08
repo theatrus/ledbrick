@@ -25,6 +25,8 @@ SetEnabledAction = ledbrick_scheduler_ns.class_("SetEnabledAction", automation.A
 CONF_CHANNELS = "channels"
 CONF_TIME_SOURCE = "time_source"
 CONF_TIMEZONE = "timezone"
+CONF_LATITUDE = "latitude"
+CONF_LONGITUDE = "longitude"
 CONF_TIMEPOINT = "timepoint"
 CONF_PWM_VALUES = "pwm_values"
 CONF_CURRENT_VALUES = "current_values"
@@ -39,6 +41,8 @@ CONFIG_SCHEMA = cv.Schema({
     cv.Optional(CONF_UPDATE_INTERVAL, default=DEFAULT_UPDATE_INTERVAL): cv.update_interval,
     cv.Optional(CONF_TIME_SOURCE): cv.use_id(time_.RealTimeClock),
     cv.Optional(CONF_TIMEZONE, default="UTC"): cv.string_strict,
+    cv.Optional(CONF_LATITUDE, default=37.7749): cv.float_range(min=-90.0, max=90.0),  # Default: San Francisco
+    cv.Optional(CONF_LONGITUDE, default=-122.4194): cv.float_range(min=-180.0, max=180.0),
 }).extend(cv.COMPONENT_SCHEMA)
 
 
@@ -48,6 +52,7 @@ async def to_code(config):
     
     cg.add(var.set_num_channels(config[CONF_CHANNELS]))
     cg.add(var.set_timezone(config[CONF_TIMEZONE]))
+    cg.add(var.set_location(config[CONF_LATITUDE], config[CONF_LONGITUDE]))
     
     if CONF_TIME_SOURCE in config:
         time_source = await cg.get_variable(config[CONF_TIME_SOURCE])

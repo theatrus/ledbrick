@@ -24,6 +24,14 @@
 - **Backup/Restore**: Full schedule backup and restore capability
 - **Stdlib Parsing**: Uses reliable `atoi()` and `atof()` for robust JSON parsing
 
+### Astronomical Functions
+- **Moon Phase**: Calculates current lunar phase (0.0=new moon, 0.5=full moon)
+- **Moon Intensity**: Real-time moon brightness based on phase and altitude above horizon
+- **Sun Intensity**: Real-time sun intensity with twilight transitions and atmospheric effects
+- **Moon Rise/Set Times**: Accurate calculation of daily moonrise and moonset times
+- **Location-Aware**: Uses configured latitude/longitude for precise local calculations
+- **Professional Algorithms**: Based on astronomical standards with proper coordinate transformations
+
 ## 🎛️ Available Services
 
 ### Schedule Management
@@ -106,13 +114,15 @@ time:
     id: sntp_time
     timezone: America/Los_Angeles  # Fallback timezone
 
-# Scheduler with timezone
+# Scheduler with timezone and location
 ledbrick_scheduler:
   id: main_scheduler
   time_source: homeassistant_time
   timezone: America/Los_Angeles
+  latitude: 37.7749                # Your location latitude for astronomical calculations
+  longitude: -122.4194             # Your location longitude for astronomical calculations
   channels: 8
-  update_interval: 30s
+  update_interval: 1s              # 1 second for smooth transitions
 ```
 
 ## 🔧 Local Storage

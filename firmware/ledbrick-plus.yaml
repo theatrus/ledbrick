@@ -73,6 +73,8 @@ ledbrick_scheduler:
   update_interval: 1s             # Update every second for smooth transitions
   time_source: homeassistant_time  # Prefer Home Assistant time for timezone support
   timezone: America/Los_Angeles     # Set your local timezone or leave default to match Home Assistant
+  latitude: 37.7749                # San Francisco latitude (set to your location)
+  longitude: -122.4194             # San Francisco longitude (set to your location)
 
 
 status_led:
