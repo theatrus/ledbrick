@@ -84,6 +84,42 @@ fan:
 
 # Light entities are now defined in the channel package
 
+# Status LED - WS2812 RGB on GPIO21
+light:
+  - platform: esp32_rmt_led_strip
+    rgb_order: GRB
+    pin: GPIO21
+    num_leds: 1
+    chipset: WS2812
+    name: "Status LED"
+    id: status_rgb_led
+    effects:
+      - pulse:
+          name: "Pulse"
+          transition_length: 1s
+          update_interval: 1s
+      - strobe:
+          name: "Strobe"
+          colors:
+            - state: true
+              brightness: 100%
+              red: 100%
+              green: 0%
+              blue: 0%
+              duration: 500ms
+            - state: false
+              duration: 250ms
+      - addressable_rainbow:
+          name: "Rainbow"
+          speed: 10
+          width: 50
+
+# 1-Wire bus on GPIO41
+one_wire:
+  - platform: gpio
+    pin: GPIO41
+    id: onewire_bus
+
 i2c:
   sda: GPIO3
   scl: GPIO4
@@ -114,3 +150,15 @@ sensor:
     update_interval: 5s
     filters:
       - multiply: 0.5
+
+  # Dallas temperature sensors (DS18B20) - auto-discovery enabled
+  # ESPHome will automatically discover and create entities for all DS18B20 sensors
+  - platform: dallas_temp
+    one_wire_id: onewire_bus
+    # Auto-discovery: omitting address makes ESPHome discover all sensors
+    name: "Temperature Sensor"
+    # Additional sensors can be configured manually if specific naming is needed:
+    # - platform: dallas_temp
+    #   one_wire_id: onewire_bus
+    #   address: 0x1c0000031edd2a28
+    #   name: "Heatsink Temperature"
