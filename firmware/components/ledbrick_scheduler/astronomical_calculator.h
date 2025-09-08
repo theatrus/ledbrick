@@ -72,6 +72,9 @@ public:
     MoonTimes get_moon_rise_set_times(const DateTime& dt) const;
     SunTimes get_sun_rise_set_times(const DateTime& dt) const;
     
+    // Projected rise/set calculations (with time shift mapping)
+    SunTimes get_projected_sun_rise_set_times(const DateTime& dt) const;
+    
     // Helper functions
     double get_projected_julian_day(const DateTime& dt) const;
     

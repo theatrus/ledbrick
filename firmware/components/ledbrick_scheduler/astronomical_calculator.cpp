@@ -328,6 +328,34 @@ AstronomicalCalculator::SunTimes AstronomicalCalculator::get_sun_rise_set_times(
     return result;
 }
 
+AstronomicalCalculator::SunTimes AstronomicalCalculator::get_projected_sun_rise_set_times(const DateTime& dt) const {
+    if (!projection_enabled_) {
+        return get_sun_rise_set_times(dt);
+    }
+    
+    // Calculate the actual sun rise/set times first
+    SunTimes actual_times = get_sun_rise_set_times(dt);
+    
+    // Apply the time shift to the results
+    SunTimes projected_times = actual_times;
+    
+    if (actual_times.rise_valid) {
+        // Add the time shift (convert to total minutes)
+        int shift_minutes = time_shift_hours_ * 60 + time_shift_minutes_;
+        projected_times.rise_minutes = (actual_times.rise_minutes + shift_minutes) % 1440;
+        if (projected_times.rise_minutes < 0) projected_times.rise_minutes += 1440;
+    }
+    
+    if (actual_times.set_valid) {
+        // Add the time shift (convert to total minutes) 
+        int shift_minutes = time_shift_hours_ * 60 + time_shift_minutes_;
+        projected_times.set_minutes = (actual_times.set_minutes + shift_minutes) % 1440;
+        if (projected_times.set_minutes < 0) projected_times.set_minutes += 1440;
+    }
+    
+    return projected_times;
+}
+
 double AstronomicalCalculator::get_projected_julian_day(const DateTime& dt) const {
     double jd = calculate_julian_day(dt);
     
