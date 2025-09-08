@@ -18,7 +18,7 @@ output:
   - platform: mcpwm_unified
     id: pwm_output_ao${channel_number}
     pin: ${current_pin}
-    frequency: 39khz
+    frequency: 16khz
 
 light:
   - platform: monochromatic
