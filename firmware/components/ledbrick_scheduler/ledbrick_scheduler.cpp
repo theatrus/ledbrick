@@ -15,6 +15,10 @@ static const char *const TAG = "ledbrick_scheduler";
 void LEDBrickScheduler::setup() {
   ESP_LOGCONFIG(TAG, "Setting up LEDBrick Scheduler...");
   
+  // Initialize the astronomical calculator with default location
+  astro_calc_.set_location(latitude_, longitude_);
+  astro_calc_.set_projection_settings(astronomical_projection_, time_shift_hours_, time_shift_minutes_);
+  
   // Initialize persistent storage
   schedule_pref_ = global_preferences->make_preference<ScheduleStorage>(SCHEDULE_HASH);
   
@@ -345,22 +349,49 @@ void LEDBrickScheduler::initialize_presets() {
 std::vector<SchedulePoint> LEDBrickScheduler::create_sunrise_sunset_preset() const {
   std::vector<SchedulePoint> points;
   
-  // 6 AM - Dawn (gradually increasing)
-  points.emplace_back(360, 
+  // Calculate actual sunrise and sunset times (with potential projection/offset)
+  update_astro_calculator_settings();
+  auto dt = esphome_time_to_datetime();
+  auto sun_times = astro_calc_.get_sun_rise_set_times(dt);
+  
+  // Use calculated times or fallback to defaults
+  uint16_t sunrise_minutes = sun_times.rise_valid ? sun_times.rise_minutes : 360;  // Default 6:00 AM
+  uint16_t sunset_minutes = sun_times.set_valid ? sun_times.set_minutes : 1080;    // Default 6:00 PM
+  
+  // Calculate solar noon (midpoint between sunrise and sunset)
+  uint16_t noon_minutes = 720;  // Default 12:00 PM
+  if (sun_times.rise_valid && sun_times.set_valid) {
+    // Handle day wrapping (sunset next day)
+    if (sunset_minutes < sunrise_minutes) {
+      sunset_minutes += 1440;  // Add 24 hours
+    }
+    noon_minutes = (sunrise_minutes + sunset_minutes) / 2;
+    if (noon_minutes >= 1440) {
+      noon_minutes -= 1440;  // Wrap back to same day
+    }
+  }
+  
+  ESP_LOGI(TAG, "Creating sunrise/sunset preset: sunrise=%02u:%02u, noon=%02u:%02u, sunset=%02u:%02u", 
+           sunrise_minutes / 60, sunrise_minutes % 60,
+           noon_minutes / 60, noon_minutes % 60, 
+           sunset_minutes / 60, sunset_minutes % 60);
+  
+  // Sunrise - Dawn (gradually increasing warm light)
+  points.emplace_back(sunrise_minutes, 
                      std::vector<float>{0, 0, 0, 20, 40, 60, 80, 0}, 
                      std::vector<float>{0, 0, 0, 0.3f, 0.6f, 1.0f, 1.2f, 0});
   
-  // 12 PM - Noon (full spectrum)
-  points.emplace_back(720,
+  // Solar noon - Full spectrum
+  points.emplace_back(noon_minutes,
                      std::vector<float>{60, 80, 100, 90, 80, 70, 60, 40},
                      std::vector<float>{1.0f, 1.5f, 2.0f, 1.8f, 1.5f, 1.2f, 1.0f, 0.6f});
   
-  // 6 PM - Dusk (decreasing)
-  points.emplace_back(1080,
+  // Sunset - Dusk (warm fading light)
+  points.emplace_back(sunset_minutes,
                      std::vector<float>{20, 40, 60, 80, 60, 40, 20, 10},
                      std::vector<float>{0.3f, 0.6f, 1.0f, 1.2f, 1.0f, 0.6f, 0.3f, 0.1f});
   
-  // 12 AM - Night (off)
+  // Midnight - Night (all off)
   points.emplace_back(1440,
                      std::vector<float>(num_channels_, 0.0f),
                      std::vector<float>(num_channels_, 0.0f));
@@ -755,496 +786,72 @@ void LEDBrickScheduler::parse_float_array(const std::string &array_str, std::vec
 }
 
 float LEDBrickScheduler::get_moon_phase() const {
-  if (!time_source_) {
-    ESP_LOGW(TAG, "No time source available for moon phase calculation");
-    return 0.0f;
-  }
-  
-  auto time = time_source_->now();
-  if (!time.is_valid()) {
-    ESP_LOGW(TAG, "Invalid time for moon phase calculation");
-    return 0.0f;
-  }
-  
-  // Calculate Julian Day Number
-  int year = time.year;
-  int month = time.month;
-  int day = time.day_of_month;
-  
-  // Adjust for January/February
-  if (month <= 2) {
-    year--;
-    month += 12;
-  }
-  
-  // Julian Day calculation (Gregorian calendar)
-  int a = year / 100;
-  int b = 2 - a + (a / 4);
-  double jd = static_cast<double>(static_cast<int>(365.25 * (year + 4716)) + 
-                                  static_cast<int>(30.6001 * (month + 1)) + 
-                                  day + b - 1524.5);
-  
-  // Add time of day
-  jd += (time.hour + time.minute / 60.0 + time.second / 3600.0) / 24.0;
-  
-  // Moon phase calculation using simplified lunar algorithm
-  // Reference: Astronomical Algorithms by Jean Meeus
-  
-  // Days since J2000.0 (January 1, 2000, 12:00 TT)
-  double days_since_j2000 = jd - 2451545.0;
-  
-  // Mean longitude of the Moon
-  double moon_longitude = fmod(218.316 + 13.176396 * days_since_j2000, 360.0);
-  if (moon_longitude < 0) moon_longitude += 360.0;
-  
-  // Mean longitude of the Sun  
-  double sun_longitude = fmod(280.459 + 0.98564736 * days_since_j2000, 360.0);
-  if (sun_longitude < 0) sun_longitude += 360.0;
-  
-  // Moon's elongation from the Sun
-  double elongation = moon_longitude - sun_longitude;
-  if (elongation < 0) elongation += 360.0;
-  
-  // Convert to phase (0.0 = new moon, 0.5 = full moon, 1.0 = new moon again)
-  double phase = elongation / 360.0;
-  
-  ESP_LOGV(TAG, "Moon phase calculation: JD=%.2f, elongation=%.1f°, phase=%.3f", 
-           jd, elongation, phase);
-  
-  return static_cast<float>(phase);
+  update_astro_calculator_settings();
+  auto dt = esphome_time_to_datetime();
+  return astro_calc_.get_moon_phase(dt);
 }
 
-LEDBrickScheduler::MoonTimes LEDBrickScheduler::get_moon_rise_set_times() const {
-  MoonTimes result;
-  
-  if (!time_source_) {
-    ESP_LOGW(TAG, "No time source available for moon rise/set calculation");
-    return result;
-  }
-  
-  auto current_time = time_source_->now();
-  if (!current_time.is_valid()) {
-    ESP_LOGW(TAG, "Invalid time for moon rise/set calculation");
-    return result;
-  }
-  
-  // Calculate Julian Day for start of today
-  int year = current_time.year;
-  int month = current_time.month;
-  int day = current_time.day_of_month;
-  
-  if (month <= 2) {
-    year--;
-    month += 12;
-  }
-  
-  int a = year / 100;
-  int b = 2 - a + (a / 4);
-  double jd_base = static_cast<double>(static_cast<int>(365.25 * (year + 4716)) + 
-                                       static_cast<int>(30.6001 * (month + 1)) + 
-                                       day + b - 1524.5);
-  
-  double prev_altitude = -90.0;
-  bool found_rise = false;
-  bool found_set = false;
-  
-  // Check every 15 minutes throughout the day using the new helper function
-  for (int minutes = 0; minutes < 1440 && (!found_rise || !found_set); minutes += 15) {
-    int hours = minutes / 60;
-    int mins = minutes % 60;
-    
-    // Calculate Julian Day for this specific time
-    double jd = jd_base + (hours + mins / 60.0) / 24.0;
-    
-    // Use the dedicated position calculator
-    auto pos = calculate_moon_position_at_time(jd);
-    double altitude = pos.altitude;
-    
-    // Check for horizon crossings (0 degrees altitude)
-    if (prev_altitude != -90.0) {  // Skip first iteration
-      if (prev_altitude < 0.0 && altitude >= 0.0 && !found_rise) {
-        // Moon rise detected
-        result.rise_minutes = minutes - 7;  // Approximate midpoint of 15-minute interval
-        if (result.rise_minutes < 0) result.rise_minutes += 1440;
-        result.rise_valid = true;
-        found_rise = true;
-        ESP_LOGV(TAG, "Moon rise detected at %02d:%02d (altitude %.1f°)", 
-                 result.rise_minutes / 60, result.rise_minutes % 60, altitude);
-      }
-      else if (prev_altitude >= 0.0 && altitude < 0.0 && !found_set) {
-        // Moon set detected  
-        result.set_minutes = minutes - 7;  // Approximate midpoint of 15-minute interval
-        if (result.set_minutes < 0) result.set_minutes += 1440;
-        result.set_valid = true;
-        found_set = true;
-        ESP_LOGV(TAG, "Moon set detected at %02d:%02d (altitude %.1f°)", 
-                 result.set_minutes / 60, result.set_minutes % 60, altitude);
-      }
-    }
-    
-    prev_altitude = altitude;
-  }
-  
-  ESP_LOGD(TAG, "Moon times for %.4f°N, %.4f°W: Rise=%s, Set=%s", 
-           latitude_, -longitude_,
-           result.rise_valid ? "valid" : "none",
-           result.set_valid ? "valid" : "none");
-  
-  return result;
+AstronomicalCalculator::MoonTimes LEDBrickScheduler::get_moon_rise_set_times() const {
+  update_astro_calculator_settings();
+  auto dt = esphome_time_to_datetime();
+  return astro_calc_.get_moon_rise_set_times(dt);
 }
 
-LEDBrickScheduler::CelestialPosition LEDBrickScheduler::calculate_moon_position() const {
-  if (!time_source_) {
-    return {-90.0, 0.0};  // Default below horizon
-  }
-  
-  auto time = time_source_->now();
-  if (!time.is_valid()) {
-    return {-90.0, 0.0};
-  }
-  
-  // Calculate Julian Day Number with time of day
-  int year = time.year;
-  int month = time.month;
-  int day = time.day_of_month;
-  
-  if (month <= 2) {
-    year--;
-    month += 12;
-  }
-  
-  int a = year / 100;
-  int b = 2 - a + (a / 4);
-  double jd = static_cast<double>(static_cast<int>(365.25 * (year + 4716)) + 
-                                  static_cast<int>(30.6001 * (month + 1)) + 
-                                  day + b - 1524.5);
-  
-  // Add time of day
-  jd += (time.hour + time.minute / 60.0 + time.second / 3600.0) / 24.0;
-  
-  return calculate_moon_position_at_time(jd);
+AstronomicalCalculator::SunTimes LEDBrickScheduler::get_sun_rise_set_times() const {
+  update_astro_calculator_settings();
+  auto dt = esphome_time_to_datetime();
+  return astro_calc_.get_sun_rise_set_times(dt);
 }
 
-LEDBrickScheduler::CelestialPosition LEDBrickScheduler::calculate_moon_position_at_time(double julian_day) const {
-  CelestialPosition pos = {-90.0, 0.0};  // Default below horizon
-  
-  // Days since J2000.0
-  double d = julian_day - 2451545.0;
-  
-  // Calculate Moon's position
-  double L = fmod(218.316 + 13.176396 * d, 360.0);
-  if (L < 0) L += 360.0;
-  
-  double M = fmod(134.963 + 13.064993 * d, 360.0);
-  if (M < 0) M += 360.0;
-  M = M * M_PI / 180.0;
-  
-  // Moon's longitude with perturbation
-  double moon_lon = L + 6.289 * sin(M);
-  moon_lon = fmod(moon_lon, 360.0);
-  if (moon_lon < 0) moon_lon += 360.0;
-  moon_lon = moon_lon * M_PI / 180.0;
-  
-  // Moon's latitude
-  double moon_lat = 5.128 * sin(fmod(93.272 + 13.229350 * d, 360.0) * M_PI / 180.0);
-  moon_lat = moon_lat * M_PI / 180.0;
-  
-  // Convert to equatorial coordinates
-  double ecliptic_obliquity = 23.439 * M_PI / 180.0;
-  
-  double alpha = atan2(sin(moon_lon) * cos(ecliptic_obliquity) - tan(moon_lat) * sin(ecliptic_obliquity), 
-                      cos(moon_lon));
-  double delta = asin(sin(moon_lat) * cos(ecliptic_obliquity) + 
-                     cos(moon_lat) * sin(ecliptic_obliquity) * sin(moon_lon));
-  
-  // Greenwich Sidereal Time
-  double gst = fmod(280.46061837 + 360.98564736629 * d, 360.0);
-  if (gst < 0) gst += 360.0;
-  gst = gst * M_PI / 180.0;
-  
-  // Convert to radians
-  double lat_rad = latitude_ * M_PI / 180.0;
-  double lon_rad = longitude_ * M_PI / 180.0;
-  
-  // Local Hour Angle
-  double H = gst + lon_rad - alpha;
-  
-  // Calculate altitude and azimuth
-  pos.altitude = asin(sin(lat_rad) * sin(delta) + cos(lat_rad) * cos(delta) * cos(H));
-  pos.altitude = pos.altitude * 180.0 / M_PI;
-  
-  double azimuth = atan2(sin(H), cos(H) * sin(lat_rad) - tan(delta) * cos(lat_rad));
-  pos.azimuth = fmod(azimuth * 180.0 / M_PI + 180.0, 360.0);
-  
-  return pos;
-}
 
-LEDBrickScheduler::CelestialPosition LEDBrickScheduler::calculate_sun_position() const {
-  if (!time_source_) {
-    return {-90.0, 0.0};  // Default below horizon
-  }
-  
-  auto time = time_source_->now();
-  if (!time.is_valid()) {
-    return {-90.0, 0.0};
-  }
-  
-  // Calculate Julian Day Number with time of day
-  int year = time.year;
-  int month = time.month;
-  int day = time.day_of_month;
-  
-  if (month <= 2) {
-    year--;
-    month += 12;
-  }
-  
-  int a = year / 100;
-  int b = 2 - a + (a / 4);
-  double jd = static_cast<double>(static_cast<int>(365.25 * (year + 4716)) + 
-                                  static_cast<int>(30.6001 * (month + 1)) + 
-                                  day + b - 1524.5);
-  
-  // Add time of day
-  jd += (time.hour + time.minute / 60.0 + time.second / 3600.0) / 24.0;
-  
-  return calculate_sun_position_at_time(jd);
-}
-
-LEDBrickScheduler::CelestialPosition LEDBrickScheduler::calculate_sun_position_at_time(double julian_day) const {
-  CelestialPosition pos = {-90.0, 0.0};  // Default below horizon
-  
-  // Days since J2000.0
-  double n = julian_day - 2451545.0;
-  
-  // Mean longitude of Sun
-  double L = fmod(280.460 + 0.98564736 * n, 360.0);
-  if (L < 0) L += 360.0;
-  
-  // Mean anomaly of Sun
-  double g = fmod(357.528 + 0.98560028 * n, 360.0);
-  if (g < 0) g += 360.0;
-  g = g * M_PI / 180.0;
-  
-  // Ecliptic longitude of Sun
-  double lambda = L + 1.915 * sin(g) + 0.020 * sin(2.0 * g);
-  lambda = fmod(lambda, 360.0);
-  if (lambda < 0) lambda += 360.0;
-  lambda = lambda * M_PI / 180.0;
-  
-  // Obliquity of ecliptic
-  double epsilon = 23.439 * M_PI / 180.0;
-  
-  // Right ascension and declination
-  double alpha = atan2(cos(epsilon) * sin(lambda), cos(lambda));
-  double delta = asin(sin(epsilon) * sin(lambda));
-  
-  // Greenwich Sidereal Time
-  double gst = fmod(280.46061837 + 360.98564736629 * n, 360.0);
-  if (gst < 0) gst += 360.0;
-  gst = gst * M_PI / 180.0;
-  
-  // Convert to radians
-  double lat_rad = latitude_ * M_PI / 180.0;
-  double lon_rad = longitude_ * M_PI / 180.0;
-  
-  // Local Hour Angle
-  double H = gst + lon_rad - alpha;
-  
-  // Calculate altitude and azimuth
-  pos.altitude = asin(sin(lat_rad) * sin(delta) + cos(lat_rad) * cos(delta) * cos(H));
-  pos.altitude = pos.altitude * 180.0 / M_PI;
-  
-  double azimuth = atan2(sin(H), cos(H) * sin(lat_rad) - tan(delta) * cos(lat_rad));
-  pos.azimuth = fmod(azimuth * 180.0 / M_PI + 180.0, 360.0);
-  
-  return pos;
-}
 
 float LEDBrickScheduler::get_moon_intensity() const {
-  auto pos = calculate_moon_position();
-  
-  // If below horizon, return 0
-  if (pos.altitude <= 0.0) {
-    return 0.0f;
-  }
-  
-  // Scale altitude from 0-90 degrees to 0.0-1.0 intensity
-  // Use sine curve for more natural intensity scaling
-  double altitude_rad = pos.altitude * M_PI / 180.0;
-  float base_intensity = static_cast<float>(sin(altitude_rad));
-  
-  // Factor in moon phase - new moon is dim, full moon is bright
-  float phase = get_moon_phase();
-  float phase_brightness = 0.1f + 0.9f * (1.0f - abs(phase - 0.5f) * 2.0f);  // Peak at 0.5 (full moon)
-  
-  float intensity = base_intensity * phase_brightness;
-  
-  ESP_LOGVV(TAG, "Moon intensity: altitude=%.1f°, phase=%.3f, brightness=%.3f, final=%.3f", 
-            pos.altitude, phase, phase_brightness, intensity);
-  
-  return intensity;
+  update_astro_calculator_settings();
+  auto dt = esphome_time_to_datetime();
+  return astro_calc_.get_moon_intensity(dt);
 }
 
 float LEDBrickScheduler::get_sun_intensity() const {
-  auto pos = calculate_sun_position();
-  
-  // Handle different sun positions with atmospheric effects
-  if (pos.altitude <= -6.0) {
-    // Below civil twilight - complete darkness
-    return 0.0f;
-  } else if (pos.altitude <= 0.0) {
-    // Twilight period - gradual transition from 0 to 0.1
-    float twilight_factor = (pos.altitude + 6.0) / 6.0;  // 0.0 to 1.0
-    return 0.1f * twilight_factor;
-  } else if (pos.altitude <= 6.0) {
-    // Dawn/dusk transition - from 0.1 to full intensity
-    float dawn_factor = pos.altitude / 6.0;  // 0.0 to 1.0
-    double altitude_rad = pos.altitude * M_PI / 180.0;
-    float base_intensity = static_cast<float>(sin(altitude_rad));
-    return 0.1f + (base_intensity - 0.1f) * dawn_factor;
-  } else {
-    // Above 6 degrees - full daylight calculation
-    double altitude_rad = pos.altitude * M_PI / 180.0;
-    float intensity = static_cast<float>(sin(altitude_rad));
-    
-    // Add slight atmospheric dimming for very low sun
-    if (pos.altitude < 30.0) {
-      float atm_factor = 0.7f + 0.3f * (pos.altitude / 30.0f);
-      intensity *= atm_factor;
-    }
-    
-    return intensity;
-  }
+  update_astro_calculator_settings();
+  auto dt = esphome_time_to_datetime();
+  return astro_calc_.get_sun_intensity(dt);
 }
 
-double LEDBrickScheduler::get_projected_julian_day() const {
+
+float LEDBrickScheduler::get_projected_sun_intensity() const {
+  update_astro_calculator_settings();
+  auto dt = esphome_time_to_datetime();
+  return astro_calc_.get_projected_sun_intensity(dt);
+}
+
+float LEDBrickScheduler::get_projected_moon_intensity() const {
+  update_astro_calculator_settings();
+  auto dt = esphome_time_to_datetime();
+  return astro_calc_.get_projected_moon_intensity(dt);
+}
+
+AstronomicalCalculator::DateTime LEDBrickScheduler::esphome_time_to_datetime() const {
   if (!time_source_) {
-    return 0.0;
+    // Return a default time if no time source
+    return AstronomicalCalculator::DateTime(2025, 1, 8, 12, 0, 0);
   }
   
   auto time = time_source_->now();
   if (!time.is_valid()) {
-    return 0.0;
+    // Return a default time if invalid
+    return AstronomicalCalculator::DateTime(2025, 1, 8, 12, 0, 0);
   }
   
-  // Calculate current Julian Day
-  int year = time.year;
-  int month = time.month;
-  int day = time.day_of_month;
-  
-  if (month <= 2) {
-    year--;
-    month += 12;
-  }
-  
-  int a = year / 100;
-  int b = 2 - a + (a / 4);
-  double jd = static_cast<double>(static_cast<int>(365.25 * (year + 4716)) + 
-                                  static_cast<int>(30.6001 * (month + 1)) + 
-                                  day + b - 1524.5);
-  
-  // Add current time of day
-  jd += (time.hour + time.minute / 60.0 + time.second / 3600.0) / 24.0;
-  
-  if (!astronomical_projection_) {
-    // No projection - return current time
-    return jd;
-  }
-  
-  // Apply time shift
-  double shift_hours = time_shift_hours_ + time_shift_minutes_ / 60.0;
-  jd += shift_hours / 24.0;  // Convert hours to days
-  
-  // For projection mode, we calculate what time it would be at the remote location
-  // to get the same local solar time. This involves timezone offset calculation.
-  
-  // Calculate timezone offset between our local time and the target location
-  // Rough approximation: 15 degrees longitude = 1 hour time difference
-  double longitude_offset_hours = longitude_ / 15.0;  // Target location offset from GMT
-  
-  // We want remote location's solar time to map to our local clock time
-  // So if it's 6:15 AM sunrise there, we want 6:15 AM here (in our timezone)
-  // This means we calculate for what the sun position would be at the remote location
-  // when their local solar time matches our current local clock time.
-  
-  // Apply the longitude-based time offset to synchronize local solar times
-  jd -= longitude_offset_hours / 24.0;
-  
-  return jd;
+  return AstronomicalCalculator::DateTime(
+    time.year, time.month, time.day_of_month, 
+    time.hour, time.minute, time.second
+  );
 }
 
-float LEDBrickScheduler::get_projected_sun_intensity() const {
-  if (!astronomical_projection_) {
-    // Not using projection - return regular sun intensity
-    return get_sun_intensity();
-  }
-  
-  double projected_jd = get_projected_julian_day();
-  if (projected_jd == 0.0) {
-    return 0.0f;
-  }
-  
-  auto pos = calculate_sun_position_at_time(projected_jd);
-  
-  // Same intensity calculation logic as regular sun intensity
-  if (pos.altitude <= -6.0) {
-    return 0.0f;
-  } else if (pos.altitude <= 0.0) {
-    float twilight_factor = (pos.altitude + 6.0) / 6.0;
-    return 0.1f * twilight_factor;
-  } else if (pos.altitude <= 6.0) {
-    float dawn_factor = pos.altitude / 6.0;
-    double altitude_rad = pos.altitude * M_PI / 180.0;
-    float base_intensity = static_cast<float>(sin(altitude_rad));
-    return 0.1f + (base_intensity - 0.1f) * dawn_factor;
-  } else {
-    double altitude_rad = pos.altitude * M_PI / 180.0;
-    float intensity = static_cast<float>(sin(altitude_rad));
-    
-    if (pos.altitude < 30.0) {
-      float atm_factor = 0.7f + 0.3f * (pos.altitude / 30.0f);
-      intensity *= atm_factor;
-    }
-    
-    ESP_LOGVV(TAG, "Projected sun intensity: altitude=%.1f°, shift=%dh%dm, intensity=%.3f", 
-              pos.altitude, time_shift_hours_, time_shift_minutes_, intensity);
-    
-    return intensity;
-  }
-}
-
-float LEDBrickScheduler::get_projected_moon_intensity() const {
-  if (!astronomical_projection_) {
-    // Not using projection - return regular moon intensity
-    return get_moon_intensity();
-  }
-  
-  double projected_jd = get_projected_julian_day();
-  if (projected_jd == 0.0) {
-    return 0.0f;
-  }
-  
-  auto pos = calculate_moon_position_at_time(projected_jd);
-  
-  if (pos.altitude <= 0.0) {
-    return 0.0f;
-  }
-  
-  // Scale altitude from 0-90 degrees to 0.0-1.0 intensity
-  double altitude_rad = pos.altitude * M_PI / 180.0;
-  float base_intensity = static_cast<float>(sin(altitude_rad));
-  
-  // Factor in moon phase - we still use current phase, not projected phase
-  float phase = get_moon_phase();
-  float phase_brightness = 0.1f + 0.9f * (1.0f - abs(phase - 0.5f) * 2.0f);
-  
-  float intensity = base_intensity * phase_brightness;
-  
-  ESP_LOGVV(TAG, "Projected moon intensity: altitude=%.1f°, phase=%.3f, shift=%dh%dm, intensity=%.3f", 
-            pos.altitude, phase, time_shift_hours_, time_shift_minutes_, intensity);
-  
-  return intensity;
+void LEDBrickScheduler::update_astro_calculator_settings() const {
+  // Update location and projection settings in the calculator
+  astro_calc_.set_location(latitude_, longitude_);
+  astro_calc_.set_projection_settings(astronomical_projection_, time_shift_hours_, time_shift_minutes_);
 }
 
 } // namespace ledbrick_scheduler

@@ -7,6 +7,7 @@
 #include "esphome/components/time/real_time_clock.h"
 #include "esphome/components/light/light_state.h"
 #include "esphome/components/number/number.h"
+#include "astronomical_calculator.h"  // Include our standalone calculator
 #include <vector>
 #include <map>
 #include <string>
@@ -79,7 +80,7 @@ class LEDBrickScheduler : public PollingComponent {
   uint16_t get_current_time_minutes() const;
   InterpolationResult get_current_values() const;
   
-  // Astronomical functions
+  // Astronomical functions (delegated to standalone calculator)
   float get_moon_phase() const;  // Returns 0.0-1.0 (0=new moon, 0.5=full moon)
   float get_moon_intensity() const;  // Returns 0.0-1.0 based on altitude (0=below horizon, 1=overhead)
   float get_sun_intensity() const;   // Returns 0.0-1.0 based on altitude (0=below horizon, 1=overhead)
@@ -88,14 +89,9 @@ class LEDBrickScheduler : public PollingComponent {
   float get_projected_sun_intensity() const;  // Sun intensity with optional time projection
   float get_projected_moon_intensity() const; // Moon intensity with optional time projection
   
-  struct MoonTimes {
-    bool rise_valid = false;
-    bool set_valid = false;
-    uint16_t rise_minutes = 0;  // Minutes from midnight
-    uint16_t set_minutes = 0;   // Minutes from midnight
-  };
-  
-  MoonTimes get_moon_rise_set_times() const;
+  // Use the standalone calculator's MoonTimes and SunTimes structs
+  AstronomicalCalculator::MoonTimes get_moon_rise_set_times() const;
+  AstronomicalCalculator::SunTimes get_sun_rise_set_times() const;
   
   // External entity references
   void add_light(uint8_t channel, light::LightState *light);
@@ -116,6 +112,9 @@ class LEDBrickScheduler : public PollingComponent {
   bool astronomical_projection_{false};  // Enable time projection mode
   int time_shift_hours_{0};              // Additional time shift in hours
   int time_shift_minutes_{0};            // Additional time shift in minutes
+  
+  // Standalone astronomical calculator instance
+  mutable AstronomicalCalculator astro_calc_;  // Mutable to allow updates from const methods
   
   time::RealTimeClock *time_source_{nullptr};
   
@@ -143,19 +142,11 @@ class LEDBrickScheduler : public PollingComponent {
   void sort_schedule_points();
   void parse_float_array(const std::string &array_str, std::vector<float> &values) const;
   
-  // Astronomical calculation helpers
-  struct CelestialPosition {
-    double altitude;   // Degrees above horizon (-90 to +90)
-    double azimuth;    // Degrees from north (0-360)
-  };
+  // Helper to convert ESPHome time to AstronomicalCalculator::DateTime
+  AstronomicalCalculator::DateTime esphome_time_to_datetime() const;
   
-  CelestialPosition calculate_moon_position() const;
-  CelestialPosition calculate_moon_position_at_time(double julian_day) const;
-  CelestialPosition calculate_sun_position() const;
-  CelestialPosition calculate_sun_position_at_time(double julian_day) const;
-  
-  // Time projection helper
-  double get_projected_julian_day() const;
+  // Update the astronomical calculator settings when location/projection changes
+  void update_astro_calculator_settings() const;
   
   // Built-in presets
   void initialize_presets();
