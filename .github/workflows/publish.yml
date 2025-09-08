@@ -68,9 +68,23 @@ jobs:
 
       - name: Copy firmware and manifest
         run: |
-          mkdir output
-          cp ${{ steps.esphome-build.outputs.name }}*.bin output/
-          cp ${{ steps.esphome-build.outputs.name }}*.json output/
+          # ESPHome build action creates a directory with the device name
+          DEVICE_DIR="${{ steps.esphome-build.outputs.name }}"
+          echo "Looking for build output in directory: $DEVICE_DIR"
+          ls -la
+          if [ -d "$DEVICE_DIR" ]; then
+            echo "Contents of $DEVICE_DIR:"
+            ls -la "$DEVICE_DIR"/
+            mkdir -p output
+            cp "$DEVICE_DIR"/*.bin output/ 2>/dev/null || echo "No .bin files found"
+            cp "$DEVICE_DIR"/*.json output/ 2>/dev/null || echo "No .json files found"
+          else
+            echo "Device directory $DEVICE_DIR not found, searching for files..."
+            find . -name "*.bin" -exec cp {} output/ \; 2>/dev/null || true
+            find . -name "*.json" -exec cp {} output/ \; 2>/dev/null || true
+          fi
+          echo "Final output directory contents:"
+          ls -la output/ || echo "Output directory is empty or doesn't exist"
 
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
@@ -109,15 +123,21 @@ jobs:
 
       - name: Copy firmware files
         run: |
-          for artifact in firmware-artifacts/*/; do
-            cp "$artifact"*.bin output/
-            if [ -f "$artifact"*.json ]; then
-              # Rename manifest to match expected name
-              filename=$(basename "$artifact"*.json)
-              device_name=$(echo "$filename" | sed 's/\.json$//')
-              cp "$artifact"*.json output/manifest.json
+          echo "Available firmware artifacts:"
+          ls -la firmware-artifacts/
+          for artifact_dir in firmware-artifacts/*/; do
+            echo "Processing artifact directory: $artifact_dir"
+            ls -la "$artifact_dir"
+            # Copy all .bin files
+            find "$artifact_dir" -name "*.bin" -exec cp {} output/ \;
+            # Copy manifest.json if it exists
+            if ls "$artifact_dir"*.json 1> /dev/null 2>&1; then
+              cp "$artifact_dir"*.json output/manifest.json
+              echo "Copied manifest file"
             fi
           done
+          echo "Final output directory for Pages:"
+          ls -la output/
 
       - name: Replace version in HTML
         run: |
