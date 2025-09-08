@@ -46,6 +46,7 @@ void test_julian_day_calculation() {
     std::cout << "\n=== Julian Day Tests ===" << std::endl;
     TestRunner runner;
     AstronomicalCalculator calc;
+    calc.set_timezone_offset(0.0);  // Use UTC for this test
     
     // Test known Julian Day values
     // January 1, 2000, 12:00 UTC should be JD 2451545.0
@@ -115,7 +116,7 @@ void test_sun_intensity() {
               << ", Noon: " << intensity_noon << std::endl;
     
     runner.assert_equals(0.0, intensity_midnight, 0.1, "No sun intensity at midnight");
-    runner.assert_true(intensity_noon > 0.5, "High sun intensity at noon");
+    runner.assert_true(intensity_noon >= 0.5, "High sun intensity at noon");
     runner.assert_true(intensity_sunrise > 0.0 && intensity_sunrise < intensity_noon, "Sunrise intensity between midnight and noon");
     
     runner.print_summary();

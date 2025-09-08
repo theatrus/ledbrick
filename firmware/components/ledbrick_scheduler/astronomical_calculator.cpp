@@ -94,46 +94,51 @@ AstronomicalCalculator::CelestialPosition AstronomicalCalculator::calculate_sun_
     // Mean anomaly of Sun
     double g = fmod(357.528 + 0.98560028 * n, 360.0);
     if (g < 0) g += 360.0;
-    g = g * M_PI / 180.0;
+    double g_rad = g * M_PI / 180.0;
     
     // Ecliptic longitude of Sun
-    double lambda = L + 1.915 * sin(g) + 0.020 * sin(2.0 * g);
+    double lambda = L + 1.915 * sin(g_rad) + 0.020 * sin(2.0 * g_rad);
     lambda = fmod(lambda, 360.0);
     if (lambda < 0) lambda += 360.0;
-    lambda = lambda * M_PI / 180.0;
+    double lambda_rad = lambda * M_PI / 180.0;
     
-    // Obliquity of ecliptic
+    // Obliquity of ecliptic (23.439 degrees for J2000)
     double epsilon = 23.439 * M_PI / 180.0;
     
     // Right ascension and declination
-    double alpha = atan2(cos(epsilon) * sin(lambda), cos(lambda));
-    double delta = asin(sin(epsilon) * sin(lambda));
+    double alpha = atan2(cos(epsilon) * sin(lambda_rad), cos(lambda_rad));
+    if (alpha < 0) alpha += 2.0 * M_PI;
+    double delta = asin(sin(epsilon) * sin(lambda_rad));
     
-    // Greenwich Sidereal Time at 0h UT
-    double gst0 = fmod(280.46061837 + 36525.0 * 360.98564736629 * n / 36525.0, 360.0);
-    if (gst0 < 0) gst0 += 360.0;
+    // Greenwich Mean Sidereal Time (GMST)
+    double t = n / 36525.0;  // Julian centuries since J2000
+    double gmst = fmod(280.46061837 + 360.98564736629 * n + 0.000387933 * t * t, 360.0);
+    if (gmst < 0) gmst += 360.0;
     
-    // Local sidereal time (accounting for longitude and time of day)
-    double fractional_day = fmod(julian_day, 1.0);  // Time of day as fraction
-    double ut_hours = fractional_day * 24.0;
-    double lst = gst0 + longitude_ + 15.0 * ut_hours;
-    lst = fmod(lst, 360.0);
-    if (lst < 0) lst += 360.0;
-    lst = lst * M_PI / 180.0;
-    
-    // Convert to radians
-    double lat_rad = latitude_ * M_PI / 180.0;
+    // Local Mean Sidereal Time (LMST)
+    double lmst = gmst + longitude_;
+    lmst = fmod(lmst, 360.0);
+    if (lmst < 0) lmst += 360.0;
+    double lmst_rad = lmst * M_PI / 180.0;
     
     // Local Hour Angle
-    double H = lst - alpha;
+    double H = lmst_rad - alpha;
     
-    // Calculate altitude and azimuth
+    // Convert coordinates to radians
+    double lat_rad = latitude_ * M_PI / 180.0;
+    
+    // Calculate altitude and azimuth using spherical trigonometry
     CelestialPosition pos;
+    
+    // Altitude
     pos.altitude = asin(sin(lat_rad) * sin(delta) + cos(lat_rad) * cos(delta) * cos(H));
     pos.altitude = pos.altitude * 180.0 / M_PI;
     
-    double azimuth = atan2(sin(H), cos(H) * sin(lat_rad) - tan(delta) * cos(lat_rad));
-    pos.azimuth = fmod(azimuth * 180.0 / M_PI + 180.0, 360.0);
+    // Azimuth (measured from north, clockwise)
+    double y = sin(H);
+    double x = cos(H) * sin(lat_rad) - tan(delta) * cos(lat_rad);
+    double azimuth = atan2(y, x) * 180.0 / M_PI;
+    pos.azimuth = fmod(azimuth + 180.0, 360.0);  // Convert to 0-360 from north
     
     return pos;
 }
