@@ -73,6 +73,87 @@ api:
             id(main_scheduler).clear_schedule();
         - logger.log: "Cleared all schedule points"
 
+    # === Dynamic Schedule Point Management ===
+    
+    # Set a dynamic schedule point for all 8 channels
+    - service: set_dynamic_schedule_point_8ch
+      variables:
+        time_type: string  # "sunrise_relative", "sunset_relative", "solar_noon", etc.
+        offset_minutes: int  # Offset from reference time (-1439 to +1439)
+        pwm_ch1: float
+        pwm_ch2: float
+        pwm_ch3: float
+        pwm_ch4: float
+        pwm_ch5: float
+        pwm_ch6: float
+        pwm_ch7: float
+        pwm_ch8: float
+        current_ch1: float
+        current_ch2: float
+        current_ch3: float
+        current_ch4: float
+        current_ch5: float
+        current_ch6: float
+        current_ch7: float
+        current_ch8: float
+      then:
+        - lambda: |-
+            // Convert time_type string to enum using helper function
+            auto type = LEDScheduler::string_to_dynamic_time_type(time_type);
+            if (type == LEDScheduler::DynamicTimeType::FIXED && time_type != "fixed") {
+              ESP_LOGW("main", "Unknown time_type: %s", time_type.c_str());
+              return;
+            }
+            
+            std::vector<float> pwm_values = {pwm_ch1, pwm_ch2, pwm_ch3, pwm_ch4, pwm_ch5, pwm_ch6, pwm_ch7, pwm_ch8};
+            std::vector<float> current_values = {current_ch1, current_ch2, current_ch3, current_ch4, current_ch5, current_ch6, current_ch7, current_ch8};
+            id(main_scheduler).add_dynamic_schedule_point(type, offset_minutes, pwm_values, current_values);
+            ESP_LOGI("main", "Dynamic schedule point set: %s %+d minutes", time_type.c_str(), offset_minutes);
+
+    # Simplified 4-channel dynamic version
+    - service: set_dynamic_schedule_point_4ch
+      variables:
+        time_type: string
+        offset_minutes: int
+        pwm_ch1: float
+        pwm_ch2: float
+        pwm_ch3: float
+        pwm_ch4: float
+        current_ch1: float
+        current_ch2: float
+        current_ch3: float
+        current_ch4: float
+      then:
+        - lambda: |-
+            // Convert time_type string to enum using helper function
+            auto type = LEDScheduler::string_to_dynamic_time_type(time_type);
+            if (type == LEDScheduler::DynamicTimeType::FIXED && time_type != "fixed") {
+              ESP_LOGW("main", "Unknown time_type: %s", time_type.c_str());
+              return;
+            }
+            
+            std::vector<float> pwm_values = {pwm_ch1, pwm_ch2, pwm_ch3, pwm_ch4, 0, 0, 0, 0};
+            std::vector<float> current_values = {current_ch1, current_ch2, current_ch3, current_ch4, 0, 0, 0, 0};
+            id(main_scheduler).add_dynamic_schedule_point(type, offset_minutes, pwm_values, current_values);
+            ESP_LOGI("main", "Dynamic schedule point set: %s %+d minutes (4ch)", time_type.c_str(), offset_minutes);
+
+    # Remove a dynamic schedule point
+    - service: remove_dynamic_schedule_point
+      variables:
+        time_type: string
+        offset_minutes: int
+      then:
+        - lambda: |-
+            // Convert time_type string to enum using helper function
+            auto type = LEDScheduler::string_to_dynamic_time_type(time_type);
+            if (type == LEDScheduler::DynamicTimeType::FIXED && time_type != "fixed") {
+              ESP_LOGW("main", "Unknown time_type: %s", time_type.c_str());
+              return;
+            }
+            
+            id(main_scheduler).remove_dynamic_schedule_point(type, offset_minutes);
+            ESP_LOGI("main", "Removed dynamic schedule point: %s %+d minutes", time_type.c_str(), offset_minutes);
+
     # === Preset Management ===
     
     # Load a preset schedule

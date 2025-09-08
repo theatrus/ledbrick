@@ -1,0 +1,262 @@
+# Home Assistant Dynamic Schedule Example
+# This file shows how to use the dynamic schedule points feature with Home Assistant
+
+# Example 1: Simple Dynamic Sunrise/Sunset Schedule
+automation:
+  - alias: "Setup Dynamic Aquarium Lighting"
+    trigger:
+      - platform: homeassistant
+        event: start
+      - platform: time
+        at: "03:00:00"  # Reset schedule daily at 3 AM
+    action:
+      # Clear existing schedule
+      - service: esphome.ledbrickplus_clear_schedule
+      
+      # Pre-dawn (30 minutes before sunrise) - Moonlight simulation
+      - service: esphome.ledbrickplus_set_dynamic_schedule_point_8ch
+        data:
+          time_type: "sunrise_relative"
+          offset_minutes: -30
+          pwm_ch1: 5    # Blue moonlight
+          pwm_ch2: 0
+          pwm_ch3: 0
+          pwm_ch4: 5    # Blue moonlight
+          pwm_ch5: 0
+          pwm_ch6: 0
+          pwm_ch7: 0
+          pwm_ch8: 0
+          current_ch1: 0.1
+          current_ch2: 0
+          current_ch3: 0
+          current_ch4: 0.1
+          current_ch5: 0
+          current_ch6: 0
+          current_ch7: 0
+          current_ch8: 0
+      
+      # Sunrise - Dawn begins
+      - service: esphome.ledbrickplus_set_dynamic_schedule_point_8ch
+        data:
+          time_type: "sunrise_relative"
+          offset_minutes: 0
+          pwm_ch1: 20   # Blue
+          pwm_ch2: 10   # Royal Blue
+          pwm_ch3: 5    # UV
+          pwm_ch4: 15   # Cool White
+          pwm_ch5: 10   # Warm White
+          pwm_ch6: 5    # Red
+          pwm_ch7: 0    # Green
+          pwm_ch8: 0    # Far Red
+          current_ch1: 0.4
+          current_ch2: 0.2
+          current_ch3: 0.1
+          current_ch4: 0.3
+          current_ch5: 0.2
+          current_ch6: 0.1
+          current_ch7: 0
+          current_ch8: 0
+      
+      # Solar Noon - Peak intensity
+      - service: esphome.ledbrickplus_set_dynamic_schedule_point_8ch
+        data:
+          time_type: "solar_noon"
+          offset_minutes: 0
+          pwm_ch1: 85   # Blue
+          pwm_ch2: 80   # Royal Blue
+          pwm_ch3: 40   # UV
+          pwm_ch4: 90   # Cool White
+          pwm_ch5: 70   # Warm White
+          pwm_ch6: 30   # Red
+          pwm_ch7: 20   # Green
+          pwm_ch8: 15   # Far Red
+          current_ch1: 1.7
+          current_ch2: 1.6
+          current_ch3: 0.8
+          current_ch4: 1.8
+          current_ch5: 1.4
+          current_ch6: 0.6
+          current_ch7: 0.4
+          current_ch8: 0.3
+      
+      # Sunset - Dusk begins
+      - service: esphome.ledbrickplus_set_dynamic_schedule_point_8ch
+        data:
+          time_type: "sunset_relative"
+          offset_minutes: 0
+          pwm_ch1: 15   # Blue
+          pwm_ch2: 10   # Royal Blue
+          pwm_ch3: 0    # UV
+          pwm_ch4: 10   # Cool White
+          pwm_ch5: 20   # Warm White (more warm at sunset)
+          pwm_ch6: 15   # Red (more red at sunset)
+          pwm_ch7: 5    # Green
+          pwm_ch8: 10   # Far Red
+          current_ch1: 0.3
+          current_ch2: 0.2
+          current_ch3: 0
+          current_ch4: 0.2
+          current_ch5: 0.4
+          current_ch6: 0.3
+          current_ch7: 0.1
+          current_ch8: 0.2
+      
+      # Post-sunset (30 minutes after) - Night/Moonlight
+      - service: esphome.ledbrickplus_set_dynamic_schedule_point_8ch
+        data:
+          time_type: "sunset_relative"
+          offset_minutes: 30
+          pwm_ch1: 5    # Blue moonlight
+          pwm_ch2: 0
+          pwm_ch3: 0
+          pwm_ch4: 5    # Blue moonlight
+          pwm_ch5: 0
+          pwm_ch6: 0
+          pwm_ch7: 0
+          pwm_ch8: 0
+          current_ch1: 0.1
+          current_ch2: 0
+          current_ch3: 0
+          current_ch4: 0.1
+          current_ch5: 0
+          current_ch6: 0
+          current_ch7: 0
+          current_ch8: 0
+
+# Example 2: Civil Twilight Schedule (gentler transitions)
+automation:
+  - alias: "Civil Twilight Aquarium Schedule"
+    trigger:
+      - platform: state
+        entity_id: input_boolean.use_civil_twilight_schedule
+        to: "on"
+    action:
+      - service: esphome.ledbrickplus_clear_schedule
+      
+      # Civil dawn (sun 6° below horizon)
+      - service: esphome.ledbrickplus_set_dynamic_schedule_point_4ch
+        data:
+          time_type: "civil_dawn"
+          offset_minutes: 0
+          pwm_ch1: 10
+          pwm_ch2: 10
+          pwm_ch3: 10
+          pwm_ch4: 10
+          current_ch1: 0.2
+          current_ch2: 0.2
+          current_ch3: 0.2
+          current_ch4: 0.2
+      
+      # Solar noon
+      - service: esphome.ledbrickplus_set_dynamic_schedule_point_4ch
+        data:
+          time_type: "solar_noon"
+          offset_minutes: 0
+          pwm_ch1: 80
+          pwm_ch2: 80
+          pwm_ch3: 80
+          pwm_ch4: 80
+          current_ch1: 1.6
+          current_ch2: 1.6
+          current_ch3: 1.6
+          current_ch4: 1.6
+      
+      # Civil dusk
+      - service: esphome.ledbrickplus_set_dynamic_schedule_point_4ch
+        data:
+          time_type: "civil_dusk"
+          offset_minutes: 0
+          pwm_ch1: 10
+          pwm_ch2: 10
+          pwm_ch3: 10
+          pwm_ch4: 10
+          current_ch1: 0.2
+          current_ch2: 0.2
+          current_ch3: 0.2
+          current_ch4: 0.2
+
+# Example 3: Load the built-in dynamic preset
+automation:
+  - alias: "Load Dynamic Sunrise Sunset Preset"
+    trigger:
+      - platform: state
+        entity_id: input_boolean.use_dynamic_preset
+        to: "on"
+    action:
+      - service: esphome.ledbrickplus_load_preset
+        data:
+          preset_name: "dynamic_sunrise_sunset"
+
+# Helper entities for the UI
+input_boolean:
+  use_civil_twilight_schedule:
+    name: Use Civil Twilight Schedule
+    icon: mdi:weather-sunset
+  
+  use_dynamic_preset:
+    name: Use Dynamic Sunrise/Sunset Preset
+    icon: mdi:weather-sunny
+
+# Dashboard card example
+# Add this to your Lovelace dashboard
+lovelace:
+  - type: entities
+    title: Dynamic Lighting Schedule
+    entities:
+      - entity: switch.ledbrickplus_scheduler_enabled
+        name: Scheduler Enabled
+      - entity: input_boolean.use_dynamic_preset
+        name: Dynamic Sunrise/Sunset
+      - entity: input_boolean.use_civil_twilight_schedule
+        name: Civil Twilight Schedule
+      - type: divider
+      - entity: sensor.ledbrickplus_scheduler_current_time
+        name: Current Time
+      - entity: sensor.ledbrickplus_scheduler_pwm_channel_1
+        name: Channel 1 PWM
+      - entity: sensor.ledbrickplus_scheduler_current_channel_1
+        name: Channel 1 Current
+  
+  - type: markdown
+    content: |
+      ## Dynamic Schedule Points
+      
+      Dynamic schedule points automatically adjust based on your location's sunrise/sunset times.
+      
+      **Available Time Types:**
+      - `sunrise_relative` - Relative to sunrise time
+      - `sunset_relative` - Relative to sunset time  
+      - `solar_noon` - When sun is at highest point
+      - `civil_dawn` - Sun 6° below horizon (morning)
+      - `civil_dusk` - Sun 6° below horizon (evening)
+      - `nautical_dawn` - Sun 12° below horizon (morning)
+      - `nautical_dusk` - Sun 12° below horizon (evening)
+      - `astronomical_dawn` - Sun 18° below horizon (morning)
+      - `astronomical_dusk` - Sun 18° below horizon (evening)
+      
+      **Offset:** -1439 to +1439 minutes from reference time
+
+# Script for easy dynamic point creation
+script:
+  add_dynamic_sunrise_point:
+    alias: "Add Dynamic Sunrise Point"
+    fields:
+      offset:
+        description: "Minutes offset from sunrise"
+        example: -30
+      brightness:
+        description: "Brightness percentage (0-100)"
+        example: 20
+    sequence:
+      - service: esphome.ledbrickplus_set_dynamic_schedule_point_4ch
+        data:
+          time_type: "sunrise_relative"
+          offset_minutes: "{{ offset }}"
+          pwm_ch1: "{{ brightness }}"
+          pwm_ch2: "{{ brightness }}"
+          pwm_ch3: "{{ brightness }}"
+          pwm_ch4: "{{ brightness }}"
+          current_ch1: "{{ brightness / 50 }}"  # Simple current calculation
+          current_ch2: "{{ brightness / 50 }}"
+          current_ch3: "{{ brightness / 50 }}"
+          current_ch4: "{{ brightness / 50 }}"

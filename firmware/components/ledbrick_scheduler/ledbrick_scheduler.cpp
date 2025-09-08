@@ -48,9 +48,14 @@ void LEDBrickScheduler::update() {
     return;
   }
   
+  // Update astronomical times for dynamic schedule points
+  update_astronomical_times_for_scheduler();
+  
   // Get current values from standalone scheduler and apply them
   uint16_t current_time = get_current_time_minutes();
-  auto values = scheduler_.get_values_at_time(current_time);
+  
+  // Use astronomical interpolation if we have dynamic points
+  auto values = scheduler_.get_values_at_time_with_astro(current_time, scheduler_.get_astronomical_times());
   if (values.valid) {
     apply_values(values);
   }
@@ -110,6 +115,18 @@ void LEDBrickScheduler::set_schedule_point(uint16_t time_minutes, const std::vec
   save_schedule_to_flash();
 }
 
+void LEDBrickScheduler::add_dynamic_schedule_point(LEDScheduler::DynamicTimeType type, int16_t offset_minutes,
+                                                  const std::vector<float> &pwm_values,
+                                                  const std::vector<float> &current_values) {
+  scheduler_.add_dynamic_schedule_point(type, offset_minutes, pwm_values, current_values);
+  
+  // Save to flash automatically
+  save_schedule_to_flash();
+  
+  ESP_LOGD(TAG, "Added dynamic schedule point: %s %+d minutes", 
+           LEDScheduler::dynamic_time_type_to_string(type).c_str(), offset_minutes);
+}
+
 void LEDBrickScheduler::remove_schedule_point(uint16_t time_minutes) {
   scheduler_.remove_schedule_point(time_minutes);
   
@@ -117,6 +134,16 @@ void LEDBrickScheduler::remove_schedule_point(uint16_t time_minutes) {
   save_schedule_to_flash();
   
   ESP_LOGD(TAG, "Removed schedule point at %02u:%02u", time_minutes / 60, time_minutes % 60);
+}
+
+void LEDBrickScheduler::remove_dynamic_schedule_point(LEDScheduler::DynamicTimeType type, int16_t offset_minutes) {
+  scheduler_.remove_dynamic_schedule_point(type, offset_minutes);
+  
+  // Save to flash automatically
+  save_schedule_to_flash();
+  
+  ESP_LOGD(TAG, "Removed dynamic schedule point: %s %+d minutes", 
+           LEDScheduler::dynamic_time_type_to_string(type).c_str(), offset_minutes);
 }
 
 void LEDBrickScheduler::clear_schedule() {
@@ -433,6 +460,63 @@ void LEDBrickScheduler::update_astro_calculator_settings() const {
   astro_calc_.set_location(latitude_, longitude_);
   astro_calc_.set_timezone_offset(timezone_offset_hours_);
   astro_calc_.set_projection_settings(astronomical_projection_, time_shift_hours_, time_shift_minutes_);
+}
+
+void LEDBrickScheduler::update_astronomical_times_for_scheduler() {
+  static uint32_t last_astro_update = 0;
+  uint32_t current_millis = millis();
+  
+  // Update astronomical times every 5 minutes (300000 ms)
+  if (current_millis - last_astro_update < 300000 && last_astro_update != 0) {
+    return; // Skip update if less than 5 minutes have passed
+  }
+  
+  last_astro_update = current_millis;
+  
+  // Calculate current astronomical times
+  update_astro_calculator_settings();
+  auto dt = esphome_time_to_datetime();
+  
+  // Get sunrise/sunset times (with projection if enabled)
+  auto sun_times = astronomical_projection_ ? 
+    astro_calc_.get_projected_sun_rise_set_times(dt) : 
+    astro_calc_.get_sun_rise_set_times(dt);
+  
+  // Calculate solar noon (midpoint between sunrise and sunset)
+  uint16_t solar_noon = 720; // Default noon
+  if (sun_times.rise_valid && sun_times.set_valid && sun_times.set_minutes > sun_times.rise_minutes) {
+    solar_noon = (sun_times.rise_minutes + sun_times.set_minutes) / 2;
+  }
+  
+  // Calculate civil twilight times (sun 6° below horizon)
+  // For now, approximate as 30 minutes before/after sunrise/sunset
+  uint16_t civil_dawn = sun_times.rise_valid ? 
+    (sun_times.rise_minutes > 30 ? sun_times.rise_minutes - 30 : 0) : 390;
+  uint16_t civil_dusk = sun_times.set_valid ? 
+    (sun_times.set_minutes < 1410 ? sun_times.set_minutes + 30 : 1439) : 1110;
+  
+  // Build astronomical times structure
+  LEDScheduler::AstronomicalTimes astro_times;
+  astro_times.sunrise_minutes = sun_times.rise_valid ? sun_times.rise_minutes : 420;
+  astro_times.sunset_minutes = sun_times.set_valid ? sun_times.set_minutes : 1080;
+  astro_times.solar_noon_minutes = solar_noon;
+  astro_times.civil_dawn_minutes = civil_dawn;
+  astro_times.civil_dusk_minutes = civil_dusk;
+  
+  // For nautical and astronomical twilight, use further approximations
+  astro_times.nautical_dawn_minutes = civil_dawn > 30 ? civil_dawn - 30 : 0;
+  astro_times.nautical_dusk_minutes = civil_dusk < 1410 ? civil_dusk + 30 : 1439;
+  astro_times.astronomical_dawn_minutes = civil_dawn > 60 ? civil_dawn - 60 : 0;
+  astro_times.astronomical_dusk_minutes = civil_dusk < 1380 ? civil_dusk + 60 : 1439;
+  astro_times.valid = true;
+  
+  // Update the scheduler with new astronomical times
+  scheduler_.set_astronomical_times(astro_times);
+  
+  ESP_LOGD(TAG, "Updated astronomical times - Sunrise: %02u:%02u, Sunset: %02u:%02u, Solar Noon: %02u:%02u",
+           astro_times.sunrise_minutes / 60, astro_times.sunrise_minutes % 60,
+           astro_times.sunset_minutes / 60, astro_times.sunset_minutes % 60,
+           astro_times.solar_noon_minutes / 60, astro_times.solar_noon_minutes % 60);
 }
 
 } // namespace ledbrick_scheduler

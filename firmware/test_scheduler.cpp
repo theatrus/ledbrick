@@ -208,6 +208,57 @@ void test_mutations(TestRunner& runner) {
     runner.assert_true(scheduler.is_schedule_empty(), "Schedule is empty after clear");
 }
 
+void test_dynamic_schedule_points(TestRunner& runner) {
+    runner.start_suite("Dynamic Schedule Point Tests");
+    
+    LEDScheduler scheduler(2);
+    
+    // Test adding dynamic schedule points
+    scheduler.add_dynamic_schedule_point(LEDScheduler::DynamicTimeType::SUNRISE_RELATIVE, -30,
+        std::vector<float>{10.0f, 20.0f}, std::vector<float>{0.2f, 0.4f});
+    scheduler.add_dynamic_schedule_point(LEDScheduler::DynamicTimeType::SOLAR_NOON, 0,
+        std::vector<float>{80.0f, 90.0f}, std::vector<float>{1.6f, 1.8f});
+    scheduler.add_dynamic_schedule_point(LEDScheduler::DynamicTimeType::SUNSET_RELATIVE, 30,
+        std::vector<float>{15.0f, 25.0f}, std::vector<float>{0.3f, 0.5f});
+    
+    runner.assert_equals(3, static_cast<int>(scheduler.get_schedule_size()), "Dynamic points added");
+    
+    // Test dynamic time calculation
+    LEDScheduler::AstronomicalTimes astro_times;
+    astro_times.sunrise_minutes = 420;  // 7:00 AM
+    astro_times.sunset_minutes = 1080;  // 6:00 PM
+    astro_times.solar_noon_minutes = 750; // 12:30 PM
+    astro_times.valid = true;
+    
+    auto points = scheduler.get_schedule_points();
+    
+    // Test sunrise relative calculation
+    uint16_t sunrise_time = scheduler.calculate_dynamic_time(points[0], astro_times);
+    runner.assert_equals(390, static_cast<int>(sunrise_time), "Sunrise -30 minutes = 6:30 AM");
+    
+    // Test solar noon calculation
+    uint16_t noon_time = scheduler.calculate_dynamic_time(points[1], astro_times);
+    runner.assert_equals(750, static_cast<int>(noon_time), "Solar noon = 12:30 PM");
+    
+    // Test sunset relative calculation
+    uint16_t sunset_time = scheduler.calculate_dynamic_time(points[2], astro_times);
+    runner.assert_equals(1110, static_cast<int>(sunset_time), "Sunset +30 minutes = 6:30 PM");
+    
+    // Test interpolation with astronomical times
+    auto result = scheduler.get_values_at_time_with_astro(750, astro_times);
+    runner.assert_true(result.valid, "Dynamic interpolation valid");
+    runner.assert_equals(80.0f, result.pwm_values[0], 1.0f, "Dynamic PWM value at solar noon");
+    
+    // Test dynamic preset
+    scheduler.load_preset("dynamic_sunrise_sunset");
+    runner.assert_equals(7, static_cast<int>(scheduler.get_schedule_size()), "Dynamic preset loaded");
+    
+    // Test JSON export includes dynamic info
+    std::string json = scheduler.export_json();
+    runner.assert_true(json.find("\"time_type\": \"sunrise_relative\"") != std::string::npos, 
+                      "JSON contains dynamic type info");
+}
+
 int main() {
     TestResults results;
     TestRunner runner;
@@ -236,6 +287,9 @@ int main() {
     results.add_suite_results(runner);
     
     test_mutations(runner);
+    results.add_suite_results(runner);
+    
+    test_dynamic_schedule_points(runner);
     results.add_suite_results(runner);
     
     results.print_final_summary("LED Scheduler");

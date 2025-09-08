@@ -50,7 +50,11 @@ class LEDBrickScheduler : public PollingComponent {
   void add_schedule_point(const SchedulePoint &point);
   void set_schedule_point(uint16_t time_minutes, const std::vector<float> &pwm_values, 
                          const std::vector<float> &current_values);
+  void add_dynamic_schedule_point(LEDScheduler::DynamicTimeType type, int16_t offset_minutes,
+                                 const std::vector<float> &pwm_values,
+                                 const std::vector<float> &current_values);
   void remove_schedule_point(uint16_t time_minutes);
+  void remove_dynamic_schedule_point(LEDScheduler::DynamicTimeType type, int16_t offset_minutes);
   void clear_schedule();
   
   // Preset management (delegates to standalone scheduler)
@@ -136,6 +140,7 @@ class LEDBrickScheduler : public PollingComponent {
   
   // Update the astronomical calculator settings when location/projection changes
   void update_astro_calculator_settings() const;
+  void update_astronomical_times_for_scheduler();
   
   // Built-in presets (use astronomical data for sunrise/sunset)
   void create_sunrise_sunset_preset_with_astro_data() const;
