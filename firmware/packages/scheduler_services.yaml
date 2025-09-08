@@ -143,6 +143,19 @@ api:
             id(main_scheduler).export_schedule_json(json_output);
             ESP_LOGI("main", "Schedule JSON Export: %s", json_output.c_str());
 
+    # Import schedule from JSON
+    - service: import_schedule_json
+      variables:
+        json_data: string
+      then:
+        - lambda: |-
+            bool success = id(main_scheduler).import_schedule_json(json_data);
+            if (success) {
+              ESP_LOGI("main", "Schedule JSON import successful");
+            } else {
+              ESP_LOGW("main", "Schedule JSON import failed - invalid format");
+            }
+
     # Force save schedule to flash
     - service: save_to_flash
       then:
@@ -192,6 +205,89 @@ sensor:
       auto values = id(main_scheduler).get_current_values();
       return values.current_values.size() > 0 ? values.current_values[0] : 0.0f;
     update_interval: 30s
+
+# === Entity Setup ===
+# Connect scheduler to actual lights and number entities
+
+esphome:
+  on_boot:
+    priority: 100  # Run after other components are set up
+    then:
+      - lambda: |-
+          // Connect lights to scheduler (channels are 1-indexed in config, 0-indexed in code)
+          if (id(lpwm1)) id(main_scheduler).add_light(0, id(lpwm1));
+          if (id(lpwm2)) id(main_scheduler).add_light(1, id(lpwm2));
+          if (id(lpwm3)) id(main_scheduler).add_light(2, id(lpwm3));
+          if (id(lpwm4)) id(main_scheduler).add_light(3, id(lpwm4));
+          if (id(lpwm5)) id(main_scheduler).add_light(4, id(lpwm5));
+          if (id(lpwm6)) id(main_scheduler).add_light(5, id(lpwm6));
+          if (id(lpwm7)) id(main_scheduler).add_light(6, id(lpwm7));
+          if (id(lpwm8)) id(main_scheduler).add_light(7, id(lpwm8));
+          
+          // Connect current controls to scheduler
+          if (id(current_1)) id(main_scheduler).add_current_control(0, id(current_1));
+          if (id(current_2)) id(main_scheduler).add_current_control(1, id(current_2));
+          if (id(current_3)) id(main_scheduler).add_current_control(2, id(current_3));
+          if (id(current_4)) id(main_scheduler).add_current_control(3, id(current_4));
+          if (id(current_5)) id(main_scheduler).add_current_control(4, id(current_5));
+          if (id(current_6)) id(main_scheduler).add_current_control(5, id(current_6));
+          if (id(current_7)) id(main_scheduler).add_current_control(6, id(current_7));
+          if (id(current_8)) id(main_scheduler).add_current_control(7, id(current_8));
+          
+          // Connect max current controls to scheduler
+          if (id(max_current_1)) id(main_scheduler).add_max_current_control(0, id(max_current_1));
+          if (id(max_current_2)) id(main_scheduler).add_max_current_control(1, id(max_current_2));
+          if (id(max_current_3)) id(main_scheduler).add_max_current_control(2, id(max_current_3));
+          if (id(max_current_4)) id(main_scheduler).add_max_current_control(3, id(max_current_4));
+          if (id(max_current_5)) id(main_scheduler).add_max_current_control(4, id(max_current_5));
+          if (id(max_current_6)) id(main_scheduler).add_max_current_control(5, id(max_current_6));
+          if (id(max_current_7)) id(main_scheduler).add_max_current_control(6, id(max_current_7));
+          if (id(max_current_8)) id(main_scheduler).add_max_current_control(7, id(max_current_8));
+          
+          // Set current channels to their maximum configured values at boot
+          if (id(current_1) && id(max_current_1)) {
+            float max_val = id(max_current_1)->state;
+            id(current_1)->publish_state(max_val);
+            ESP_LOGI("main", "Set current_1 to max value: %.2fA", max_val);
+          }
+          if (id(current_2) && id(max_current_2)) {
+            float max_val = id(max_current_2)->state;
+            id(current_2)->publish_state(max_val);
+            ESP_LOGI("main", "Set current_2 to max value: %.2fA", max_val);
+          }
+          if (id(current_3) && id(max_current_3)) {
+            float max_val = id(max_current_3)->state;
+            id(current_3)->publish_state(max_val);
+            ESP_LOGI("main", "Set current_3 to max value: %.2fA", max_val);
+          }
+          if (id(current_4) && id(max_current_4)) {
+            float max_val = id(max_current_4)->state;
+            id(current_4)->publish_state(max_val);
+            ESP_LOGI("main", "Set current_4 to max value: %.2fA", max_val);
+          }
+          if (id(current_5) && id(max_current_5)) {
+            float max_val = id(max_current_5)->state;
+            id(current_5)->publish_state(max_val);
+            ESP_LOGI("main", "Set current_5 to max value: %.2fA", max_val);
+          }
+          if (id(current_6) && id(max_current_6)) {
+            float max_val = id(max_current_6)->state;
+            id(current_6)->publish_state(max_val);
+            ESP_LOGI("main", "Set current_6 to max value: %.2fA", max_val);
+          }
+          if (id(current_7) && id(max_current_7)) {
+            float max_val = id(max_current_7)->state;
+            id(current_7)->publish_state(max_val);
+            ESP_LOGI("main", "Set current_7 to max value: %.2fA", max_val);
+          }
+          if (id(current_8) && id(max_current_8)) {
+            float max_val = id(max_current_8)->state;
+            id(current_8)->publish_state(max_val);
+            ESP_LOGI("main", "Set current_8 to max value: %.2fA", max_val);
+          }
+          
+          ESP_LOGI("main", "Connected scheduler to all available lights and number entities");
+          ESP_LOGI("main", "Set all current channels to their maximum configured values");
 
 # === Control Entities ===
 

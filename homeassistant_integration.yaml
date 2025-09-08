@@ -162,6 +162,14 @@ input_select:
       - "custom_2"
     initial: "sunrise_sunset"
 
+input_text:
+  # JSON import/export helper
+  ledbrick_json_data:
+    name: "Schedule JSON Data"
+    max: 2048
+    multiline: true
+    mode: text
+
 input_boolean:
   ledbrick_scheduler_enable:
     name: "Enable LEDBrick Scheduler"
@@ -303,6 +311,31 @@ script:
     alias: "Export LEDBrick Schedule JSON"
     sequence:
       - service: esphome.ledbrickplus_get_schedule_json
+
+  ledbrick_import_json:
+    alias: "Import LEDBrick Schedule JSON"
+    fields:
+      json_data:
+        name: "JSON Data"
+        description: "Complete JSON schedule configuration"
+        required: true
+        example: '{"timezone":"America/Los_Angeles","enabled":true,"schedule_points":[{"time_minutes":360,"pwm_values":[0,0,0,20,40,60,80,0],"current_values":[0,0,0,0.3,0.6,1.0,1.2,0]}]}'
+    sequence:
+      - service: esphome.ledbrickplus_import_schedule_json
+        data:
+          json_data: "{{ json_data }}"
+
+  ledbrick_import_from_input:
+    alias: "Import Schedule from Input Text"
+    sequence:
+      - service: esphome.ledbrickplus_import_schedule_json
+        data:
+          json_data: "{{ states('input_text.ledbrick_json_data') }}"
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.ledbrick_json_data
+        data:
+          value: ""  # Clear after import
 
 # === Automations ===
 

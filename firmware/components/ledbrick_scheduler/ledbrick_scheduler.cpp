@@ -1,10 +1,11 @@
 #include "ledbrick_scheduler.h"
 #include "esphome/core/log.h"
 #include "esphome/core/application.h"
-#include "esphome/components/output/float_output.h"
+#include "esphome/components/light/light_state.h"
 #include "esphome/components/number/number.h"
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 
 namespace esphome {
 namespace ledbrick_scheduler {
@@ -36,12 +37,25 @@ void LEDBrickScheduler::setup() {
 
 void LEDBrickScheduler::update() {
   if (!enabled_) {
+    ESP_LOGVV(TAG, "Scheduler disabled, skipping update");
     return;
   }
   
   // Get current values and apply them
   auto values = get_current_values();
   apply_values(values);
+  
+  // Log current interpolated values every 10 seconds (reduce log spam)
+  static uint32_t last_log_time = 0;
+  uint32_t current_millis = millis();
+  if (current_millis - last_log_time > 10000) {
+    uint16_t current_time = get_current_time_minutes();
+    ESP_LOGD(TAG, "Scheduler active at %02u:%02u - Ch1: PWM=%.1f%%, Current=%.2fA", 
+             current_time / 60, current_time % 60,
+             values.pwm_values.size() > 0 ? values.pwm_values[0] : 0.0f,
+             values.current_values.size() > 0 ? values.current_values[0] : 0.0f);
+    last_log_time = current_millis;
+  }
 }
 
 void LEDBrickScheduler::dump_config() {
@@ -222,12 +236,37 @@ InterpolationResult LEDBrickScheduler::interpolate_values(uint16_t current_time)
 }
 
 void LEDBrickScheduler::apply_values(const InterpolationResult &values) {
+  static std::vector<float> last_pwm_values_(num_channels_, -1.0f);
+  static std::vector<float> last_current_values_(num_channels_, -1.0f);
+  
   for (uint8_t channel = 0; channel < num_channels_; channel++) {
-    // Apply PWM output
-    auto pwm_it = pwm_outputs_.find(channel);
-    if (pwm_it != pwm_outputs_.end() && pwm_it->second) {
-      float pwm_level = values.pwm_values[channel] / 100.0f; // Convert percentage to 0-1
-      pwm_it->second->set_level(pwm_level);
+    // Apply PWM to light entity
+    auto light_it = lights_.find(channel);
+    if (light_it != lights_.end() && light_it->second) {
+      float brightness = values.pwm_values[channel] / 100.0f; // Convert percentage to 0-1
+      
+      // Only update if value has changed significantly (reduce unnecessary calls)
+      if (last_pwm_values_.size() <= channel || 
+          abs(brightness - last_pwm_values_[channel]) > 0.001f) {
+        
+        // Create light call to set brightness
+        auto call = light_it->second->make_call();
+        call.set_state(brightness > 0.001f); // Turn on if brightness > 0
+        if (brightness > 0.001f) {
+          call.set_brightness(brightness);
+        }
+        call.perform();
+        
+        if (last_pwm_values_.size() <= channel) {
+          last_pwm_values_.resize(num_channels_, -1.0f);
+        }
+        last_pwm_values_[channel] = brightness;
+        
+        ESP_LOGV(TAG, "Updated light %u brightness to %.3f (%.1f%%)", 
+                 channel, brightness, values.pwm_values[channel]);
+      }
+    } else {
+      ESP_LOGVV(TAG, "No light entity found for channel %u", channel);
     }
     
     // Apply current control with limiting
@@ -243,8 +282,23 @@ void LEDBrickScheduler::apply_values(const InterpolationResult &values) {
         target_current = std::min(target_current, max_current);
       }
       
-      // Set the current control value
-      current_it->second->publish_state(target_current);
+      // Only update if value has changed significantly
+      if (last_current_values_.size() <= channel || 
+          abs(target_current - last_current_values_[channel]) > 0.01f) {
+        
+        // Set the current control value
+        current_it->second->publish_state(target_current);
+        
+        if (last_current_values_.size() <= channel) {
+          last_current_values_.resize(num_channels_, -1.0f);
+        }
+        last_current_values_[channel] = target_current;
+        
+        ESP_LOGV(TAG, "Updated current %u to %.3fA (limited from %.3fA)", 
+                 channel, target_current, values.current_values[channel]);
+      }
+    } else {
+      ESP_LOGVV(TAG, "No current control found for channel %u", channel);
     }
   }
 }
@@ -256,9 +310,9 @@ void LEDBrickScheduler::sort_schedule_points() {
            });
 }
 
-void LEDBrickScheduler::add_pwm_output(uint8_t channel, output::FloatOutput *output) {
-  pwm_outputs_[channel] = output;
-  ESP_LOGD(TAG, "Added PWM output for channel %u", channel);
+void LEDBrickScheduler::add_light(uint8_t channel, light::LightState *light) {
+  lights_[channel] = light;
+  ESP_LOGD(TAG, "Added light entity for channel %u", channel);
 }
 
 void LEDBrickScheduler::add_current_control(uint8_t channel, number::Number *control) {
@@ -527,10 +581,169 @@ void LEDBrickScheduler::export_schedule_json(std::string &json_output) const {
 }
 
 bool LEDBrickScheduler::import_schedule_json(const std::string &json_input) {
-  // Simple JSON parsing for schedule import
-  // This is a basic implementation - in production you'd want a proper JSON library
-  ESP_LOGW(TAG, "JSON import not yet fully implemented");
-  return false;
+  ESP_LOGI(TAG, "Importing schedule from JSON (%zu chars)", json_input.length());
+  
+  // Simple JSON parsing - look for key patterns
+  // This is basic parsing suitable for the JSON format we export
+  
+  // Clear existing schedule
+  schedule_points_.clear();
+  
+  // Extract enabled state
+  size_t enabled_pos = json_input.find("\"enabled\":");
+  if (enabled_pos != std::string::npos) {
+    size_t value_start = json_input.find_first_not_of(" \t", enabled_pos + 10);
+    if (value_start != std::string::npos) {
+      enabled_ = json_input.substr(value_start, 4) == "true";
+    }
+  }
+  
+  // Find schedule_points array
+  size_t points_start = json_input.find("\"schedule_points\":[");
+  if (points_start == std::string::npos) {
+    ESP_LOGW(TAG, "No schedule_points found in JSON");
+    return false;
+  }
+  
+  points_start += 18; // Skip "schedule_points":[
+  size_t points_end = json_input.find("]}", points_start);
+  if (points_end == std::string::npos) {
+    points_end = json_input.find("]", points_start);
+  }
+  
+  if (points_end == std::string::npos) {
+    ESP_LOGW(TAG, "Invalid schedule_points array format");
+    return false;
+  }
+  
+  std::string points_str = json_input.substr(points_start, points_end - points_start);
+  ESP_LOGD(TAG, "Parsing schedule points: %s", points_str.c_str());
+  
+  // Parse individual points (basic implementation)
+  size_t pos = 0;
+  int points_parsed = 0;
+  
+  while (pos < points_str.length() && points_parsed < 50) { // Limit to 50 points
+    // Find start of next point object
+    size_t point_start = points_str.find("{", pos);
+    if (point_start == std::string::npos) break;
+    
+    size_t point_end = points_str.find("}", point_start);
+    if (point_end == std::string::npos) break;
+    
+    std::string point_str = points_str.substr(point_start, point_end - point_start + 1);
+    
+    // Parse this point
+    SchedulePoint point;
+    bool valid_point = false;
+    
+    // Extract time_minutes
+    size_t time_pos = point_str.find("\"time_minutes\":");
+    if (time_pos != std::string::npos) {
+      size_t num_start = time_pos + 15;
+      size_t num_end = point_str.find_first_of(",}", num_start);
+      if (num_end != std::string::npos) {
+        std::string time_str = point_str.substr(num_start, num_end - num_start);
+        // Use stdlib atoi for reliable integer parsing
+        int time_val = atoi(time_str.c_str());
+        
+        if (time_val >= 0 && time_val < 1440) {
+          point.time_minutes = static_cast<uint16_t>(time_val);
+          valid_point = true;
+        }
+      }
+    }
+    
+    if (!valid_point) {
+      pos = point_end + 1;
+      continue;
+    }
+    
+    // Extract PWM values array
+    size_t pwm_start = point_str.find("\"pwm_values\":[");
+    if (pwm_start != std::string::npos) {
+      pwm_start += 14;
+      size_t pwm_end = point_str.find("]", pwm_start);
+      if (pwm_end != std::string::npos) {
+        std::string pwm_str = point_str.substr(pwm_start, pwm_end - pwm_start);
+        parse_float_array(pwm_str, point.pwm_values);
+      }
+    }
+    
+    // Extract current values array
+    size_t current_start = point_str.find("\"current_values\":[");
+    if (current_start != std::string::npos) {
+      current_start += 18;
+      size_t current_end = point_str.find("]", current_start);
+      if (current_end != std::string::npos) {
+        std::string current_str = point_str.substr(current_start, current_end - current_start);
+        parse_float_array(current_str, point.current_values);
+      }
+    }
+    
+    // Validate and add point
+    if (point.time_minutes < 1440 && 
+        point.pwm_values.size() <= num_channels_ && 
+        point.current_values.size() <= num_channels_) {
+      
+      // Resize to match channel count
+      point.pwm_values.resize(num_channels_, 0.0f);
+      point.current_values.resize(num_channels_, 0.0f);
+      
+      schedule_points_.push_back(point);
+      points_parsed++;
+      
+      ESP_LOGD(TAG, "Imported point: %02u:%02u with %zu PWM/%zu current values",
+              point.time_minutes / 60, point.time_minutes % 60,
+              point.pwm_values.size(), point.current_values.size());
+    } else {
+      ESP_LOGW(TAG, "Skipping invalid schedule point");
+    }
+    
+    pos = point_end + 1;
+  }
+  
+  // Sort points and save to flash
+  sort_schedule_points();
+  save_schedule_to_flash();
+  
+  ESP_LOGI(TAG, "Successfully imported %d schedule points, enabled=%s", 
+           points_parsed, enabled_ ? "true" : "false");
+  
+  return points_parsed > 0;
+}
+
+void LEDBrickScheduler::parse_float_array(const std::string &array_str, std::vector<float> &values) const {
+  values.clear();
+  
+  size_t pos = 0;
+  while (pos < array_str.length()) {
+    // Skip whitespace and commas
+    while (pos < array_str.length() && (array_str[pos] == ' ' || array_str[pos] == '\t' || array_str[pos] == ',')) {
+      pos++;
+    }
+    
+    if (pos >= array_str.length()) break;
+    
+    // Find end of number
+    size_t end_pos = pos;
+    while (end_pos < array_str.length() && 
+           array_str[end_pos] != ',' && 
+           array_str[end_pos] != ']' && 
+           array_str[end_pos] != '}') {
+      end_pos++;
+    }
+    
+    if (end_pos > pos) {
+      std::string num_str = array_str.substr(pos, end_pos - pos);
+      
+      // Use stdlib atof for reliable float parsing
+      float value = static_cast<float>(atof(num_str.c_str()));
+      values.push_back(value);
+    }
+    
+    pos = end_pos;
+  }
 }
 
 } // namespace ledbrick_scheduler

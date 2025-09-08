@@ -70,7 +70,7 @@ external_components:
 ledbrick_scheduler:
   id: main_scheduler
   channels: 8  # Full 8-channel configuration
-  update_interval: 30s
+  update_interval: 1s             # Update every second for smooth transitions
   time_source: homeassistant_time  # Prefer Home Assistant time for timezone support
   timezone: America/Los_Angeles     # Set your local timezone or leave default to match Home Assistant
 

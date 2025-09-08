@@ -2,17 +2,27 @@
 
 ## ✅ Recent Updates
 
+### Light Entity Control (FIXED)
+- **Direct Light Control**: Scheduler now properly controls the light entities (`lpwm1`, `lpwm2`, etc.) from channel packages
+- **Current Control**: Scheduler controls the current number entities (`current_1`, `current_2`, etc.)
+- **Automatic Connection**: On boot, scheduler automatically connects to all available light and number entities
+- **Smooth Updates**: Updates every second for smooth, continuous lighting transitions
+- **Smart Optimization**: Only sends updates when values change significantly (reduces unnecessary API calls)
+- **Visual Feedback**: Changes are visible in Home Assistant dashboard lights and sliders
+
 ### Timezone Support
-- **Home Assistant Time Source**: Scheduler now uses `homeassistant_time` as primary time source for automatic timezone detection
+- **Home Assistant Time Source**: Scheduler uses `homeassistant_time` as primary time source for automatic timezone detection
 - **Fallback SNTP**: Uses SNTP with `America/Los_Angeles` timezone if Home Assistant unavailable
 - **Configuration**: Set timezone in `ledbrick_scheduler` config: `timezone: America/Los_Angeles`
 - **Display**: All times shown in configured local timezone (not UTC)
 
-### JSON Export Service  
-- **New Service**: `get_schedule_json` exports complete scheduler configuration as JSON
+### JSON Export & Import Services  
+- **Export Service**: `get_schedule_json` exports complete scheduler configuration as JSON
+- **Import Service**: `import_schedule_json` imports schedule configuration from JSON string
 - **Rich Data**: Includes current time, timezone, current interpolated values, and all schedule points
 - **Time Display**: Human-readable time format (HH:MM) alongside raw minutes
-- **Logging**: JSON output appears in ESPHome logs for easy access
+- **Backup/Restore**: Full schedule backup and restore capability
+- **Stdlib Parsing**: Uses reliable `atoi()` and `atof()` for robust JSON parsing
 
 ## 🎛️ Available Services
 
@@ -29,7 +39,8 @@
 ### Control & Status
 - `set_scheduler_enabled` - Enable/disable scheduler
 - `get_scheduler_status` - Log current status and interpolated values
-- `get_schedule_json` - **NEW** Export complete configuration as JSON
+- `get_schedule_json` - Export complete configuration as JSON
+- `import_schedule_json` - **NEW** Import schedule configuration from JSON string
 
 ### Storage Management
 - `save_to_flash` - Force save to ESP32 flash memory
@@ -62,17 +73,25 @@
 
 ### Scripts Available
 - `ledbrick_export_json` - Trigger JSON export
+- `ledbrick_import_json` - **NEW** Import JSON with data parameter
+- `ledbrick_import_from_input` - **NEW** Import from input text helper
 - `ledbrick_morning_gentle` - Set gentle morning lighting  
 - `ledbrick_midday_full` - Set full spectrum midday
 - `ledbrick_evening_warm` - Set warm evening lighting
 
-### Usage Example
+### Usage Examples
 ```yaml
-# Call the JSON export service
+# Export current schedule as JSON
 - service: script.ledbrick_export_json
+# Check ESPHome logs for JSON output
 
-# Check ESPHome logs for JSON output:
-# "Schedule JSON Export: {timezone:..., current_time_minutes:720, ...}"
+# Import schedule from JSON string
+- service: script.ledbrick_import_json
+  data:
+    json_data: '{"timezone":"America/Los_Angeles","enabled":true,"schedule_points":[{"time_minutes":480,"pwm_values":[0,20,40,60,80,60,40,20],"current_values":[0,0.3,0.6,1.0,1.5,1.0,0.6,0.3]}]}'
+
+# Import using the input text helper (paste JSON in Home Assistant UI)
+- service: script.ledbrick_import_from_input
 ```
 
 ## ⚙️ Configuration

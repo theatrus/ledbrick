@@ -5,7 +5,7 @@
 #include "esphome/core/time.h"
 #include "esphome/core/preferences.h"
 #include "esphome/components/time/real_time_clock.h"
-#include "esphome/components/output/float_output.h"
+#include "esphome/components/light/light_state.h"
 #include "esphome/components/number/number.h"
 #include <vector>
 #include <map>
@@ -70,14 +70,14 @@ class LEDBrickScheduler : public PollingComponent {
   uint16_t get_current_time_minutes() const;
   InterpolationResult get_current_values() const;
   
-  // External output references
-  void add_pwm_output(uint8_t channel, output::FloatOutput *output);
+  // External entity references
+  void add_light(uint8_t channel, light::LightState *light);
   void add_current_control(uint8_t channel, number::Number *control);
   void add_max_current_control(uint8_t channel, number::Number *control);
 
  protected:
   uint8_t num_channels_{8};
-  uint32_t update_interval_{30000}; // 30 seconds
+  uint32_t update_interval_{1000}; // 1 second for smooth transitions
   bool enabled_{true};
   std::string timezone_{"UTC"};
   
@@ -96,8 +96,8 @@ class LEDBrickScheduler : public PollingComponent {
   std::vector<SchedulePoint> schedule_points_;
   mutable std::map<std::string, std::vector<SchedulePoint>> presets_;
   
-  // Output references
-  std::map<uint8_t, output::FloatOutput*> pwm_outputs_;
+  // Entity references
+  std::map<uint8_t, light::LightState*> lights_;
   std::map<uint8_t, number::Number*> current_controls_;
   std::map<uint8_t, number::Number*> max_current_controls_;
   
@@ -105,6 +105,7 @@ class LEDBrickScheduler : public PollingComponent {
   InterpolationResult interpolate_values(uint16_t current_time) const;
   void apply_values(const InterpolationResult &values);
   void sort_schedule_points();
+  void parse_float_array(const std::string &array_str, std::vector<float> &values) const;
   
   // Built-in presets
   void initialize_presets();
