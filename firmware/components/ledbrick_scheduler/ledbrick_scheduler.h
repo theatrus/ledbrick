@@ -8,6 +8,7 @@
 #include "esphome/components/light/light_state.h"
 #include "esphome/components/number/number.h"
 #include "astronomical_calculator.h"  // Include our standalone calculator
+#include "scheduler.h"  // Include standalone scheduler
 #include <vector>
 #include <map>
 #include <string>
@@ -15,20 +16,9 @@
 namespace esphome {
 namespace ledbrick_scheduler {
 
-struct SchedulePoint {
-  uint16_t time_minutes;  // 0-1439 (minutes from midnight)
-  std::vector<float> pwm_values;     // PWM percentages (0-100) per channel
-  std::vector<float> current_values; // Current values (0-5A) per channel
-  
-  SchedulePoint() : time_minutes(0) {}
-  SchedulePoint(uint16_t time, std::vector<float> pwm, std::vector<float> current) 
-    : time_minutes(time), pwm_values(std::move(pwm)), current_values(std::move(current)) {}
-};
-
-struct InterpolationResult {
-  std::vector<float> pwm_values;
-  std::vector<float> current_values;
-};
+// Use the standalone scheduler types
+using SchedulePoint = LEDScheduler::SchedulePoint;
+using InterpolationResult = LEDScheduler::InterpolationResult;
 
 class LEDBrickScheduler : public PollingComponent {
  public:
@@ -56,18 +46,18 @@ class LEDBrickScheduler : public PollingComponent {
   }
   void set_timezone_offset_hours(double hours) { timezone_offset_hours_ = hours; }
 
-  // Schedule management
+  // Schedule management (delegates to standalone scheduler)
   void add_schedule_point(const SchedulePoint &point);
   void set_schedule_point(uint16_t time_minutes, const std::vector<float> &pwm_values, 
                          const std::vector<float> &current_values);
   void remove_schedule_point(uint16_t time_minutes);
   void clear_schedule();
   
-  // Preset management
+  // Preset management (delegates to standalone scheduler)
   void load_preset(const std::string &preset_name);
   void save_preset(const std::string &preset_name);
   
-  // Persistent storage
+  // Persistent storage (ESPHome-specific)
   void save_schedule_to_flash();
   void load_schedule_from_flash();
   void export_schedule_json(std::string &json_output) const;
@@ -118,8 +108,9 @@ class LEDBrickScheduler : public PollingComponent {
   int time_shift_minutes_{0};            // Additional time shift in minutes
   double timezone_offset_hours_{0.0};    // Timezone offset from UTC in hours
   
-  // Standalone astronomical calculator instance
-  mutable AstronomicalCalculator astro_calc_;  // Mutable to allow updates from const methods
+  // Standalone components
+  mutable AstronomicalCalculator astro_calc_;  // Astronomical calculations
+  LEDScheduler scheduler_;  // Core scheduling logic
   
   time::RealTimeClock *time_source_{nullptr};
   
@@ -132,20 +123,13 @@ class LEDBrickScheduler : public PollingComponent {
     uint8_t data[3800];  // Flexible storage for points
   };
   
-  // Schedule storage
-  std::vector<SchedulePoint> schedule_points_;
-  mutable std::map<std::string, std::vector<SchedulePoint>> presets_;
-  
   // Entity references
   std::map<uint8_t, light::LightState*> lights_;
   std::map<uint8_t, number::Number*> current_controls_;
   std::map<uint8_t, number::Number*> max_current_controls_;
   
   // Internal methods
-  InterpolationResult interpolate_values(uint16_t current_time) const;
   void apply_values(const InterpolationResult &values);
-  void sort_schedule_points();
-  void parse_float_array(const std::string &array_str, std::vector<float> &values) const;
   
   // Helper to convert ESPHome time to AstronomicalCalculator::DateTime
   AstronomicalCalculator::DateTime esphome_time_to_datetime() const;
@@ -153,11 +137,8 @@ class LEDBrickScheduler : public PollingComponent {
   // Update the astronomical calculator settings when location/projection changes
   void update_astro_calculator_settings() const;
   
-  // Built-in presets
-  void initialize_presets();
-  std::vector<SchedulePoint> create_sunrise_sunset_preset() const;
-  std::vector<SchedulePoint> create_full_spectrum_preset() const;
-  std::vector<SchedulePoint> create_simple_preset() const;
+  // Built-in presets (use astronomical data for sunrise/sunset)
+  void create_sunrise_sunset_preset_with_astro_data() const;
 };
 
 // Automation actions

@@ -7,8 +7,9 @@
 #include <cmath>
 #include <cstdlib>
 
-// Include the astronomical calculator implementation
+// Include the standalone implementations
 #include "astronomical_calculator.cpp"
+#include "scheduler.cpp"
 
 namespace esphome {
 namespace ledbrick_scheduler {
@@ -18,6 +19,9 @@ static const char *const TAG = "ledbrick_scheduler";
 void LEDBrickScheduler::setup() {
   ESP_LOGCONFIG(TAG, "Setting up LEDBrick Scheduler...");
   
+  // Initialize the standalone scheduler
+  scheduler_.set_num_channels(num_channels_);
+  
   // Initialize the astronomical calculator with default location
   astro_calc_.set_location(latitude_, longitude_);
   astro_calc_.set_projection_settings(astronomical_projection_, time_shift_hours_, time_shift_minutes_);
@@ -25,19 +29,15 @@ void LEDBrickScheduler::setup() {
   // Initialize persistent storage
   schedule_pref_ = global_preferences->make_preference<ScheduleStorage>(SCHEDULE_HASH);
   
-  // Initialize presets
-  initialize_presets();
-  
   // Load schedule from flash storage
   load_schedule_from_flash();
   
   // Load default sunrise/sunset schedule if no points exist
-  if (schedule_points_.empty()) {
+  if (scheduler_.is_schedule_empty()) {
     ESP_LOGI(TAG, "No saved schedule found, loading default preset");
     load_preset("sunrise_sunset");
     save_schedule_to_flash();  // Save the default schedule
   }
-  
   
   ESP_LOGCONFIG(TAG, "LEDBrick Scheduler setup complete");
 }
@@ -48,9 +48,12 @@ void LEDBrickScheduler::update() {
     return;
   }
   
-  // Get current values and apply them
-  auto values = get_current_values();
-  apply_values(values);
+  // Get current values from standalone scheduler and apply them
+  uint16_t current_time = get_current_time_minutes();
+  auto values = scheduler_.get_values_at_time(current_time);
+  if (values.valid) {
+    apply_values(values);
+  }
   
   // Log current interpolated values every 10 seconds (reduce log spam)
   static uint32_t last_log_time = 0;
@@ -72,7 +75,7 @@ void LEDBrickScheduler::dump_config() {
   ESP_LOGCONFIG(TAG, "  Enabled: %s", enabled_ ? "YES" : "NO");
   ESP_LOGCONFIG(TAG, "  Timezone: %s", timezone_.c_str());
   ESP_LOGCONFIG(TAG, "  Location: %.4f°N, %.4f°W", latitude_, -longitude_);
-  ESP_LOGCONFIG(TAG, "  Schedule Points: %zu", schedule_points_.size());
+  ESP_LOGCONFIG(TAG, "  Schedule Points: %zu", scheduler_.get_schedule_size());
   ESP_LOGCONFIG(TAG, "  Time Source: %s", time_source_ ? "CONFIGURED" : "NOT SET");
   
   if (astronomical_projection_) {
@@ -90,18 +93,7 @@ void LEDBrickScheduler::dump_config() {
 }
 
 void LEDBrickScheduler::add_schedule_point(const SchedulePoint &point) {
-  // Validate point
-  if (point.pwm_values.size() != num_channels_ || point.current_values.size() != num_channels_) {
-    ESP_LOGW(TAG, "Schedule point has wrong number of channels (expected %u)", num_channels_);
-    return;
-  }
-  
-  // Remove existing point at same time
-  remove_schedule_point(point.time_minutes);
-  
-  // Add new point
-  schedule_points_.push_back(point);
-  sort_schedule_points();
+  scheduler_.add_schedule_point(point);
   
   // Save to flash automatically
   save_schedule_to_flash();
@@ -112,40 +104,45 @@ void LEDBrickScheduler::add_schedule_point(const SchedulePoint &point) {
 
 void LEDBrickScheduler::set_schedule_point(uint16_t time_minutes, const std::vector<float> &pwm_values, 
                                           const std::vector<float> &current_values) {
-  SchedulePoint point(time_minutes, pwm_values, current_values);
-  add_schedule_point(point);
+  scheduler_.set_schedule_point(time_minutes, pwm_values, current_values);
+  
+  // Save to flash automatically
+  save_schedule_to_flash();
 }
 
 void LEDBrickScheduler::remove_schedule_point(uint16_t time_minutes) {
-  auto it = std::remove_if(schedule_points_.begin(), schedule_points_.end(),
-                          [time_minutes](const SchedulePoint &p) {
-                            return p.time_minutes == time_minutes;
-                          });
+  scheduler_.remove_schedule_point(time_minutes);
   
-  if (it != schedule_points_.end()) {
-    schedule_points_.erase(it, schedule_points_.end());
-    ESP_LOGD(TAG, "Removed schedule point at %02u:%02u", time_minutes / 60, time_minutes % 60);
-  }
+  // Save to flash automatically
+  save_schedule_to_flash();
+  
+  ESP_LOGD(TAG, "Removed schedule point at %02u:%02u", time_minutes / 60, time_minutes % 60);
 }
 
 void LEDBrickScheduler::clear_schedule() {
-  schedule_points_.clear();
+  scheduler_.clear_schedule();
+  
+  // Save to flash automatically
+  save_schedule_to_flash();
+  
   ESP_LOGD(TAG, "Cleared all schedule points");
 }
 
 void LEDBrickScheduler::load_preset(const std::string &preset_name) {
-  auto it = presets_.find(preset_name);
-  if (it != presets_.end()) {
-    schedule_points_ = it->second;
-    sort_schedule_points();
-    ESP_LOGI(TAG, "Loaded preset '%s' with %zu points", preset_name.c_str(), schedule_points_.size());
+  if (preset_name == "sunrise_sunset") {
+    create_sunrise_sunset_preset_with_astro_data();
   } else {
-    ESP_LOGW(TAG, "Preset '%s' not found", preset_name.c_str());
+    scheduler_.load_preset(preset_name);
   }
+  
+  // Save to flash automatically
+  save_schedule_to_flash();
+  
+  ESP_LOGI(TAG, "Loaded preset '%s' with %zu points", preset_name.c_str(), scheduler_.get_schedule_size());
 }
 
 void LEDBrickScheduler::save_preset(const std::string &preset_name) {
-  presets_[preset_name] = schedule_points_;
+  scheduler_.save_preset(preset_name);
   ESP_LOGI(TAG, "Saved current schedule as preset '%s'", preset_name.c_str());
 }
 
@@ -166,88 +163,25 @@ uint16_t LEDBrickScheduler::get_current_time_minutes() const {
 
 InterpolationResult LEDBrickScheduler::get_current_values() const {
   uint16_t current_time = get_current_time_minutes();
-  return interpolate_values(current_time);
+  return scheduler_.get_values_at_time(current_time);
 }
 
-InterpolationResult LEDBrickScheduler::interpolate_values(uint16_t current_time) const {
-  InterpolationResult result;
-  result.pwm_values.resize(num_channels_, 0.0f);
-  result.current_values.resize(num_channels_, 0.0f);
+void LEDBrickScheduler::create_sunrise_sunset_preset_with_astro_data() const {
+  // Calculate actual sunrise and sunset times using astronomical calculator
+  update_astro_calculator_settings();
+  auto dt = esphome_time_to_datetime();
+  auto sun_times = astro_calc_.get_projected_sun_rise_set_times(dt);
   
-  if (schedule_points_.empty()) {
-    return result;
-  }
+  // Use calculated times or fallback to defaults
+  uint16_t sunrise_minutes = sun_times.rise_valid ? sun_times.rise_minutes : 420;  // Default 7:00 AM
+  uint16_t sunset_minutes = sun_times.set_valid ? sun_times.set_minutes : 1080;    // Default 6:00 PM
   
-  // Handle single point case
-  if (schedule_points_.size() == 1) {
-    result.pwm_values = schedule_points_[0].pwm_values;
-    result.current_values = schedule_points_[0].current_values;
-    return result;
-  }
+  ESP_LOGI(TAG, "Creating astronomical sunrise/sunset preset: sunrise=%02u:%02u, sunset=%02u:%02u", 
+           sunrise_minutes / 60, sunrise_minutes % 60,
+           sunset_minutes / 60, sunset_minutes % 60);
   
-  // Find interpolation points
-  const SchedulePoint *before = nullptr;
-  const SchedulePoint *after = nullptr;
-  
-  // Check if we're before the first point
-  if (current_time <= schedule_points_[0].time_minutes) {
-    // Interpolate from midnight (0,0) to first point
-    after = &schedule_points_[0];
-    float ratio = after->time_minutes > 0 ? static_cast<float>(current_time) / after->time_minutes : 0.0f;
-    
-    for (size_t i = 0; i < num_channels_; i++) {
-      result.pwm_values[i] = ratio * after->pwm_values[i];
-      result.current_values[i] = ratio * after->current_values[i];
-    }
-    
-    return result;
-  }
-  
-  // Check if we're after the last point
-  if (current_time >= schedule_points_.back().time_minutes) {
-    // Interpolate from last point to midnight (0,0)
-    before = &schedule_points_.back();
-    float time_to_midnight = 1440 - before->time_minutes;
-    float time_since_last = current_time - before->time_minutes;
-    float ratio = time_to_midnight > 0 ? (time_to_midnight - time_since_last) / time_to_midnight : 0.0f;
-    
-    for (size_t i = 0; i < num_channels_; i++) {
-      result.pwm_values[i] = ratio * before->pwm_values[i];
-      result.current_values[i] = ratio * before->current_values[i];
-    }
-    
-    return result;
-  }
-  
-  // Find surrounding points
-  for (size_t i = 0; i < schedule_points_.size() - 1; i++) {
-    if (current_time >= schedule_points_[i].time_minutes && 
-        current_time <= schedule_points_[i + 1].time_minutes) {
-      before = &schedule_points_[i];
-      after = &schedule_points_[i + 1];
-      break;
-    }
-  }
-  
-  if (!before || !after) {
-    ESP_LOGW(TAG, "Failed to find interpolation points for time %u", current_time);
-    return result;
-  }
-  
-  // Linear interpolation
-  uint16_t time_diff = after->time_minutes - before->time_minutes;
-  float ratio = time_diff > 0 ? static_cast<float>(current_time - before->time_minutes) / time_diff : 0.0f;
-  
-  for (size_t i = 0; i < num_channels_; i++) {
-    result.pwm_values[i] = before->pwm_values[i] + ratio * (after->pwm_values[i] - before->pwm_values[i]);
-    result.current_values[i] = before->current_values[i] + ratio * (after->current_values[i] - before->current_values[i]);
-  }
-  
-  ESP_LOGVV(TAG, "Interpolated at %02u:%02u (ratio=%.3f): PWM[0]=%.1f%%, Current[0]=%.2fA", 
-            current_time / 60, current_time % 60, ratio, 
-            result.pwm_values[0], result.current_values[0]);
-  
-  return result;
+  // Use the standalone scheduler to create the preset with astronomical data
+  const_cast<LEDScheduler&>(scheduler_).create_sunrise_sunset_preset(sunrise_minutes, sunset_minutes);
 }
 
 void LEDBrickScheduler::apply_values(const InterpolationResult &values) {
@@ -318,12 +252,6 @@ void LEDBrickScheduler::apply_values(const InterpolationResult &values) {
   }
 }
 
-void LEDBrickScheduler::sort_schedule_points() {
-  std::sort(schedule_points_.begin(), schedule_points_.end(),
-           [](const SchedulePoint &a, const SchedulePoint &b) {
-             return a.time_minutes < b.time_minutes;
-           });
-}
 
 void LEDBrickScheduler::add_light(uint8_t channel, light::LightState *light) {
   lights_[channel] = light;
@@ -341,153 +269,22 @@ void LEDBrickScheduler::add_max_current_control(uint8_t channel, number::Number 
 }
 
 
-void LEDBrickScheduler::initialize_presets() {
-  presets_["sunrise_sunset"] = create_sunrise_sunset_preset();
-  presets_["full_spectrum"] = create_full_spectrum_preset();
-  presets_["simple"] = create_simple_preset();
-  
-  ESP_LOGD(TAG, "Initialized %zu built-in presets", presets_.size());
-}
-
-std::vector<SchedulePoint> LEDBrickScheduler::create_sunrise_sunset_preset() const {
-  std::vector<SchedulePoint> points;
-  
-  // Calculate actual sunrise and sunset times (with potential projection/offset)
-  update_astro_calculator_settings();
-  auto dt = esphome_time_to_datetime();
-  auto sun_times = astro_calc_.get_projected_sun_rise_set_times(dt);
-  
-  // Use calculated times or fallback to defaults
-  uint16_t sunrise_minutes = sun_times.rise_valid ? sun_times.rise_minutes : 360;  // Default 6:00 AM
-  uint16_t sunset_minutes = sun_times.set_valid ? sun_times.set_minutes : 1080;    // Default 6:00 PM
-  
-  // Calculate solar noon (midpoint between sunrise and sunset)
-  uint16_t noon_minutes = 720;  // Default 12:00 PM
-  if (sun_times.rise_valid && sun_times.set_valid) {
-    // Handle day wrapping (sunset next day)
-    if (sunset_minutes < sunrise_minutes) {
-      sunset_minutes += 1440;  // Add 24 hours
-    }
-    noon_minutes = (sunrise_minutes + sunset_minutes) / 2;
-    if (noon_minutes >= 1440) {
-      noon_minutes -= 1440;  // Wrap back to same day
-    }
-  }
-  
-  ESP_LOGI(TAG, "Creating sunrise/sunset preset: sunrise=%02u:%02u, noon=%02u:%02u, sunset=%02u:%02u", 
-           sunrise_minutes / 60, sunrise_minutes % 60,
-           noon_minutes / 60, noon_minutes % 60, 
-           sunset_minutes / 60, sunset_minutes % 60);
-  
-  // Sunrise - Dawn (gradually increasing warm light)
-  points.emplace_back(sunrise_minutes, 
-                     std::vector<float>{0, 0, 0, 20, 40, 60, 80, 0}, 
-                     std::vector<float>{0, 0, 0, 0.3f, 0.6f, 1.0f, 1.2f, 0});
-  
-  // Solar noon - Full spectrum
-  points.emplace_back(noon_minutes,
-                     std::vector<float>{60, 80, 100, 90, 80, 70, 60, 40},
-                     std::vector<float>{1.0f, 1.5f, 2.0f, 1.8f, 1.5f, 1.2f, 1.0f, 0.6f});
-  
-  // Sunset - Dusk (warm fading light)
-  points.emplace_back(sunset_minutes,
-                     std::vector<float>{20, 40, 60, 80, 60, 40, 20, 10},
-                     std::vector<float>{0.3f, 0.6f, 1.0f, 1.2f, 1.0f, 0.6f, 0.3f, 0.1f});
-  
-  // Midnight - Night (all off)
-  points.emplace_back(1440,
-                     std::vector<float>(num_channels_, 0.0f),
-                     std::vector<float>(num_channels_, 0.0f));
-  
-  return points;
-}
-
-std::vector<SchedulePoint> LEDBrickScheduler::create_full_spectrum_preset() const {
-  std::vector<SchedulePoint> points;
-  
-  // 8 AM - Morning
-  points.emplace_back(480,
-                     std::vector<float>{40, 60, 80, 100, 80, 60, 40, 20},
-                     std::vector<float>{0.6f, 1.0f, 1.5f, 2.0f, 1.5f, 1.0f, 0.6f, 0.3f});
-  
-  // 12 PM - Midday (maximum)
-  points.emplace_back(720,
-                     std::vector<float>{80, 100, 100, 100, 100, 100, 80, 60},
-                     std::vector<float>{1.5f, 2.0f, 2.0f, 2.0f, 2.0f, 2.0f, 1.5f, 1.0f});
-  
-  // 4 PM - Afternoon
-  points.emplace_back(960,
-                     std::vector<float>{60, 80, 100, 100, 80, 60, 40, 30},
-                     std::vector<float>{1.0f, 1.5f, 2.0f, 2.0f, 1.5f, 1.0f, 0.6f, 0.4f});
-  
-  // 8 PM - Evening
-  points.emplace_back(1200,
-                     std::vector<float>{20, 30, 40, 60, 40, 30, 20, 10},
-                     std::vector<float>{0.3f, 0.4f, 0.6f, 1.0f, 0.6f, 0.4f, 0.3f, 0.1f});
-  
-  return points;
-}
-
-std::vector<SchedulePoint> LEDBrickScheduler::create_simple_preset() const {
-  std::vector<SchedulePoint> points;
-  
-  // 8 AM - On
-  points.emplace_back(480,
-                     std::vector<float>(num_channels_, 70.0f),
-                     std::vector<float>(num_channels_, 1.2f));
-  
-  // 8 PM - Off
-  points.emplace_back(1200,
-                     std::vector<float>(num_channels_, 0.0f),
-                     std::vector<float>(num_channels_, 0.0f));
-  
-  return points;
-}
 
 void LEDBrickScheduler::save_schedule_to_flash() {
+  // Use standalone scheduler's serialization
+  auto serialized = scheduler_.serialize();
+  
   ScheduleStorage storage;
   memset(&storage, 0, sizeof(storage));
   
-  storage.num_points = std::min((size_t)50, schedule_points_.size()); // Limit to 50 points
+  storage.num_points = serialized.num_points;
   
-  size_t data_pos = 0;
-  for (size_t i = 0; i < storage.num_points && data_pos < sizeof(storage.data) - 100; i++) {
-    const auto &point = schedule_points_[i];
-    
-    // Write time_minutes (2 bytes)
-    if (data_pos + 2 >= sizeof(storage.data)) break;
-    storage.data[data_pos++] = point.time_minutes & 0xFF;
-    storage.data[data_pos++] = (point.time_minutes >> 8) & 0xFF;
-    
-    // Write PWM count and values
-    if (data_pos + 1 >= sizeof(storage.data)) break;
-    uint8_t pwm_count = std::min((size_t)num_channels_, point.pwm_values.size());
-    storage.data[data_pos++] = pwm_count;
-    
-    for (uint8_t j = 0; j < pwm_count && data_pos + 4 < sizeof(storage.data); j++) {
-      uint32_t float_bits = *reinterpret_cast<const uint32_t*>(&point.pwm_values[j]);
-      storage.data[data_pos++] = (float_bits >> 0) & 0xFF;
-      storage.data[data_pos++] = (float_bits >> 8) & 0xFF;
-      storage.data[data_pos++] = (float_bits >> 16) & 0xFF;
-      storage.data[data_pos++] = (float_bits >> 24) & 0xFF;
-    }
-    
-    // Write current count and values
-    if (data_pos + 1 >= sizeof(storage.data)) break;
-    uint8_t current_count = std::min((size_t)num_channels_, point.current_values.size());
-    storage.data[data_pos++] = current_count;
-    
-    for (uint8_t j = 0; j < current_count && data_pos + 4 < sizeof(storage.data); j++) {
-      uint32_t float_bits = *reinterpret_cast<const uint32_t*>(&point.current_values[j]);
-      storage.data[data_pos++] = (float_bits >> 0) & 0xFF;
-      storage.data[data_pos++] = (float_bits >> 8) & 0xFF;
-      storage.data[data_pos++] = (float_bits >> 16) & 0xFF;
-      storage.data[data_pos++] = (float_bits >> 24) & 0xFF;
-    }
-  }
+  // Copy serialized data, limiting to storage size
+  size_t copy_size = std::min(serialized.data.size(), sizeof(storage.data));
+  std::memcpy(storage.data, serialized.data.data(), copy_size);
   
   if (schedule_pref_.save(&storage)) {
-    ESP_LOGD(TAG, "Saved schedule to flash (%u points, %zu bytes)", storage.num_points, data_pos);
+    ESP_LOGD(TAG, "Saved schedule to flash (%u points, %zu bytes)", storage.num_points, copy_size);
   } else {
     ESP_LOGW(TAG, "Failed to save schedule to flash");
   }
@@ -503,135 +300,42 @@ void LEDBrickScheduler::load_schedule_from_flash() {
   
   ESP_LOGD(TAG, "Loading schedule from flash (%u points)", storage.num_points);
   
-  if (storage.num_points > 100) {  // Sanity check
-    ESP_LOGW(TAG, "Invalid schedule data: too many points (%u)", storage.num_points);
-    return;
+  // Create serialized data structure from storage
+  LEDScheduler::SerializedData serialized;
+  serialized.num_points = storage.num_points;
+  serialized.num_channels = num_channels_;
+  serialized.data.assign(storage.data, storage.data + sizeof(storage.data));
+  
+  // Use standalone scheduler's deserialization
+  if (scheduler_.deserialize(serialized)) {
+    ESP_LOGI(TAG, "Loaded %zu schedule points from flash", scheduler_.get_schedule_size());
+  } else {
+    ESP_LOGW(TAG, "Failed to deserialize schedule from flash");
   }
-  
-  schedule_points_.clear();
-  
-  size_t data_pos = 0;
-  
-  // Read each schedule point
-  for (uint16_t i = 0; i < storage.num_points && data_pos < sizeof(storage.data) - 10; i++) {
-    SchedulePoint point;
-    
-    // Read time (2 bytes)
-    if (data_pos + 2 > sizeof(storage.data)) break;
-    point.time_minutes = storage.data[data_pos] | (storage.data[data_pos + 1] << 8);
-    data_pos += 2;
-    
-    // Read PWM values
-    if (data_pos + 1 > sizeof(storage.data)) break;
-    uint8_t pwm_count = storage.data[data_pos++];
-    if (pwm_count > 16) {
-      ESP_LOGW(TAG, "Invalid PWM count: %u", pwm_count);
-      break;
-    }
-    
-    for (uint8_t j = 0; j < pwm_count && data_pos + 4 <= sizeof(storage.data); j++) {
-      uint32_t float_bits = storage.data[data_pos] | (storage.data[data_pos + 1] << 8) | 
-                           (storage.data[data_pos + 2] << 16) | (storage.data[data_pos + 3] << 24);
-      float val = *reinterpret_cast<const float*>(&float_bits);
-      point.pwm_values.push_back(val);
-      data_pos += 4;
-    }
-    
-    // Read current values
-    if (data_pos + 1 > sizeof(storage.data)) break;
-    uint8_t current_count = storage.data[data_pos++];
-    if (current_count > 16) {
-      ESP_LOGW(TAG, "Invalid current count: %u", current_count);
-      break;
-    }
-    
-    for (uint8_t j = 0; j < current_count && data_pos + 4 <= sizeof(storage.data); j++) {
-      uint32_t float_bits = storage.data[data_pos] | (storage.data[data_pos + 1] << 8) | 
-                           (storage.data[data_pos + 2] << 16) | (storage.data[data_pos + 3] << 24);
-      float val = *reinterpret_cast<const float*>(&float_bits);
-      point.current_values.push_back(val);
-      data_pos += 4;
-    }
-    
-    schedule_points_.push_back(point);
-  }
-  
-  sort_schedule_points();
-  ESP_LOGI(TAG, "Loaded %zu schedule points from flash", schedule_points_.size());
 }
 
 void LEDBrickScheduler::export_schedule_json(std::string &json_output) const {
+  // Use standalone scheduler's JSON export, then augment with ESPHome-specific data
+  json_output = scheduler_.export_json();
+  
+  // Parse and modify the JSON to add ESPHome-specific fields
+  // For simplicity, we'll create a new JSON string
   uint16_t current_time = get_current_time_minutes();
   auto current_values = get_current_values();
   
-  json_output = "{";
-  json_output += "\"timezone\":\"" + timezone_ + "\",";
-  json_output += "\"current_time_minutes\":" + std::to_string(current_time) + ",";
-  json_output += "\"current_time_display\":\"";
-  
-  // Add human-readable time
-  char time_str[10];
-  sprintf(time_str, "%02d:%02d", current_time / 60, current_time % 60);
-  json_output += std::string(time_str) + "\",";
-  
-  json_output += "\"enabled\":" + std::string(enabled_ ? "true" : "false") + ",";
-  json_output += "\"channels\":" + std::to_string(num_channels_) + ",";
-  
-  // Current interpolated values
-  json_output += "\"current_pwm_values\":[";
-  for (size_t i = 0; i < current_values.pwm_values.size(); i++) {
-    if (i > 0) json_output += ",";
-    json_output += std::to_string(current_values.pwm_values[i]);
+  size_t closing_brace = json_output.rfind('}');
+  if (closing_brace != std::string::npos) {
+    json_output.insert(closing_brace, 
+      ",\"timezone\":\"" + timezone_ + 
+      "\",\"current_time_minutes\":" + std::to_string(current_time) +
+      ",\"enabled\":" + std::string(enabled_ ? "true" : "false"));
   }
-  json_output += "],\"current_current_values\":[";
-  for (size_t i = 0; i < current_values.current_values.size(); i++) {
-    if (i > 0) json_output += ",";
-    json_output += std::to_string(current_values.current_values[i]);
-  }
-  json_output += "],";
-  
-  // Schedule points
-  json_output += "\"schedule_points\":[";
-  for (size_t i = 0; i < schedule_points_.size(); i++) {
-    const auto &point = schedule_points_[i];
-    
-    if (i > 0) json_output += ",";
-    json_output += "{\"time_minutes\":" + std::to_string(point.time_minutes);
-    
-    // Add human-readable time for each point
-    sprintf(time_str, "%02d:%02d", point.time_minutes / 60, point.time_minutes % 60);
-    json_output += ",\"time_display\":\"" + std::string(time_str) + "\"";
-    
-    json_output += ",\"pwm_values\":[";
-    
-    for (size_t j = 0; j < point.pwm_values.size(); j++) {
-      if (j > 0) json_output += ",";
-      json_output += std::to_string(point.pwm_values[j]);
-    }
-    
-    json_output += "],\"current_values\":[";
-    
-    for (size_t j = 0; j < point.current_values.size(); j++) {
-      if (j > 0) json_output += ",";
-      json_output += std::to_string(point.current_values[j]);
-    }
-    
-    json_output += "]}";
-  }
-  
-  json_output += "]}";
 }
 
 bool LEDBrickScheduler::import_schedule_json(const std::string &json_input) {
   ESP_LOGI(TAG, "Importing schedule from JSON (%zu chars)", json_input.length());
   
-  // Simple JSON parsing - look for key patterns
-  // This is basic parsing suitable for the JSON format we export
-  
-  // Clear existing schedule
-  schedule_points_.clear();
-  
-  // Extract enabled state
+  // Extract enabled state from ESPHome-specific fields
   size_t enabled_pos = json_input.find("\"enabled\":");
   if (enabled_pos != std::string::npos) {
     size_t value_start = json_input.find_first_not_of(" \t", enabled_pos + 10);
@@ -640,153 +344,20 @@ bool LEDBrickScheduler::import_schedule_json(const std::string &json_input) {
     }
   }
   
-  // Find schedule_points array
-  size_t points_start = json_input.find("\"schedule_points\":[");
-  if (points_start == std::string::npos) {
-    ESP_LOGW(TAG, "No schedule_points found in JSON");
-    return false;
+  // Use standalone scheduler's JSON import
+  bool success = scheduler_.import_json(json_input);
+  
+  if (success) {
+    save_schedule_to_flash();
+    ESP_LOGI(TAG, "Successfully imported %zu schedule points, enabled=%s", 
+             scheduler_.get_schedule_size(), enabled_ ? "true" : "false");
+  } else {
+    ESP_LOGW(TAG, "Failed to import JSON schedule");
   }
   
-  points_start += 18; // Skip "schedule_points":[
-  size_t points_end = json_input.find("]}", points_start);
-  if (points_end == std::string::npos) {
-    points_end = json_input.find("]", points_start);
-  }
-  
-  if (points_end == std::string::npos) {
-    ESP_LOGW(TAG, "Invalid schedule_points array format");
-    return false;
-  }
-  
-  std::string points_str = json_input.substr(points_start, points_end - points_start);
-  ESP_LOGD(TAG, "Parsing schedule points: %s", points_str.c_str());
-  
-  // Parse individual points (basic implementation)
-  size_t pos = 0;
-  int points_parsed = 0;
-  
-  while (pos < points_str.length() && points_parsed < 50) { // Limit to 50 points
-    // Find start of next point object
-    size_t point_start = points_str.find("{", pos);
-    if (point_start == std::string::npos) break;
-    
-    size_t point_end = points_str.find("}", point_start);
-    if (point_end == std::string::npos) break;
-    
-    std::string point_str = points_str.substr(point_start, point_end - point_start + 1);
-    
-    // Parse this point
-    SchedulePoint point;
-    bool valid_point = false;
-    
-    // Extract time_minutes
-    size_t time_pos = point_str.find("\"time_minutes\":");
-    if (time_pos != std::string::npos) {
-      size_t num_start = time_pos + 15;
-      size_t num_end = point_str.find_first_of(",}", num_start);
-      if (num_end != std::string::npos) {
-        std::string time_str = point_str.substr(num_start, num_end - num_start);
-        // Use stdlib atoi for reliable integer parsing
-        int time_val = atoi(time_str.c_str());
-        
-        if (time_val >= 0 && time_val < 1440) {
-          point.time_minutes = static_cast<uint16_t>(time_val);
-          valid_point = true;
-        }
-      }
-    }
-    
-    if (!valid_point) {
-      pos = point_end + 1;
-      continue;
-    }
-    
-    // Extract PWM values array
-    size_t pwm_start = point_str.find("\"pwm_values\":[");
-    if (pwm_start != std::string::npos) {
-      pwm_start += 14;
-      size_t pwm_end = point_str.find("]", pwm_start);
-      if (pwm_end != std::string::npos) {
-        std::string pwm_str = point_str.substr(pwm_start, pwm_end - pwm_start);
-        parse_float_array(pwm_str, point.pwm_values);
-      }
-    }
-    
-    // Extract current values array
-    size_t current_start = point_str.find("\"current_values\":[");
-    if (current_start != std::string::npos) {
-      current_start += 18;
-      size_t current_end = point_str.find("]", current_start);
-      if (current_end != std::string::npos) {
-        std::string current_str = point_str.substr(current_start, current_end - current_start);
-        parse_float_array(current_str, point.current_values);
-      }
-    }
-    
-    // Validate and add point
-    if (point.time_minutes < 1440 && 
-        point.pwm_values.size() <= num_channels_ && 
-        point.current_values.size() <= num_channels_) {
-      
-      // Resize to match channel count
-      point.pwm_values.resize(num_channels_, 0.0f);
-      point.current_values.resize(num_channels_, 0.0f);
-      
-      schedule_points_.push_back(point);
-      points_parsed++;
-      
-      ESP_LOGD(TAG, "Imported point: %02u:%02u with %zu PWM/%zu current values",
-              point.time_minutes / 60, point.time_minutes % 60,
-              point.pwm_values.size(), point.current_values.size());
-    } else {
-      ESP_LOGW(TAG, "Skipping invalid schedule point");
-    }
-    
-    pos = point_end + 1;
-  }
-  
-  // Sort points and save to flash
-  sort_schedule_points();
-  save_schedule_to_flash();
-  
-  ESP_LOGI(TAG, "Successfully imported %d schedule points, enabled=%s", 
-           points_parsed, enabled_ ? "true" : "false");
-  
-  return points_parsed > 0;
+  return success;
 }
 
-void LEDBrickScheduler::parse_float_array(const std::string &array_str, std::vector<float> &values) const {
-  values.clear();
-  
-  size_t pos = 0;
-  while (pos < array_str.length()) {
-    // Skip whitespace and commas
-    while (pos < array_str.length() && (array_str[pos] == ' ' || array_str[pos] == '\t' || array_str[pos] == ',')) {
-      pos++;
-    }
-    
-    if (pos >= array_str.length()) break;
-    
-    // Find end of number
-    size_t end_pos = pos;
-    while (end_pos < array_str.length() && 
-           array_str[end_pos] != ',' && 
-           array_str[end_pos] != ']' && 
-           array_str[end_pos] != '}') {
-      end_pos++;
-    }
-    
-    if (end_pos > pos) {
-      std::string num_str = array_str.substr(pos, end_pos - pos);
-      
-      // Use stdlib atof for reliable float parsing
-      float value = static_cast<float>(atof(num_str.c_str()));
-      values.push_back(value);
-    }
-    
-    pos = end_pos;
-  }
-}
 
 float LEDBrickScheduler::get_moon_phase() const {
   update_astro_calculator_settings();

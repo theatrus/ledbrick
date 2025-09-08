@@ -1,50 +1,12 @@
 #include "components/ledbrick_scheduler/astronomical_calculator.h"
+#include "test_framework.h"
 #include <iostream>
 #include <iomanip>
 #include <cassert>
 #include <cmath>
 
-// Simple test framework
-class TestRunner {
-private:
-    int tests_run = 0;
-    int tests_passed = 0;
-    
-public:
-    void assert_equals(double expected, double actual, double tolerance, const std::string& test_name) {
-        tests_run++;
-        if (std::abs(expected - actual) <= tolerance) {
-            tests_passed++;
-            std::cout << "✓ " << test_name << " PASSED" << std::endl;
-        } else {
-            std::cout << "✗ " << test_name << " FAILED: expected " << expected 
-                      << ", got " << actual << " (diff: " << std::abs(expected - actual) << ")" << std::endl;
-        }
-    }
-    
-    void assert_true(bool condition, const std::string& test_name) {
-        tests_run++;
-        if (condition) {
-            tests_passed++;
-            std::cout << "✓ " << test_name << " PASSED" << std::endl;
-        } else {
-            std::cout << "✗ " << test_name << " FAILED" << std::endl;
-        }
-    }
-    
-    void print_summary() {
-        std::cout << "\n=== TEST SUMMARY ===" << std::endl;
-        std::cout << "Tests run: " << tests_run << std::endl;
-        std::cout << "Tests passed: " << tests_passed << std::endl;
-        std::cout << "Tests failed: " << (tests_run - tests_passed) << std::endl;
-        std::cout << "Success rate: " << std::fixed << std::setprecision(1) 
-                  << (100.0 * tests_passed / tests_run) << "%" << std::endl;
-    }
-};
-
-void test_julian_day_calculation() {
-    std::cout << "\n=== Julian Day Tests ===" << std::endl;
-    TestRunner runner;
+void test_julian_day_calculation(TestRunner& runner) {
+    runner.start_suite("Julian Day Tests");
     AstronomicalCalculator calc;
     calc.set_timezone_offset(0.0);  // Use UTC for this test
     
@@ -59,12 +21,10 @@ void test_julian_day_calculation() {
     double jd_today = calc.calculate_julian_day(dt_today);
     runner.assert_true(jd_today > 2460000 && jd_today < 2470000, "Current date JD range check");
     
-    runner.print_summary();
 }
 
-void test_moon_phase() {
-    std::cout << "\n=== Moon Phase Tests ===" << std::endl;
-    TestRunner runner;
+void test_moon_phase(TestRunner& runner) {
+    runner.start_suite("Moon Phase Tests");
     AstronomicalCalculator calc;
     
     // Test moon phase calculation for various dates
@@ -74,12 +34,10 @@ void test_moon_phase() {
     
     std::cout << "Moon phase on 2025-01-08: " << std::fixed << std::setprecision(3) << phase1 << std::endl;
     
-    runner.print_summary();
 }
 
-void test_sun_position() {
-    std::cout << "\n=== Sun Position Tests ===" << std::endl;
-    TestRunner runner;
+void test_sun_position(TestRunner& runner) {
+    runner.start_suite("Sun Position Tests");
     AstronomicalCalculator calc(37.7749, -122.4194);  // San Francisco
     calc.set_timezone_offset(-8.0);  // PST = UTC-8
     
@@ -93,12 +51,10 @@ void test_sun_position() {
     runner.assert_true(sun_pos.altitude > 0, "Sun above horizon at noon in January SF");
     runner.assert_true(sun_pos.azimuth > 150 && sun_pos.azimuth < 210, "Sun roughly south at noon");
     
-    runner.print_summary();
 }
 
-void test_sun_intensity() {
-    std::cout << "\n=== Sun Intensity Tests ===" << std::endl;
-    TestRunner runner;
+void test_sun_intensity(TestRunner& runner) {
+    runner.start_suite("Sun Intensity Tests");
     AstronomicalCalculator calc(37.7749, -122.4194);  // San Francisco
     calc.set_timezone_offset(-8.0);  // PST = UTC-8
     
@@ -115,16 +71,14 @@ void test_sun_intensity() {
               << ", Sunrise: " << intensity_sunrise 
               << ", Noon: " << intensity_noon << std::endl;
     
-    runner.assert_equals(0.0, intensity_midnight, 0.1, "No sun intensity at midnight");
+    runner.assert_equals(0.0f, intensity_midnight, 0.1f, "No sun intensity at midnight");
     runner.assert_true(intensity_noon >= 0.49, "High sun intensity at noon");
     runner.assert_true(intensity_sunrise > 0.0 && intensity_sunrise < intensity_noon, "Sunrise intensity between midnight and noon");
     
-    runner.print_summary();
 }
 
-void test_time_projection() {
-    std::cout << "\n=== Time Projection Tests ===" << std::endl;
-    TestRunner runner;
+void test_time_projection(TestRunner& runner) {
+    runner.start_suite("Time Projection Tests");
     
     // Test Tahiti projection scenario
     AstronomicalCalculator calc_tahiti(-17.5, -149.4);  // Tahiti coordinates
@@ -146,12 +100,10 @@ void test_time_projection() {
     float shifted_intensity = calc_tahiti.get_projected_sun_intensity(test_time);
     std::cout << "Tahiti sun intensity with +2h30m shift: " << shifted_intensity << std::endl;
     
-    runner.print_summary();
 }
 
-void test_moon_rise_set() {
-    std::cout << "\n=== Moon Rise/Set Tests ===" << std::endl;
-    TestRunner runner;
+void test_moon_rise_set(TestRunner& runner) {
+    runner.start_suite("Moon Rise/Set Tests");
     AstronomicalCalculator calc(37.7749, -122.4194);  // San Francisco
     calc.set_timezone_offset(-8.0);  // PST = UTC-8
     
@@ -180,12 +132,10 @@ void test_moon_rise_set() {
         runner.assert_true(moon_times.set_minutes < 1440, "Set time within 24 hours");
     }
     
-    runner.print_summary();
 }
 
-void test_sun_rise_set() {
-    std::cout << "\n=== Sun Rise/Set Tests ===" << std::endl;
-    TestRunner runner;
+void test_sun_rise_set(TestRunner& runner) {
+    runner.start_suite("Sun Rise/Set Tests");
     AstronomicalCalculator calc(37.7749, -122.4194);  // San Francisco
     calc.set_timezone_offset(-8.0);  // PST = UTC-8
     
@@ -216,12 +166,10 @@ void test_sun_rise_set() {
         runner.assert_true(sun_times.set_minutes >= 1020 && sun_times.set_minutes <= 1080, "Sunset between 5:00-6:00 PM for SF in January");
     }
     
-    runner.print_summary();
 }
 
-void test_singapore_offset() {
-    std::cout << "\n=== Singapore Pacific Offset Tests ===" << std::endl;
-    TestRunner runner;
+void test_singapore_offset(TestRunner& runner) {
+    runner.start_suite("Singapore Pacific Offset Tests");
     
     // Singapore coordinates: 1.35°N, 103.82°E (UTC+8)
     AstronomicalCalculator calc_singapore(1.35, 103.82);
@@ -288,26 +236,40 @@ void test_singapore_offset() {
                           "Projected sunrise appears around 2 AM Singapore time (01:30-02:30)");
     }
     
-    runner.print_summary();
-}
-
-void run_comprehensive_test() {
-    std::cout << "=== COMPREHENSIVE ASTRONOMICAL CALCULATOR TESTS ===" << std::endl;
-    std::cout << "Testing date: January 8, 2025" << std::endl;
-    
-    test_julian_day_calculation();
-    test_moon_phase();
-    test_sun_position();
-    test_sun_intensity();
-    test_time_projection();
-    test_moon_rise_set();
-    test_sun_rise_set();
-    test_singapore_offset();
-    
-    std::cout << "\n=== ALL TESTS COMPLETED ===" << std::endl;
 }
 
 int main() {
-    run_comprehensive_test();
-    return 0;
+    TestResults results;
+    TestRunner runner;
+    
+    std::cout << "=== COMPREHENSIVE ASTRONOMICAL CALCULATOR TESTS ===" << std::endl;
+    std::cout << "Testing date: January 8, 2025" << std::endl;
+    
+    test_julian_day_calculation(runner);
+    results.add_suite_results(runner);
+    
+    test_moon_phase(runner);
+    results.add_suite_results(runner);
+    
+    test_sun_position(runner);
+    results.add_suite_results(runner);
+    
+    test_sun_intensity(runner);
+    results.add_suite_results(runner);
+    
+    test_time_projection(runner);
+    results.add_suite_results(runner);
+    
+    test_moon_rise_set(runner);
+    results.add_suite_results(runner);
+    
+    test_sun_rise_set(runner);
+    results.add_suite_results(runner);
+    
+    test_singapore_offset(runner);
+    results.add_suite_results(runner);
+    
+    results.print_final_summary("Astronomical Calculator");
+    
+    return results.get_exit_code();
 }
