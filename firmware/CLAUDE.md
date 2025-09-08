@@ -1,5 +1,8 @@
 # LEDBrick Firmware - Claude Development Notes
 
+## Important: Line Endings
+**ALWAYS use LF (Unix) line endings, not CRLF (Windows) line endings for all files.**
+
 ## Building the Project
 
 To build and test the LEDBrick firmware:
