@@ -26,8 +26,8 @@ void test_basic_functionality(TestRunner& runner) {
     // Test getting values at the exact time
     auto result = scheduler.get_values_at_time(720);
     runner.assert_true(result.valid, "Result valid at exact time");
-    runner.assert_equals(50.0f, result.pwm_values[0], 0.01f, "PWM value at exact time");
-    runner.assert_equals(1.6f, result.current_values[3], 0.01f, "Current value at exact time");
+    runner.assert_equals(50.0f, result.pwm_values[0], 0.01f, "PWM value at exact time (expected: 50.0, actual: " + std::to_string(result.pwm_values[0]) + ")");
+    runner.assert_equals(1.6f, result.current_values[3], 0.01f, "Current value at exact time (expected: 1.6, actual: " + std::to_string(result.current_values[3]) + ")");
 }
 
 void test_interpolation(TestRunner& runner) {
@@ -42,10 +42,10 @@ void test_interpolation(TestRunner& runner) {
     // Test interpolation at midpoint
     auto result = scheduler.get_values_at_time(840); // 2:00 PM (midpoint)
     runner.assert_true(result.valid, "Interpolation result valid");
-    runner.assert_equals(50.0f, result.pwm_values[0], 1.0f, "PWM interpolated value");
-    runner.assert_equals(60.0f, result.pwm_values[1], 1.0f, "PWM interpolated value");
-    runner.assert_equals(1.0f, result.current_values[0], 0.1f, "Current interpolated value");
-    runner.assert_equals(1.2f, result.current_values[1], 0.1f, "Current interpolated value");
+    runner.assert_equals(50.0f, result.pwm_values[0], 1.0f, "PWM interpolated value channel 0 (expected: 50.0, actual: " + std::to_string(result.pwm_values[0]) + ")");
+    runner.assert_equals(60.0f, result.pwm_values[1], 1.0f, "PWM interpolated value channel 1 (expected: 60.0, actual: " + std::to_string(result.pwm_values[1]) + ")");
+    runner.assert_equals(1.0f, result.current_values[0], 0.1f, "Current interpolated value channel 0 (expected: 1.0, actual: " + std::to_string(result.current_values[0]) + ")");
+    runner.assert_equals(1.2f, result.current_values[1], 0.1f, "Current interpolated value channel 1 (expected: 1.2, actual: " + std::to_string(result.current_values[1]) + ")");
 }
 
 void test_presets(TestRunner& runner) {
@@ -105,8 +105,8 @@ void test_serialization(TestRunner& runner) {
     // Verify values
     auto result = scheduler2.get_values_at_time(360);
     runner.assert_true(result.valid, "Deserialized values valid");
-    runner.assert_equals(10.0f, result.pwm_values[0], 0.01f, "Deserialized PWM value");
-    runner.assert_equals(0.6f, result.current_values[2], 0.01f, "Deserialized current value");
+    runner.assert_equals(10.0f, result.pwm_values[0], 0.01f, "Deserialized PWM value (expected: 10.0, actual: " + std::to_string(result.pwm_values[0]) + ")");
+    runner.assert_equals(0.6f, result.current_values[2], 0.01f, "Deserialized current value (expected: 0.6, actual: " + std::to_string(result.current_values[2]) + ")");
 }
 
 void test_json_export(TestRunner& runner) {
@@ -173,10 +173,10 @@ void test_channel_management(TestRunner& runner) {
     runner.assert_equals(4, static_cast<int>(result.current_values.size()), "Current values resized");
     
     // Original values should be preserved
-    runner.assert_equals(50.0f, result.pwm_values[0], 0.01f, "Original PWM preserved");
-    runner.assert_equals(60.0f, result.pwm_values[1], 0.01f, "Original PWM preserved");
-    runner.assert_equals(0.0f, result.pwm_values[2], 0.01f, "New PWM defaulted to 0");
-    runner.assert_equals(0.0f, result.pwm_values[3], 0.01f, "New PWM defaulted to 0");
+    runner.assert_equals(50.0f, result.pwm_values[0], 0.01f, "Original PWM preserved channel 0 (expected: 50.0, actual: " + std::to_string(result.pwm_values[0]) + ")");
+    runner.assert_equals(60.0f, result.pwm_values[1], 0.01f, "Original PWM preserved channel 1 (expected: 60.0, actual: " + std::to_string(result.pwm_values[1]) + ")");
+    runner.assert_equals(0.0f, result.pwm_values[2], 0.01f, "New PWM defaulted to 0 channel 2 (expected: 0.0, actual: " + std::to_string(result.pwm_values[2]) + ")");
+    runner.assert_equals(0.0f, result.pwm_values[3], 0.01f, "New PWM defaulted to 0 channel 3 (expected: 0.0, actual: " + std::to_string(result.pwm_values[3]) + ")");
 }
 
 void test_mutations(TestRunner& runner) {
@@ -196,7 +196,7 @@ void test_mutations(TestRunner& runner) {
     runner.assert_equals(3, static_cast<int>(scheduler.get_schedule_size()), "Size unchanged after update");
     
     auto result = scheduler.get_values_at_time(720);
-    runner.assert_equals(55.0f, result.pwm_values[0], 0.01f, "Point updated correctly");
+    runner.assert_equals(55.0f, result.pwm_values[0], 0.01f, "Point updated correctly (expected: 55.0, actual: " + std::to_string(result.pwm_values[0]) + ")");
     
     // Remove point
     scheduler.remove_schedule_point(720);
@@ -247,7 +247,7 @@ void test_dynamic_schedule_points(TestRunner& runner) {
     // Test interpolation with astronomical times
     auto result = scheduler.get_values_at_time_with_astro(750, astro_times);
     runner.assert_true(result.valid, "Dynamic interpolation valid");
-    runner.assert_equals(80.0f, result.pwm_values[0], 1.0f, "Dynamic PWM value at solar noon");
+    runner.assert_equals(80.0f, result.pwm_values[0], 1.0f, "Dynamic PWM value at solar noon (expected: 80.0, actual: " + std::to_string(result.pwm_values[0]) + ")");
     
     // Test dynamic preset
     scheduler.load_preset("dynamic_sunrise_sunset");
@@ -257,6 +257,236 @@ void test_dynamic_schedule_points(TestRunner& runner) {
     std::string json = scheduler.export_json();
     runner.assert_true(json.find("\"time_type\": \"sunrise_relative\"") != std::string::npos, 
                       "JSON contains dynamic type info");
+}
+
+void test_dynamic_schedule_full_day(TestRunner& runner) {
+    runner.start_suite("Dynamic Schedule Full Day Tests");
+    
+    LEDScheduler scheduler(4);  // 4 channels for easier testing
+    
+    // Set up astronomical times for a specific date
+    // Let's use June 21 (summer solstice) for longer days
+    // San Francisco location
+    LEDScheduler::AstronomicalTimes astro_times;
+    astro_times.astronomical_dawn_minutes = 270;   // 4:30 AM
+    astro_times.nautical_dawn_minutes = 300;       // 5:00 AM  
+    astro_times.civil_dawn_minutes = 330;          // 5:30 AM
+    astro_times.sunrise_minutes = 360;             // 6:00 AM
+    astro_times.solar_noon_minutes = 780;          // 1:00 PM
+    astro_times.sunset_minutes = 1200;             // 8:00 PM
+    astro_times.civil_dusk_minutes = 1230;         // 8:30 PM
+    astro_times.nautical_dusk_minutes = 1260;      // 9:00 PM
+    astro_times.astronomical_dusk_minutes = 1290;   // 9:30 PM
+    astro_times.valid = true;
+    
+    // Create a realistic aquarium schedule with dynamic points
+    // Night (before astronomical dawn)
+    scheduler.add_dynamic_schedule_point(LEDScheduler::DynamicTimeType::ASTRONOMICAL_DAWN, -60,
+        std::vector<float>{0.0f, 0.0f, 0.0f, 0.0f},
+        std::vector<float>{0.0f, 0.0f, 0.0f, 0.0f});
+    
+    // Start of astronomical dawn - very faint blue moonlight
+    scheduler.add_dynamic_schedule_point(LEDScheduler::DynamicTimeType::ASTRONOMICAL_DAWN, 0,
+        std::vector<float>{2.0f, 0.0f, 0.0f, 1.0f},   // Ch1: Blue, Ch4: Cool white
+        std::vector<float>{0.04f, 0.0f, 0.0f, 0.02f});
+    
+    // Civil dawn - dawn begins
+    scheduler.add_dynamic_schedule_point(LEDScheduler::DynamicTimeType::CIVIL_DAWN, 0,
+        std::vector<float>{10.0f, 5.0f, 2.0f, 8.0f},
+        std::vector<float>{0.2f, 0.1f, 0.04f, 0.16f});
+    
+    // Sunrise - morning light
+    scheduler.add_dynamic_schedule_point(LEDScheduler::DynamicTimeType::SUNRISE_RELATIVE, 0,
+        std::vector<float>{30.0f, 20.0f, 10.0f, 25.0f},
+        std::vector<float>{0.6f, 0.4f, 0.2f, 0.5f});
+    
+    // Post sunrise (30 min after) - ramping up
+    scheduler.add_dynamic_schedule_point(LEDScheduler::DynamicTimeType::SUNRISE_RELATIVE, 30,
+        std::vector<float>{60.0f, 50.0f, 30.0f, 55.0f},
+        std::vector<float>{1.2f, 1.0f, 0.6f, 1.1f});
+    
+    // Solar noon - peak intensity
+    scheduler.add_dynamic_schedule_point(LEDScheduler::DynamicTimeType::SOLAR_NOON, 0,
+        std::vector<float>{90.0f, 85.0f, 60.0f, 88.0f},
+        std::vector<float>{1.8f, 1.7f, 1.2f, 1.76f});
+    
+    // Pre-sunset (30 min before) - starting to ramp down
+    scheduler.add_dynamic_schedule_point(LEDScheduler::DynamicTimeType::SUNSET_RELATIVE, -30,
+        std::vector<float>{60.0f, 50.0f, 30.0f, 55.0f},
+        std::vector<float>{1.2f, 1.0f, 0.6f, 1.1f});
+    
+    // Sunset - evening light
+    scheduler.add_dynamic_schedule_point(LEDScheduler::DynamicTimeType::SUNSET_RELATIVE, 0,
+        std::vector<float>{25.0f, 15.0f, 5.0f, 20.0f},
+        std::vector<float>{0.5f, 0.3f, 0.1f, 0.4f});
+    
+    // Civil dusk - fading light
+    scheduler.add_dynamic_schedule_point(LEDScheduler::DynamicTimeType::CIVIL_DUSK, 0,
+        std::vector<float>{10.0f, 5.0f, 2.0f, 8.0f},
+        std::vector<float>{0.2f, 0.1f, 0.04f, 0.16f});
+    
+    // Astronomical dusk - back to moonlight
+    scheduler.add_dynamic_schedule_point(LEDScheduler::DynamicTimeType::ASTRONOMICAL_DUSK, 0,
+        std::vector<float>{2.0f, 0.0f, 0.0f, 1.0f},
+        std::vector<float>{0.04f, 0.0f, 0.0f, 0.02f});
+    
+    // Late night (after astronomical dusk)
+    scheduler.add_dynamic_schedule_point(LEDScheduler::DynamicTimeType::ASTRONOMICAL_DUSK, 60,
+        std::vector<float>{0.0f, 0.0f, 0.0f, 0.0f},
+        std::vector<float>{0.0f, 0.0f, 0.0f, 0.0f});
+    
+    // Now test values at various times throughout the day
+    
+    // Test 1: Middle of the night (2:00 AM) - should be 0
+    auto result = scheduler.get_values_at_time_with_astro(120, astro_times);
+    runner.assert_true(result.valid, "2 AM result valid");
+    runner.assert_equals(0.0f, result.pwm_values[0], 0.01f, "2 AM - Ch1 PWM is 0 (expected: 0.0, actual: " + std::to_string(result.pwm_values[0]) + ")");
+    runner.assert_equals(0.0f, result.pwm_values[3], 0.01f, "2 AM - Ch4 PWM is 0 (expected: 0.0, actual: " + std::to_string(result.pwm_values[3]) + ")");
+    
+    // Test 2: Just before astronomical dawn (4:25 AM) - ramping from 0 to 2
+    result = scheduler.get_values_at_time_with_astro(265, astro_times);
+    runner.assert_true(result.pwm_values[0] > 0.0f && result.pwm_values[0] < 2.0f,
+                      "4:25 AM - Ch1 ramping from night to moonlight (expected range: 0.0-2.0, actual: " + std::to_string(result.pwm_values[0]) + ")");
+    
+    // Test 3: At astronomical dawn (4:30 AM) - moonlight starts
+    result = scheduler.get_values_at_time_with_astro(270, astro_times);
+    runner.assert_equals(2.0f, result.pwm_values[0], 0.01f, "4:30 AM - Ch1 moonlight (expected: 2.0, actual: " + std::to_string(result.pwm_values[0]) + ")");
+    runner.assert_equals(1.0f, result.pwm_values[3], 0.01f, "4:30 AM - Ch4 moonlight (expected: 1.0, actual: " + std::to_string(result.pwm_values[3]) + ")");
+    
+    // Test 4: Between astronomical and civil dawn (5:15 AM) - ramping up
+    result = scheduler.get_values_at_time_with_astro(315, astro_times);
+    runner.assert_true(result.pwm_values[0] > 2.0f && result.pwm_values[0] < 10.0f, 
+                      "5:15 AM - Ch1 ramping up from moonlight (expected range: 2.0-10.0, actual: " + std::to_string(result.pwm_values[0]) + ")");
+    
+    // Test 5: At sunrise (6:00 AM) - morning values
+    result = scheduler.get_values_at_time_with_astro(360, astro_times);
+    runner.assert_equals(30.0f, result.pwm_values[0], 0.01f, "6:00 AM - Ch1 at sunrise (expected: 30.0, actual: " + std::to_string(result.pwm_values[0]) + ")");
+    runner.assert_equals(25.0f, result.pwm_values[3], 0.01f, "6:00 AM - Ch4 at sunrise (expected: 25.0, actual: " + std::to_string(result.pwm_values[3]) + ")");
+    
+    // Test 6: Mid-morning (9:00 AM) - interpolating toward noon
+    result = scheduler.get_values_at_time_with_astro(540, astro_times);
+    runner.assert_true(result.pwm_values[0] > 60.0f && result.pwm_values[0] < 90.0f,
+                      "9:00 AM - Ch1 interpolating to noon (expected range: 60.0-90.0, actual: " + std::to_string(result.pwm_values[0]) + ")");
+    
+    // Test 7: Solar noon (1:00 PM) - peak intensity
+    result = scheduler.get_values_at_time_with_astro(780, astro_times);
+    runner.assert_equals(90.0f, result.pwm_values[0], 0.01f, "1:00 PM - Ch1 at peak (expected: 90.0, actual: " + std::to_string(result.pwm_values[0]) + ")");
+    runner.assert_equals(88.0f, result.pwm_values[3], 0.01f, "1:00 PM - Ch4 at peak (expected: 88.0, actual: " + std::to_string(result.pwm_values[3]) + ")");
+    runner.assert_equals(1.8f, result.current_values[0], 0.01f, "1:00 PM - Ch1 current at peak (expected: 1.8, actual: " + std::to_string(result.current_values[0]) + ")");
+    
+    // Test 8: Late afternoon (5:00 PM) - starting to decrease
+    result = scheduler.get_values_at_time_with_astro(1020, astro_times);
+    runner.assert_true(result.pwm_values[0] > 60.0f && result.pwm_values[0] < 90.0f,
+                      "5:00 PM - Ch1 decreasing from peak (expected range: 60.0-90.0, actual: " + std::to_string(result.pwm_values[0]) + ")");
+    
+    // Test 9: At sunset (8:00 PM) - evening values
+    result = scheduler.get_values_at_time_with_astro(1200, astro_times);
+    runner.assert_equals(25.0f, result.pwm_values[0], 0.01f, "8:00 PM - Ch1 at sunset (expected: 25.0, actual: " + std::to_string(result.pwm_values[0]) + ")");
+    runner.assert_equals(0.5f, result.current_values[0], 0.01f, "8:00 PM - Ch1 current at sunset (expected: 0.5, actual: " + std::to_string(result.current_values[0]) + ")");
+    
+    // Test 10: During dusk (8:45 PM) - fading to moonlight
+    result = scheduler.get_values_at_time_with_astro(1245, astro_times);
+    runner.assert_true(result.pwm_values[0] > 2.0f && result.pwm_values[0] < 10.0f,
+                      "8:45 PM - Ch1 fading to moonlight (expected range: 2.0-10.0, actual: " + std::to_string(result.pwm_values[0]) + ")");
+    
+    // Test 11: Late night (11:00 PM) - back to 0
+    result = scheduler.get_values_at_time_with_astro(1380, astro_times);
+    runner.assert_equals(0.0f, result.pwm_values[0], 0.01f, "11:00 PM - Ch1 back to 0 (expected: 0.0, actual: " + std::to_string(result.pwm_values[0]) + ")");
+    runner.assert_equals(0.0f, result.current_values[0], 0.01f, "11:00 PM - Ch1 current is 0 (expected: 0.0, actual: " + std::to_string(result.current_values[0]) + ")");
+    
+    // Test ramping characteristics
+    runner.start_suite("Dynamic Schedule Ramping Tests");
+    
+    // Verify smooth ramping during sunrise period (5:30 AM to 6:30 AM)
+    float prev_value = 0.0f;
+    bool smooth_ramp_up = true;
+    for (int minutes = 330; minutes <= 390; minutes += 5) {
+        result = scheduler.get_values_at_time_with_astro(minutes, astro_times);
+        if (minutes > 330 && result.pwm_values[0] <= prev_value) {
+            smooth_ramp_up = false;
+            std::cout << "Sunrise ramp failed at " << minutes << " minutes: prev=" << prev_value << ", current=" << result.pwm_values[0] << std::endl;
+            break;
+        }
+        prev_value = result.pwm_values[0];
+    }
+    runner.assert_true(smooth_ramp_up, "Sunrise period shows smooth ramp up (values must increase monotonically)");
+    
+    // Verify smooth ramping during sunset period (7:30 PM to 8:30 PM)
+    prev_value = 100.0f;
+    bool smooth_ramp_down = true;
+    for (int minutes = 1170; minutes <= 1230; minutes += 5) {
+        result = scheduler.get_values_at_time_with_astro(minutes, astro_times);
+        if (minutes > 1170 && result.pwm_values[0] >= prev_value) {
+            smooth_ramp_down = false;
+            std::cout << "Sunset ramp failed at " << minutes << " minutes: prev=" << prev_value << ", current=" << result.pwm_values[0] << std::endl;
+            break;
+        }
+        prev_value = result.pwm_values[0];
+    }
+    runner.assert_true(smooth_ramp_down, "Sunset period shows smooth ramp down (values must decrease monotonically)");
+    
+    // Test edge case: Midnight wrap-around
+    runner.start_suite("Dynamic Schedule Midnight Wrap Tests");
+    
+    // Test just before midnight
+    result = scheduler.get_values_at_time_with_astro(1439, astro_times);
+    runner.assert_equals(0.0f, result.pwm_values[0], 0.01f, "11:59 PM - Ch1 is 0 (expected: 0.0, actual: " + std::to_string(result.pwm_values[0]) + ")");
+    
+    // Test just after midnight
+    result = scheduler.get_values_at_time_with_astro(1, astro_times);
+    runner.assert_equals(0.0f, result.pwm_values[0], 0.01f, "12:01 AM - Ch1 is 0 (expected: 0.0, actual: " + std::to_string(result.pwm_values[0]) + ")");
+}
+
+void test_dynamic_schedule_seasons(TestRunner& runner) {
+    runner.start_suite("Dynamic Schedule Seasonal Tests");
+    
+    LEDScheduler scheduler(2);  // 2 channels for simpler testing
+    
+    // Create a simple dynamic schedule
+    scheduler.add_dynamic_schedule_point(LEDScheduler::DynamicTimeType::SUNRISE_RELATIVE, -30,
+        std::vector<float>{10.0f, 10.0f}, std::vector<float>{0.2f, 0.2f});
+    scheduler.add_dynamic_schedule_point(LEDScheduler::DynamicTimeType::SUNRISE_RELATIVE, 0,
+        std::vector<float>{50.0f, 50.0f}, std::vector<float>{1.0f, 1.0f});
+    scheduler.add_dynamic_schedule_point(LEDScheduler::DynamicTimeType::SUNSET_RELATIVE, 0,
+        std::vector<float>{50.0f, 50.0f}, std::vector<float>{1.0f, 1.0f});
+    scheduler.add_dynamic_schedule_point(LEDScheduler::DynamicTimeType::SUNSET_RELATIVE, 30,
+        std::vector<float>{10.0f, 10.0f}, std::vector<float>{0.2f, 0.2f});
+    
+    // Test with summer solstice times (long day)
+    LEDScheduler::AstronomicalTimes summer_times;
+    summer_times.sunrise_minutes = 360;   // 6:00 AM
+    summer_times.sunset_minutes = 1200;   // 8:00 PM (14 hour day)
+    summer_times.solar_noon_minutes = 780; // 1:00 PM
+    summer_times.valid = true;
+    
+    // Test with winter solstice times (short day)
+    LEDScheduler::AstronomicalTimes winter_times;
+    winter_times.sunrise_minutes = 480;   // 8:00 AM
+    winter_times.sunset_minutes = 1020;   // 5:00 PM (9 hour day)
+    winter_times.solar_noon_minutes = 750; // 12:30 PM
+    winter_times.valid = true;
+    
+    // Test summer sunrise time
+    auto summer_sunrise = scheduler.get_values_at_time_with_astro(360, summer_times);
+    runner.assert_equals(50.0f, summer_sunrise.pwm_values[0], 0.01f, "Summer sunrise at 6:00 AM (expected: 50.0, actual: " + std::to_string(summer_sunrise.pwm_values[0]) + ")");
+    
+    // Test winter sunrise time (should be different)
+    auto winter_sunrise = scheduler.get_values_at_time_with_astro(480, winter_times);
+    runner.assert_equals(50.0f, winter_sunrise.pwm_values[0], 0.01f, "Winter sunrise at 8:00 AM (expected: 50.0, actual: " + std::to_string(winter_sunrise.pwm_values[0]) + ")");
+    
+    // Test that at 6:00 AM in winter, lights are still off (before sunrise)
+    auto winter_early = scheduler.get_values_at_time_with_astro(360, winter_times);
+    runner.assert_true(winter_early.pwm_values[0] < 50.0f, "Winter 6:00 AM - before sunrise, lights low (expected: < 50.0, actual: " + std::to_string(winter_early.pwm_values[0]) + ")");
+    
+    // Test that at 8:00 PM in winter, lights are already off (after sunset)
+    auto winter_late = scheduler.get_values_at_time_with_astro(1200, winter_times);
+    runner.assert_true(winter_late.pwm_values[0] < 50.0f, "Winter 8:00 PM - after sunset, lights low (expected: < 50.0, actual: " + std::to_string(winter_late.pwm_values[0]) + ")");
+    
+    // Verify day length affects midday timing
+    auto summer_noon = scheduler.get_values_at_time_with_astro(780, summer_times);
+    auto winter_noon = scheduler.get_values_at_time_with_astro(750, winter_times);
+    runner.assert_equals(50.0f, summer_noon.pwm_values[0], 0.01f, "Summer noon intensity (expected: 50.0, actual: " + std::to_string(summer_noon.pwm_values[0]) + ")");
+    runner.assert_equals(50.0f, winter_noon.pwm_values[0], 0.01f, "Winter noon intensity (expected: 50.0, actual: " + std::to_string(winter_noon.pwm_values[0]) + ")");
 }
 
 int main() {
@@ -290,6 +520,12 @@ int main() {
     results.add_suite_results(runner);
     
     test_dynamic_schedule_points(runner);
+    results.add_suite_results(runner);
+    
+    test_dynamic_schedule_full_day(runner);
+    results.add_suite_results(runner);
+    
+    test_dynamic_schedule_seasons(runner);
     results.add_suite_results(runner);
     
     results.print_final_summary("LED Scheduler");

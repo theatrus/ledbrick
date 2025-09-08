@@ -19,7 +19,7 @@ void test_julian_day_calculation(TestRunner& runner) {
     // January 8, 2025, 00:00 UTC
     AstronomicalCalculator::DateTime dt_today(2025, 1, 8, 0, 0, 0);
     double jd_today = calc.calculate_julian_day(dt_today);
-    runner.assert_true(jd_today > 2460000 && jd_today < 2470000, "Current date JD range check");
+    runner.assert_true(jd_today > 2460000 && jd_today < 2470000, "Current date JD range check (expected range: 2460000-2470000, actual: " + std::to_string(jd_today) + ")");
     
 }
 
@@ -30,7 +30,7 @@ void test_moon_phase(TestRunner& runner) {
     // Test moon phase calculation for various dates
     AstronomicalCalculator::DateTime dt1(2025, 1, 8, 12, 0, 0);
     float phase1 = calc.get_moon_phase(dt1);
-    runner.assert_true(phase1 >= 0.0 && phase1 <= 1.0, "Moon phase in valid range");
+    runner.assert_true(phase1 >= 0.0 && phase1 <= 1.0, "Moon phase in valid range (expected: 0.0-1.0, actual: " + std::to_string(phase1) + ")");
     
     std::cout << "Moon phase on 2025-01-08: " << std::fixed << std::setprecision(3) << phase1 << std::endl;
     
@@ -48,8 +48,8 @@ void test_sun_position(TestRunner& runner) {
     std::cout << "Sun position at noon SF: altitude=" << std::fixed << std::setprecision(1) 
               << sun_pos.altitude << "°, azimuth=" << sun_pos.azimuth << "°" << std::endl;
     
-    runner.assert_true(sun_pos.altitude > 0, "Sun above horizon at noon in January SF");
-    runner.assert_true(sun_pos.azimuth > 150 && sun_pos.azimuth < 210, "Sun roughly south at noon");
+    runner.assert_true(sun_pos.altitude > 0, "Sun above horizon at noon in January SF (expected: > 0, actual: " + std::to_string(sun_pos.altitude) + ")");
+    runner.assert_true(sun_pos.azimuth > 150 && sun_pos.azimuth < 210, "Sun roughly south at noon (expected range: 150-210, actual: " + std::to_string(sun_pos.azimuth) + ")");
     
 }
 
@@ -72,8 +72,8 @@ void test_sun_intensity(TestRunner& runner) {
               << ", Noon: " << intensity_noon << std::endl;
     
     runner.assert_equals(0.0f, intensity_midnight, 0.1f, "No sun intensity at midnight");
-    runner.assert_true(intensity_noon >= 0.49, "High sun intensity at noon");
-    runner.assert_true(intensity_sunrise > 0.0 && intensity_sunrise < intensity_noon, "Sunrise intensity between midnight and noon");
+    runner.assert_true(intensity_noon >= 0.49, "High sun intensity at noon (expected: >= 0.49, actual: " + std::to_string(intensity_noon) + ")");
+    runner.assert_true(intensity_sunrise > 0.0 && intensity_sunrise < intensity_noon, "Sunrise intensity between midnight and noon (expected range: 0.0-" + std::to_string(intensity_noon) + ", actual: " + std::to_string(intensity_sunrise) + ")");
     
 }
 
@@ -92,8 +92,8 @@ void test_time_projection(TestRunner& runner) {
     std::cout << "Tahiti sun intensity - Normal: " << normal_intensity 
               << ", Projected: " << projected_intensity << std::endl;
     
-    runner.assert_true(normal_intensity >= 0.0 && normal_intensity <= 1.0, "Normal intensity valid range");
-    runner.assert_true(projected_intensity >= 0.0 && projected_intensity <= 1.0, "Projected intensity valid range");
+    runner.assert_true(normal_intensity >= 0.0 && normal_intensity <= 1.0, "Normal intensity valid range (expected: 0.0-1.0, actual: " + std::to_string(normal_intensity) + ")");
+    runner.assert_true(projected_intensity >= 0.0 && projected_intensity <= 1.0, "Projected intensity valid range (expected: 0.0-1.0, actual: " + std::to_string(projected_intensity) + ")");
     
     // Test with time shift
     calc_tahiti.set_projection_settings(true, 2, 30);  // +2h 30m shift
@@ -159,11 +159,11 @@ void test_sun_rise_set(TestRunner& runner) {
     
     if (sun_times.rise_valid) {
         runner.assert_true(sun_times.rise_minutes < 1440, "Sunrise time within 24 hours");
-        runner.assert_true(sun_times.rise_minutes >= 420 && sun_times.rise_minutes <= 480, "Sunrise between 7:00-8:00 AM for SF in January");
+        runner.assert_true(sun_times.rise_minutes >= 420 && sun_times.rise_minutes <= 480, "Sunrise between 7:00-8:00 AM for SF in January (expected range: 420-480 min, actual: " + std::to_string(sun_times.rise_minutes) + ")");
     }
     if (sun_times.set_valid) {
         runner.assert_true(sun_times.set_minutes < 1440, "Sunset time within 24 hours");
-        runner.assert_true(sun_times.set_minutes >= 1020 && sun_times.set_minutes <= 1080, "Sunset between 5:00-6:00 PM for SF in January");
+        runner.assert_true(sun_times.set_minutes >= 1020 && sun_times.set_minutes <= 1080, "Sunset between 5:00-6:00 PM for SF in January (expected range: 1020-1080 min, actual: " + std::to_string(sun_times.set_minutes) + ")");
     }
     
 }
@@ -233,7 +233,7 @@ void test_singapore_offset(TestRunner& runner) {
         if (pacific_rise_minutes < 0) pacific_rise_minutes += 1440;
         
         runner.assert_true(sun_times.rise_minutes >= 90 && sun_times.rise_minutes <= 150, 
-                          "Projected sunrise appears around 2 AM Singapore time (01:30-02:30)");
+                          "Projected sunrise appears around 2 AM Singapore time (expected range: 90-150 min, actual: " + std::to_string(sun_times.rise_minutes) + ")");
     }
     
 }
