@@ -1,4 +1,5 @@
 # Build directories
+build/
 _build/
 *.uvguix*
 *.uvoptx*

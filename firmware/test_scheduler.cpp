@@ -1,4 +1,4 @@
-#include "scheduler.h"
+#include "components/ledbrick_scheduler/scheduler.h"
 #include "test_framework.h"
 #include <iostream>
 #include <iomanip>

@@ -4,16 +4,16 @@
 # Compiler settings
 CXX := g++
 CXXFLAGS := -std=c++11 -Wall -Wextra -O2
-INCLUDES := -I.
 
 # Source directories
 COMPONENT_DIR := components/ledbrick_scheduler
+INCLUDES := -I. -I$(COMPONENT_DIR)
 BUILD_DIR := build
 TEST_DIR := tests
 
 # Source files
 ASTRO_SOURCES := $(COMPONENT_DIR)/astronomical_calculator.cpp
-SCHEDULER_SOURCES := scheduler.cpp
+SCHEDULER_SOURCES := $(COMPONENT_DIR)/scheduler.cpp
 TEST_FRAMEWORK := test_framework.h
 
 # Test executables
