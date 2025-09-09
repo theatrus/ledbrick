@@ -36,6 +36,7 @@ class LEDBrickWebServer : public Component {
   // Request handlers
   static esp_err_t handle_index(httpd_req_t *req);
   static esp_err_t handle_js(httpd_req_t *req);
+  static esp_err_t handle_ui_js(httpd_req_t *req);
   static esp_err_t handle_css(httpd_req_t *req);
   static esp_err_t handle_api_schedule_get(httpd_req_t *req);
   static esp_err_t handle_api_schedule_post(httpd_req_t *req);
@@ -44,6 +45,11 @@ class LEDBrickWebServer : public Component {
   static esp_err_t handle_api_status_get(httpd_req_t *req);
   static esp_err_t handle_api_clear(httpd_req_t *req);
   static esp_err_t handle_api_point_post(httpd_req_t *req);
+  static esp_err_t handle_scheduler_enable(httpd_req_t *req);
+  static esp_err_t handle_scheduler_disable(httpd_req_t *req);
+  static esp_err_t handle_scheduler_state(httpd_req_t *req);
+  static esp_err_t handle_pwm_scale_set(httpd_req_t *req);
+  static esp_err_t handle_pwm_scale_get(httpd_req_t *req);
   static esp_err_t handle_not_found(httpd_req_t *req);
   
   // Helper methods
@@ -51,6 +57,8 @@ class LEDBrickWebServer : public Component {
   bool check_auth(httpd_req_t *req);
   void send_json_response(httpd_req_t *req, int status, const JsonDocument &doc);
   void send_error(httpd_req_t *req, int status, const std::string &message);
+  void send_compressed_content(httpd_req_t *req, const uint8_t *compressed_data, 
+                              size_t compressed_size, const char *content_type);
   
   // Static instance for callbacks
   static LEDBrickWebServer *instance_;

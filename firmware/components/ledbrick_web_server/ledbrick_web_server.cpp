@@ -54,6 +54,14 @@ void LEDBrickWebServer::setup() {
   };
   httpd_register_uri_handler(this->server_, &js_uri);
   
+  httpd_uri_t ui_js_uri = {
+    .uri = "/ledbrick-ui.js",
+    .method = HTTP_GET,
+    .handler = handle_ui_js,
+    .user_ctx = this
+  };
+  httpd_register_uri_handler(this->server_, &ui_js_uri);
+  
   httpd_uri_t css_uri = {
     .uri = "/style.css",
     .method = HTTP_GET,
@@ -120,6 +128,47 @@ void LEDBrickWebServer::setup() {
   };
   httpd_register_uri_handler(this->server_, &api_point);
   
+  // ESPHome-compatible endpoints for scheduler control
+  httpd_uri_t scheduler_enable_on = {
+    .uri = "/switch/web_scheduler_enable/turn_on",
+    .method = HTTP_POST,
+    .handler = handle_scheduler_enable,
+    .user_ctx = this
+  };
+  httpd_register_uri_handler(this->server_, &scheduler_enable_on);
+  
+  httpd_uri_t scheduler_enable_off = {
+    .uri = "/switch/web_scheduler_enable/turn_off",
+    .method = HTTP_POST,
+    .handler = handle_scheduler_disable,
+    .user_ctx = this
+  };
+  httpd_register_uri_handler(this->server_, &scheduler_enable_off);
+  
+  httpd_uri_t scheduler_state = {
+    .uri = "/switch/web_scheduler_enable",
+    .method = HTTP_GET,
+    .handler = handle_scheduler_state,
+    .user_ctx = this
+  };
+  httpd_register_uri_handler(this->server_, &scheduler_state);
+  
+  httpd_uri_t pwm_scale_set = {
+    .uri = "/number/pwm_scale/set",
+    .method = HTTP_POST,
+    .handler = handle_pwm_scale_set,
+    .user_ctx = this
+  };
+  httpd_register_uri_handler(this->server_, &pwm_scale_set);
+  
+  httpd_uri_t pwm_scale_get = {
+    .uri = "/number/pwm_scale",
+    .method = HTTP_GET,
+    .handler = handle_pwm_scale_get,
+    .user_ctx = this
+  };
+  httpd_register_uri_handler(this->server_, &pwm_scale_get);
+  
   ESP_LOGI(TAG, "LEDBrick Web Server started successfully");
 }
 
@@ -179,22 +228,40 @@ void LEDBrickWebServer::send_error(httpd_req_t *req, int status, const std::stri
   send_json_response(req, status, doc);
 }
 
+// Helper to send compressed content
+void LEDBrickWebServer::send_compressed_content(httpd_req_t *req, const uint8_t *compressed_data, 
+                                                size_t compressed_size, const char *content_type) {
+  // Set headers
+  httpd_resp_set_type(req, content_type);
+  httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
+  httpd_resp_set_hdr(req, "Cache-Control", "public, max-age=3600");
+  
+  // Send compressed data directly
+  httpd_resp_send(req, (const char *)compressed_data, compressed_size);
+}
+
 // Static content handlers
 esp_err_t LEDBrickWebServer::handle_index(httpd_req_t *req) {
-  httpd_resp_set_type(req, "text/html");
-  httpd_resp_send(req, INDEX_HTML, -1);
+  auto *self = get_instance(req);
+  self->send_compressed_content(req, INDEX_HTML_COMPRESSED, INDEX_HTML_SIZE, INDEX_HTML_TYPE);
   return ESP_OK;
 }
 
 esp_err_t LEDBrickWebServer::handle_js(httpd_req_t *req) {
-  httpd_resp_set_type(req, "application/javascript");
-  httpd_resp_send(req, LEDBRICK_JS, -1);
+  auto *self = get_instance(req);
+  self->send_compressed_content(req, LEDBRICK_JS_COMPRESSED, LEDBRICK_JS_SIZE, LEDBRICK_JS_TYPE);
+  return ESP_OK;
+}
+
+esp_err_t LEDBrickWebServer::handle_ui_js(httpd_req_t *req) {
+  auto *self = get_instance(req);
+  self->send_compressed_content(req, LEDBRICK_UI_JS_COMPRESSED, LEDBRICK_UI_JS_SIZE, LEDBRICK_UI_JS_TYPE);
   return ESP_OK;
 }
 
 esp_err_t LEDBrickWebServer::handle_css(httpd_req_t *req) {
-  httpd_resp_set_type(req, "text/css");
-  httpd_resp_send(req, STYLE_CSS, -1);
+  auto *self = get_instance(req);
+  self->send_compressed_content(req, STYLE_CSS_COMPRESSED, STYLE_CSS_SIZE, STYLE_CSS_TYPE);
   return ESP_OK;
 }
 
@@ -381,7 +448,7 @@ esp_err_t LEDBrickWebServer::handle_api_point_post(httpd_req_t *req) {
   }
   
   std::vector<float> pwm_values(8, 0.0);
-  std::vector<float> current_values(8, 2.0);
+  std::vector<float> current_values(8, 2.0);  // Default to 2A
   
   // Parse PWM values
   size_t i = 0;
@@ -389,10 +456,18 @@ esp_err_t LEDBrickWebServer::handle_api_point_post(httpd_req_t *req) {
     if (i < 8) pwm_values[i++] = v.as<float>();
   }
   
-  // Parse current values
-  i = 0;
-  for (JsonVariant v : current_array) {
-    if (i < 8) current_values[i++] = v.as<float>();
+  // Parse current values if provided
+  if (!current_array.isNull()) {
+    i = 0;
+    for (JsonVariant v : current_array) {
+      if (i < 8) {
+        float current = v.as<float>();
+        // Validate current limits (0.5A to 5A)
+        if (current < 0.5f) current = 0.5f;
+        if (current > 5.0f) current = 5.0f;
+        current_values[i++] = current;
+      }
+    }
   }
   
   // Add the schedule point
@@ -405,6 +480,86 @@ esp_err_t LEDBrickWebServer::handle_api_point_post(httpd_req_t *req) {
   response_doc["message"] = "Schedule point added";
   
   self->send_json_response(req, 200, response_doc);
+  return ESP_OK;
+}
+
+esp_err_t LEDBrickWebServer::handle_scheduler_enable(httpd_req_t *req) {
+  auto *self = get_instance(req);
+  if (!self->check_auth(req)) return ESP_OK;
+  
+  self->scheduler_->set_enabled(true);
+  self->scheduler_->save_schedule_to_flash();
+  
+  JsonDocument doc;
+  doc["id"] = "web_scheduler_enable";
+  doc["state"] = "ON";
+  self->send_json_response(req, 200, doc);
+  return ESP_OK;
+}
+
+esp_err_t LEDBrickWebServer::handle_scheduler_disable(httpd_req_t *req) {
+  auto *self = get_instance(req);
+  if (!self->check_auth(req)) return ESP_OK;
+  
+  self->scheduler_->set_enabled(false);
+  self->scheduler_->save_schedule_to_flash();
+  
+  JsonDocument doc;
+  doc["id"] = "web_scheduler_enable";
+  doc["state"] = "OFF";
+  self->send_json_response(req, 200, doc);
+  return ESP_OK;
+}
+
+esp_err_t LEDBrickWebServer::handle_scheduler_state(httpd_req_t *req) {
+  auto *self = get_instance(req);
+  if (!self->check_auth(req)) return ESP_OK;
+  
+  JsonDocument doc;
+  doc["id"] = "web_scheduler_enable";
+  doc["state"] = self->scheduler_->is_enabled() ? "ON" : "OFF";
+  self->send_json_response(req, 200, doc);
+  return ESP_OK;
+}
+
+esp_err_t LEDBrickWebServer::handle_pwm_scale_set(httpd_req_t *req) {
+  auto *self = get_instance(req);
+  if (!self->check_auth(req)) return ESP_OK;
+  
+  // Read form data
+  char buf[100];
+  int ret = httpd_req_recv(req, buf, sizeof(buf) - 1);
+  if (ret <= 0) {
+    self->send_error(req, 400, "No data received");
+    return ESP_OK;
+  }
+  buf[ret] = '\0';
+  
+  // Parse value from form data (value=XX)
+  float value = 0;
+  if (httpd_query_key_value(buf, "value", buf, sizeof(buf)) == ESP_OK) {
+    value = atof(buf);
+    value = value / 100.0f;  // Convert from percentage
+    self->scheduler_->set_pwm_scale(value);
+    httpd_resp_send(req, "OK", -1);
+  } else {
+    self->send_error(req, 400, "Invalid data");
+  }
+  
+  return ESP_OK;
+}
+
+esp_err_t LEDBrickWebServer::handle_pwm_scale_get(httpd_req_t *req) {
+  auto *self = get_instance(req);
+  if (!self->check_auth(req)) return ESP_OK;
+  
+  JsonDocument doc;
+  doc["id"] = "pwm_scale";
+  doc["value"] = self->scheduler_->get_pwm_scale() * 100.0f;  // Convert to percentage
+  doc["min"] = 0;
+  doc["max"] = 100;
+  doc["step"] = 1;
+  self->send_json_response(req, 200, doc);
   return ESP_OK;
 }
 

@@ -3,6 +3,7 @@ import esphome.config_validation as cv
 from esphome.const import CONF_ID, CONF_PORT, CONF_USERNAME, CONF_PASSWORD
 from esphome.core import CORE, coroutine_with_priority
 import os
+import subprocess
 
 DEPENDENCIES = ["network", "ledbrick_scheduler"]
 AUTO_LOAD = ["json"]
@@ -44,4 +45,19 @@ async def to_code(config):
     
     # Add defines
     cg.add_define("USE_LEDBRICK_WEB_SERVER")
+    
+    # Run the web content generator script
+    component_dir = os.path.dirname(__file__)
+    generator_script = os.path.join(component_dir, "generate_web_content.py")
+    
+    if os.path.exists(generator_script):
+        try:
+            result = subprocess.run(["python3", generator_script], 
+                                  capture_output=True, text=True, cwd=component_dir)
+            if result.returncode != 0:
+                print(f"Warning: Failed to generate web content: {result.stderr}")
+            else:
+                print("Info: Successfully regenerated web content")
+        except Exception as e:
+            print(f"Warning: Could not run web content generator: {e}")
     

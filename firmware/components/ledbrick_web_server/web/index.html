@@ -4,295 +4,239 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LEDBrick Control Panel</title>
-    <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            background-color: #1a1a2e;
-            color: #eee;
-            line-height: 1.6;
-            padding: 20px;
-        }
-        
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-        
-        h1 {
-            text-align: center;
-            color: #4a90e2;
-            margin-bottom: 30px;
-        }
-        
-        .card {
-            background-color: #16213e;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-        }
-        
-        .card h2 {
-            color: #4a90e2;
-            margin-bottom: 15px;
-            font-size: 1.2em;
-        }
-        
-        .control-group {
-            display: grid;
-            gap: 15px;
-            margin-bottom: 15px;
-        }
-        
-        .control-row {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        label {
-            flex: 0 0 120px;
-            font-weight: 500;
-        }
-        
-        input[type="text"],
-        input[type="number"],
-        input[type="password"],
-        select,
-        textarea {
-            flex: 1;
-            padding: 8px 12px;
-            background-color: #0f3460;
-            border: 1px solid #2d4263;
-            border-radius: 4px;
-            color: #fff;
-            font-size: 14px;
-        }
-        
-        input[type="range"] {
-            flex: 1;
-        }
-        
-        button {
-            background-color: #4a90e2;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            transition: background-color 0.2s;
-        }
-        
-        button:hover {
-            background-color: #357abd;
-        }
-        
-        button:disabled {
-            background-color: #666;
-            cursor: not-allowed;
-        }
-        
-        .button-group {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-        
-        .status {
-            padding: 10px;
-            background-color: #0f3460;
-            border-radius: 4px;
-            font-family: monospace;
-            font-size: 13px;
-            white-space: pre-wrap;
-            max-height: 200px;
-            overflow-y: auto;
-        }
-        
-        .error {
-            color: #ff6b6b;
-        }
-        
-        .success {
-            color: #51cf66;
-        }
-        
-        .channel-controls {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 15px;
-        }
-        
-        .channel-item {
-            background-color: #0f3460;
-            padding: 15px;
-            border-radius: 4px;
-        }
-        
-        .channel-item h3 {
-            color: #4a90e2;
-            margin-bottom: 10px;
-            font-size: 1em;
-        }
-        
-        .value-display {
-            font-family: monospace;
-            color: #51cf66;
-        }
-        
-        .json-editor {
-            min-height: 200px;
-            font-family: monospace;
-            font-size: 12px;
-        }
-        
-        .preset-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 10px;
-        }
-        
-        @media (max-width: 768px) {
-            .control-row {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            
-            label {
-                flex: unset;
-            }
-        }
-    </style>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <div class="container">
-        <h1>LEDBrick Control Panel</h1>
-        
+        <header>
+            <h1>LEDBrick Control Panel</h1>
+            <div class="status-bar">
+                <span id="connectionStatus" class="status-indicator disconnected">Disconnected</span>
+                <span id="schedulerStatus" class="scheduler-status">Scheduler: --</span>
+                <span id="currentTime" class="current-time">Time: --:--</span>
+            </div>
+        </header>
+
         <!-- Connection Settings -->
-        <div class="card">
+        <section class="card" id="connectionSettings">
             <h2>Connection Settings</h2>
-            <div class="control-group">
-                <div class="control-row">
-                    <label for="deviceUrl">Device URL:</label>
-                    <input type="text" id="deviceUrl" value="http://ledbrickplus.local" placeholder="http://192.168.1.100">
-                </div>
-                <div class="control-row">
-                    <label for="username">Username:</label>
-                    <input type="text" id="username" placeholder="admin (leave empty if no auth)">
-                </div>
-                <div class="control-row">
-                    <label for="password">Password:</label>
-                    <input type="password" id="password" placeholder="password (leave empty if no auth)">
-                </div>
-                <button onclick="testConnection()">Test Connection</button>
+            <div class="form-row">
+                <label for="deviceUrl">Device URL:</label>
+                <input type="text" id="deviceUrl" placeholder="http://192.168.1.100" value="">
+                <button onclick="testConnection()">Connect</button>
             </div>
-            <div id="connectionStatus" class="status" style="margin-top: 10px; display: none;"></div>
-        </div>
-        
+            <div class="form-row">
+                <label for="username">Username (optional):</label>
+                <input type="text" id="username" placeholder="admin">
+                <label for="password">Password:</label>
+                <input type="password" id="password" placeholder="password">
+            </div>
+        </section>
+
         <!-- Quick Controls -->
-        <div class="card">
+        <section class="card">
             <h2>Quick Controls</h2>
-            <div class="button-group">
-                <button onclick="toggleScheduler()">Toggle Scheduler</button>
-                <button onclick="setPWMScale(100)">Full Brightness</button>
-                <button onclick="setPWMScale(50)">50% Brightness</button>
-                <button onclick="setPWMScale(30)">Dim (30%)</button>
-                <button onclick="setPWMScale(0)">Off</button>
+            <div class="controls-grid">
+                <button id="toggleScheduler" onclick="toggleScheduler()" class="control-button">
+                    <span class="icon">⏸️</span>
+                    <span>Toggle Scheduler</span>
+                </button>
+                <div class="slider-control">
+                    <label for="pwmScale">Master Brightness:</label>
+                    <input type="range" id="pwmScale" min="0" max="100" value="100" 
+                           oninput="updatePWMScale(this.value)">
+                    <span id="pwmScaleValue">100%</span>
+                </div>
             </div>
-            <div class="control-row" style="margin-top: 15px;">
-                <label for="pwmScale">PWM Scale:</label>
-                <input type="range" id="pwmScale" min="0" max="100" value="100" oninput="updatePWMScale(this.value)">
-                <span class="value-display" id="pwmScaleValue">100%</span>
+        </section>
+
+        <!-- Schedule Visualization -->
+        <section class="card">
+            <h2>Schedule Visualization</h2>
+            <div class="chart-container">
+                <canvas id="scheduleChart"></canvas>
             </div>
-        </div>
-        
-        <!-- Preset Management -->
-        <div class="card">
-            <h2>Preset Management</h2>
+            <div class="legend" id="channelLegend"></div>
+        </section>
+
+        <!-- Schedule Editor -->
+        <section class="card">
+            <h2>Schedule Editor</h2>
+            <div class="schedule-controls">
+                <button onclick="refreshSchedule()" class="button">🔄 Refresh</button>
+                <button onclick="clearSchedule()" class="button danger">🗑️ Clear All</button>
+                <button onclick="showAddPointDialog()" class="button primary">➕ Add Point</button>
+            </div>
+            
+            <div class="schedule-table-container">
+                <table id="scheduleTable" class="schedule-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Type</th>
+                            <th>Ch1</th>
+                            <th>Ch2</th>
+                            <th>Ch3</th>
+                            <th>Ch4</th>
+                            <th>Ch5</th>
+                            <th>Ch6</th>
+                            <th>Ch7</th>
+                            <th>Ch8</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="scheduleTableBody">
+                        <!-- Schedule points will be populated here -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Presets -->
+        <section class="card">
+            <h2>Presets</h2>
             <div class="preset-grid">
-                <button onclick="loadPreset('dynamic_sunrise_sunset')">Dynamic Sunrise</button>
-                <button onclick="loadPreset('full_spectrum')">Full Spectrum</button>
-                <button onclick="loadPreset('simple')">Simple</button>
-                <button onclick="loadPreset('reef_natural')">Reef Natural</button>
-                <button onclick="loadPreset('planted_co2')">Planted CO2</button>
-                <button onclick="loadPreset('moonlight_only')">Moonlight Only</button>
+                <button onclick="loadPreset('dynamic_sunrise_sunset')" class="preset-button">
+                    <span class="icon">🌅</span>
+                    <span>Sunrise/Sunset</span>
+                </button>
+                <button onclick="loadPreset('full_spectrum')" class="preset-button">
+                    <span class="icon">🌈</span>
+                    <span>Full Spectrum</span>
+                </button>
+                <button onclick="loadPreset('simple')" class="preset-button">
+                    <span class="icon">💡</span>
+                    <span>Simple</span>
+                </button>
+                <button onclick="loadPreset('reef_natural')" class="preset-button">
+                    <span class="icon">🐠</span>
+                    <span>Reef Natural</span>
+                </button>
+                <button onclick="loadPreset('planted_co2')" class="preset-button">
+                    <span class="icon">🌿</span>
+                    <span>Planted CO2</span>
+                </button>
+                <button onclick="loadPreset('moonlight_only')" class="preset-button">
+                    <span class="icon">🌙</span>
+                    <span>Moonlight</span>
+                </button>
             </div>
-            <div class="button-group" style="margin-top: 15px;">
-                <button onclick="executeScript('web_quick_sunrise_demo')">Load Sunrise Demo</button>
-                <button onclick="clearSchedule()">Clear Schedule</button>
-                <button onclick="saveToFlash()">Save to Flash</button>
+        </section>
+
+        <!-- Import/Export -->
+        <section class="card">
+            <h2>Import/Export Schedule</h2>
+            <div class="import-export-controls">
+                <button onclick="exportSchedule()" class="button">📤 Export JSON</button>
+                <button onclick="importSchedule()" class="button">📥 Import JSON</button>
             </div>
-        </div>
-        
-        <!-- Schedule Point Editor -->
-        <div class="card">
-            <h2>Add Schedule Point</h2>
-            <div class="control-group">
-                <div class="control-row">
-                    <label for="scheduleTime">Time:</label>
-                    <input type="time" id="scheduleTime" value="12:00">
+            <textarea id="jsonData" placeholder="Paste JSON here or click Export to view current schedule..." 
+                      class="json-textarea"></textarea>
+            <div id="jsonStatus" class="status-message"></div>
+        </section>
+    </div>
+
+    <!-- Add/Edit Point Dialog -->
+    <div id="pointDialog" class="dialog-overlay" style="display: none;">
+        <div class="dialog">
+            <h3 id="dialogTitle">Add Schedule Point</h3>
+            <div class="dialog-content">
+                <div class="form-group">
+                    <label>Point Type:</label>
+                    <select id="pointType" onchange="updatePointTypeFields()">
+                        <option value="fixed">Fixed Time</option>
+                        <option value="sunrise">Sunrise</option>
+                        <option value="sunset">Sunset</option>
+                        <option value="astronomical">Astronomical</option>
+                    </select>
                 </div>
-                <div class="channel-controls">
-                    <div class="channel-item">
-                        <h3>Channel 1 (Blue)</h3>
-                        <input type="range" id="ch1pwm" min="0" max="100" value="0">
-                        <span class="value-display" id="ch1val">0%</span>
+                
+                <div id="fixedTimeFields" class="form-group">
+                    <label>Time:</label>
+                    <input type="time" id="pointTime" value="12:00">
+                </div>
+                
+                <div id="astronomicalFields" class="form-group" style="display: none;">
+                    <label>Base Event:</label>
+                    <select id="astroEvent">
+                        <option value="sunrise">Sunrise</option>
+                        <option value="sunset">Sunset</option>
+                        <option value="civil_dawn">Civil Dawn</option>
+                        <option value="civil_dusk">Civil Dusk</option>
+                        <option value="nautical_dawn">Nautical Dawn</option>
+                        <option value="nautical_dusk">Nautical Dusk</option>
+                    </select>
+                    <label>Offset (minutes):</label>
+                    <input type="number" id="astroOffset" value="0" min="-180" max="180">
+                </div>
+                
+                <h4>Channel Values (0-100%)</h4>
+                <div class="channel-grid">
+                    <div class="channel-input" data-channel="1">
+                        <label>Ch1:</label>
+                        <input type="number" id="ch1Value" min="0" max="100" value="0">
+                        <input type="range" min="0" max="100" value="0" 
+                               oninput="document.getElementById('ch1Value').value=this.value">
                     </div>
-                    <div class="channel-item">
-                        <h3>Channel 2 (Royal Blue)</h3>
-                        <input type="range" id="ch2pwm" min="0" max="100" value="0">
-                        <span class="value-display" id="ch2val">0%</span>
+                    <div class="channel-input" data-channel="2">
+                        <label>Ch2:</label>
+                        <input type="number" id="ch2Value" min="0" max="100" value="0">
+                        <input type="range" min="0" max="100" value="0" 
+                               oninput="document.getElementById('ch2Value').value=this.value">
                     </div>
-                    <div class="channel-item">
-                        <h3>Channel 3 (UV)</h3>
-                        <input type="range" id="ch3pwm" min="0" max="100" value="0">
-                        <span class="value-display" id="ch3val">0%</span>
+                    <div class="channel-input" data-channel="3">
+                        <label>Ch3:</label>
+                        <input type="number" id="ch3Value" min="0" max="100" value="0">
+                        <input type="range" min="0" max="100" value="0" 
+                               oninput="document.getElementById('ch3Value').value=this.value">
                     </div>
-                    <div class="channel-item">
-                        <h3>Channel 4 (White)</h3>
-                        <input type="range" id="ch4pwm" min="0" max="100" value="0">
-                        <span class="value-display" id="ch4val">0%</span>
+                    <div class="channel-input" data-channel="4">
+                        <label>Ch4:</label>
+                        <input type="number" id="ch4Value" min="0" max="100" value="0">
+                        <input type="range" min="0" max="100" value="0" 
+                               oninput="document.getElementById('ch4Value').value=this.value">
+                    </div>
+                    <div class="channel-input" data-channel="5">
+                        <label>Ch5:</label>
+                        <input type="number" id="ch5Value" min="0" max="100" value="0">
+                        <input type="range" min="0" max="100" value="0" 
+                               oninput="document.getElementById('ch5Value').value=this.value">
+                    </div>
+                    <div class="channel-input" data-channel="6">
+                        <label>Ch6:</label>
+                        <input type="number" id="ch6Value" min="0" max="100" value="0">
+                        <input type="range" min="0" max="100" value="0" 
+                               oninput="document.getElementById('ch6Value').value=this.value">
+                    </div>
+                    <div class="channel-input" data-channel="7">
+                        <label>Ch7:</label>
+                        <input type="number" id="ch7Value" min="0" max="100" value="0">
+                        <input type="range" min="0" max="100" value="0" 
+                               oninput="document.getElementById('ch7Value').value=this.value">
+                    </div>
+                    <div class="channel-input" data-channel="8">
+                        <label>Ch8:</label>
+                        <input type="number" id="ch8Value" min="0" max="100" value="0">
+                        <input type="range" min="0" max="100" value="0" 
+                               oninput="document.getElementById('ch8Value').value=this.value">
                     </div>
                 </div>
-                <button onclick="addSchedulePoint()" style="margin-top: 15px;">Add Schedule Point</button>
-            </div>
-        </div>
-        
-        <!-- JSON Import/Export -->
-        <div class="card">
-            <h2>Schedule JSON Import/Export</h2>
-            <div class="control-group">
-                <textarea id="jsonData" class="json-editor" placeholder="Paste schedule JSON here..."></textarea>
-                <div class="button-group">
-                    <button onclick="exportSchedule()">Export Current Schedule</button>
-                    <button onclick="importSchedule()">Import Schedule</button>
-                    <button onclick="formatJSON()">Format JSON</button>
+                
+                <div class="channel-presets">
+                    <button onclick="setAllChannels(0)" class="small-button">All Off</button>
+                    <button onclick="setAllChannels(50)" class="small-button">All 50%</button>
+                    <button onclick="setAllChannels(100)" class="small-button">All 100%</button>
                 </div>
             </div>
-            <div id="jsonStatus" class="status" style="margin-top: 10px; display: none;"></div>
-        </div>
-        
-        <!-- System Status -->
-        <div class="card">
-            <h2>System Status</h2>
-            <div id="systemStatus" class="status">
-                <div>Scheduler: <span id="schedulerStatus">Unknown</span></div>
-                <div>Current Time: <span id="currentTime">--:--</span></div>
-                <div>Schedule Points: <span id="schedulePoints">-</span></div>
-                <div>Active Preset: <span id="activePreset">-</span></div>
+            <div class="dialog-buttons">
+                <button onclick="closePointDialog()" class="button">Cancel</button>
+                <button onclick="saveSchedulePoint()" class="button primary">Save</button>
             </div>
-            <button onclick="updateStatus()">Refresh Status</button>
         </div>
     </div>
-    
+
     <script src="ledbrick-api.js"></script>
+    <script src="ledbrick-ui.js"></script>
 </body>
 </html>

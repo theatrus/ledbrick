@@ -111,7 +111,7 @@ class LEDBrickAPI {
         return this.request('POST', '/api/schedule/point', data);
     }
     
-    // Control scheduler enable/disable (using standard ESPHome endpoints)
+    // Control scheduler enable/disable (using our custom endpoints)
     async setSchedulerEnabled(enabled) {
         const action = enabled ? 'turn_on' : 'turn_off';
         return this.request('POST', `/switch/web_scheduler_enable/${action}`);
