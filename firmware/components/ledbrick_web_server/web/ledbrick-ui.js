@@ -58,7 +58,7 @@ function initializeChart() {
                             return 'Time: ' + tooltipItems[0].label;
                         },
                         label: function(context) {
-                            return context.dataset.label + ': ' + context.parsed.y + '%';
+                            return context.dataset.label + ': ' + context.parsed.y.toFixed(1) + '%';
                         }
                     }
                 },
@@ -334,9 +334,9 @@ function updateScheduleTable(schedule) {
             const currentValue = point.current_values ? point.current_values[i] : null;
             
             // Show PWM% and current if available
-            let cellText = pwmValue + '%';
+            let cellText = pwmValue.toFixed(1) + '%';
             if (currentValue !== null && currentValue !== undefined) {
-                cellText += `\n${currentValue.toFixed(1)}A`;
+                cellText += `\n${currentValue.toFixed(2)}A`;
             }
             cell.textContent = cellText;
             cell.style.whiteSpace = 'pre-line';
@@ -420,8 +420,8 @@ function editPoint(index) {
         const pwmInput = document.getElementById(`ch${i+1}PwmValue`);
         const pwmRange = document.getElementById(`ch${i+1}PwmRange`);
         if (pwmInput && pwmRange) {
-            pwmInput.value = pwmValue;
-            pwmRange.value = pwmValue;
+            pwmInput.value = pwmValue.toFixed(1);
+            pwmRange.value = pwmValue.toFixed(1);
         }
         
         // Set current values
@@ -1099,7 +1099,7 @@ function updateMoonSimulationFromStatus(status) {
                 const currentRange = document.getElementById(`moonCh${i+1}CurrentRange`);
                 
                 if (currentInput && currentRange) {
-                    const value = serverCurrentValue.toFixed(3);
+                    const value = serverCurrentValue.toFixed(2);
                     currentInput.value = value;
                     currentRange.value = value;
                 }
