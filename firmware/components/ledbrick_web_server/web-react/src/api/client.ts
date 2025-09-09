@@ -98,7 +98,7 @@ class LEDBrickAPI {
     return response.state === 'ON';
   }
 
-  async setPWMScale(value: number) {
+  async setPwmScale(value: number) {
     const params = new URLSearchParams();
     params.append('value', value.toString());
 
@@ -113,7 +113,7 @@ class LEDBrickAPI {
     return response.text();
   }
 
-  async getPWMScale(): Promise<number> {
+  async getPwmScale(): Promise<number> {
     const response = await this.request<any>('GET', '/number/pwm_scale');
     return response.value;
   }

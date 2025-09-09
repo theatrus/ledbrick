@@ -40,11 +40,7 @@ export function StatusBarControls({ enabled, pwmScale, onUpdate }: StatusBarCont
   const handleToggleScheduler = async () => {
     setIsSaving(true);
     try {
-      if (localEnabled) {
-        await api.disableScheduler();
-      } else {
-        await api.enableScheduler();
-      }
+      await api.setSchedulerEnabled(!localEnabled);
       setLocalEnabled(!localEnabled);
       onUpdate();
     } catch (error) {

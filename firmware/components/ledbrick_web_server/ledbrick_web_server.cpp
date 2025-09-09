@@ -644,7 +644,7 @@ esp_err_t LEDBrickWebServer::handle_api_location_post(httpd_req_t *req) {
   }
   
   // Extract latitude and longitude
-  if (!doc.containsKey("latitude") || !doc.containsKey("longitude")) {
+  if (!doc["latitude"].is<JsonVariant>() || !doc["longitude"].is<JsonVariant>()) {
     self->send_error(req, 400, "Missing latitude or longitude");
     return ESP_OK;
   }
@@ -887,7 +887,7 @@ esp_err_t LEDBrickWebServer::handle_api_timezone_get(httpd_req_t *req) {
     return ESP_OK;
   }
   
-  DynamicJsonDocument doc(256);
+  JsonDocument doc;
   doc["timezone"] = self->scheduler_->get_timezone();
   doc["timezone_offset_hours"] = self->scheduler_->get_timezone_offset_hours();
   
@@ -925,7 +925,7 @@ esp_err_t LEDBrickWebServer::handle_api_timezone_post(httpd_req_t *req) {
   }
   content[ret] = '\0';
   
-  DynamicJsonDocument doc(256);
+  JsonDocument doc;
   auto error = deserializeJson(doc, content);
   if (error) {
     self->send_error(req, 400, "Invalid JSON");
@@ -933,11 +933,11 @@ esp_err_t LEDBrickWebServer::handle_api_timezone_post(httpd_req_t *req) {
   }
   
   // Accept either timezone name or offset
-  if (doc.containsKey("timezone")) {
+  if (doc["timezone"].is<JsonVariant>()) {
     const char* tz = doc["timezone"];
     self->scheduler_->set_timezone(tz);
     ESP_LOGI(TAG, "Timezone set to: %s", tz);
-  } else if (doc.containsKey("timezone_offset_hours")) {
+  } else if (doc["timezone_offset_hours"].is<JsonVariant>()) {
     float offset = doc["timezone_offset_hours"];
     self->scheduler_->set_timezone_offset_hours(offset);
     ESP_LOGI(TAG, "Timezone offset set to: %.1f hours", offset);
@@ -947,7 +947,7 @@ esp_err_t LEDBrickWebServer::handle_api_timezone_post(httpd_req_t *req) {
   }
   
   // Update SNTP timezone if it's the active time source
-  if (doc.containsKey("timezone")) {
+  if (doc["timezone"].is<JsonVariant>()) {
     const char* tz_str = doc["timezone"];
     std::string posix_tz;
     
@@ -1048,7 +1048,7 @@ esp_err_t LEDBrickWebServer::handle_api_timezone_post(httpd_req_t *req) {
   // Save to flash
   self->scheduler_->save_schedule_to_flash();
   
-  DynamicJsonDocument response(128);
+  JsonDocument response;
   response["success"] = true;
   response["timezone"] = self->scheduler_->get_timezone();
   response["timezone_offset_hours"] = self->scheduler_->get_timezone_offset_hours();
