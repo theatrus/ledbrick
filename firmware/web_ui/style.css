@@ -1,0 +1,109 @@
+/* LEDBrick Web UI Embedded Styles */
+
+/* Custom styling for ESPHome web server integration */
+.ledbrick-controls {
+    background-color: #16213e;
+    border-radius: 8px;
+    padding: 20px;
+    margin: 20px 0;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.ledbrick-controls h3 {
+    color: #4a90e2;
+    margin-bottom: 15px;
+}
+
+.ledbrick-button-group {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 15px;
+}
+
+.ledbrick-button {
+    background-color: #4a90e2;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s;
+}
+
+.ledbrick-button:hover {
+    background-color: #357abd;
+}
+
+.ledbrick-slider {
+    width: 100%;
+    margin: 10px 0;
+}
+
+.ledbrick-json-container {
+    margin-top: 20px;
+}
+
+.ledbrick-json-textarea {
+    width: 100%;
+    min-height: 150px;
+    background-color: #0f3460;
+    border: 1px solid #2d4263;
+    border-radius: 4px;
+    color: #fff;
+    font-family: monospace;
+    font-size: 12px;
+    padding: 10px;
+    resize: vertical;
+}
+
+/* Override ESPHome default styles for better integration */
+body.ledbrick-theme {
+    background-color: #1a1a2e;
+    color: #eee;
+}
+
+.ledbrick-theme .card {
+    background-color: #16213e;
+    border-color: #2d4263;
+}
+
+.ledbrick-theme input,
+.ledbrick-theme select,
+.ledbrick-theme textarea {
+    background-color: #0f3460;
+    border-color: #2d4263;
+    color: #fff;
+}
+
+/* Quick action buttons */
+.ledbrick-quick-actions {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.ledbrick-fab {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background-color: #4a90e2;
+    color: white;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    font-size: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.ledbrick-fab:hover {
+    transform: scale(1.1);
+    background-color: #357abd;
+}

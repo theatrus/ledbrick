@@ -1,0 +1,316 @@
+# LEDBrick Web Server Package
+# Provides HTTP UI control without Home Assistant
+#
+# WARNING: Web server uses significant memory. May impact stability on ESP8266.
+# Recommended for ESP32 only.
+
+# Enable web server with authentication
+web_server:
+  port: 80
+  # Optional authentication - comment out for no auth
+  # auth:
+  #   username: admin
+  #   password: !secret web_password
+
+# Template components that act as HTTP bridges to scheduler functions
+
+# Text inputs for JSON data
+text_sensor:
+  - platform: template
+    name: "Schedule JSON Export"
+    id: schedule_json_export
+    icon: mdi:code-json
+    lambda: |-
+      // Export current schedule as minified JSON
+      static std::string last_json;
+      static unsigned long last_update = 0;
+      
+      // Only update every 5 seconds to avoid excessive processing
+      if (millis() - last_update > 5000) {
+        last_json = id(main_scheduler).export_json_minified();
+        last_update = millis();
+      }
+      
+      return last_json;
+    update_interval: 5s
+
+# Input text for JSON import (limited to 255 chars by Home Assistant, but web API can handle more)
+text:
+  - platform: template
+    name: "Schedule JSON Import"
+    id: schedule_json_import
+    optimistic: true
+    min_length: 0
+    max_length: 4096  # Increased for web API
+    mode: text
+    icon: mdi:import
+
+# Buttons for triggering actions
+button:
+  - platform: template
+    name: "Import Schedule JSON"
+    id: import_schedule_json_button
+    icon: mdi:import
+    on_press:
+      - lambda: |-
+          std::string json = id(schedule_json_import).state;
+          if (json.empty()) {
+            ESP_LOGW("web", "No JSON data to import");
+            return;
+          }
+          
+          bool success = id(main_scheduler).import_schedule_json(json);
+          if (success) {
+            ESP_LOGI("web", "Schedule imported successfully via web");
+            // Clear the input after successful import
+            id(schedule_json_import).state = "";
+          } else {
+            ESP_LOGW("web", "Failed to import schedule JSON");
+          }
+
+  - platform: template
+    name: "Export Schedule JSON"
+    id: export_schedule_json_button
+    icon: mdi:export
+    on_press:
+      - lambda: |-
+          // Force update of the export sensor
+          id(schedule_json_export).publish_state(
+            id(main_scheduler).export_json_minified()
+          );
+          ESP_LOGI("web", "Schedule exported to JSON sensor");
+
+  - platform: template
+    name: "Clear Schedule"
+    id: clear_schedule_button
+    icon: mdi:delete-sweep
+    on_press:
+      - lambda: |-
+          id(main_scheduler).clear_schedule();
+          ESP_LOGI("web", "Schedule cleared via web");
+
+  - platform: template
+    name: "Save to Flash"
+    id: save_to_flash_button
+    icon: mdi:content-save
+    on_press:
+      - lambda: |-
+          id(main_scheduler).save_schedule_to_flash();
+          ESP_LOGI("web", "Schedule saved to flash via web");
+
+# Select component for presets
+select:
+  - platform: template
+    name: "Load Preset"
+    id: preset_selector
+    icon: mdi:playlist-star
+    options:
+      - "Select Preset..."
+      - "dynamic_sunrise_sunset"
+      - "full_spectrum" 
+      - "simple"
+      - "reef_natural"
+      - "planted_co2"
+      - "moonlight_only"
+    initial_option: "Select Preset..."
+    optimistic: true
+    on_value:
+      then:
+        - lambda: |-
+            if (x != "Select Preset...") {
+              id(main_scheduler).load_preset(x);
+              ESP_LOGI("web", "Loaded preset: %s", x.c_str());
+              // Reset selector
+              id(preset_selector).publish_state("Select Preset...");
+            }
+
+# Number inputs for channel control
+number:
+  # Global PWM scale is already defined in scheduler_components.yaml
+  
+  # Time input for schedule points (0-1439 minutes)
+  - platform: template
+    name: "Schedule Time"
+    id: schedule_time_input
+    icon: mdi:clock-outline
+    min_value: 0
+    max_value: 1439
+    step: 15
+    unit_of_measurement: "min"
+    optimistic: true
+    initial_value: 720  # Noon
+
+  # Channel PWM inputs for quick schedule point addition
+  - platform: template
+    name: "Channel 1 PWM"
+    id: ch1_pwm_input
+    icon: mdi:brightness-percent
+    min_value: 0
+    max_value: 100
+    step: 5
+    unit_of_measurement: "%"
+    optimistic: true
+    initial_value: 0
+
+  - platform: template
+    name: "Channel 2 PWM"
+    id: ch2_pwm_input
+    icon: mdi:brightness-percent
+    min_value: 0
+    max_value: 100
+    step: 5
+    unit_of_measurement: "%"
+    optimistic: true
+    initial_value: 0
+
+  - platform: template
+    name: "Channel 3 PWM"
+    id: ch3_pwm_input
+    icon: mdi:brightness-percent
+    min_value: 0
+    max_value: 100
+    step: 5
+    unit_of_measurement: "%"
+    optimistic: true
+    initial_value: 0
+
+  - platform: template
+    name: "Channel 4 PWM"
+    id: ch4_pwm_input
+    icon: mdi:brightness-percent
+    min_value: 0
+    max_value: 100
+    step: 5
+    unit_of_measurement: "%"
+    optimistic: true
+    initial_value: 0
+
+# Button to add schedule point with current channel values
+button:
+  - platform: template
+    name: "Add Schedule Point"
+    id: add_schedule_point_button
+    icon: mdi:plus-circle
+    on_press:
+      - lambda: |-
+          int time_min = id(schedule_time_input).state;
+          std::vector<float> pwm_values = {
+            id(ch1_pwm_input).state,
+            id(ch2_pwm_input).state,
+            id(ch3_pwm_input).state,
+            id(ch4_pwm_input).state,
+            0, 0, 0, 0  // Channels 5-8
+          };
+          std::vector<float> current_values(8, 2.0);  // Default 2A per channel
+          
+          id(main_scheduler).set_schedule_point(time_min, pwm_values, current_values);
+          ESP_LOGI("web", "Added schedule point at %02d:%02d", time_min / 60, time_min % 60);
+
+# Switch to enable/disable scheduler
+switch:
+  - platform: template
+    name: "Web Scheduler Enable"
+    id: web_scheduler_enable
+    icon: mdi:calendar-check
+    lambda: |-
+      return id(main_scheduler).is_enabled();
+    turn_on_action:
+      - lambda: |-
+          id(main_scheduler).enable();
+    turn_off_action:
+      - lambda: |-
+          id(main_scheduler).disable();
+
+# Sensor to show current scheduler time
+sensor:
+  - platform: template
+    name: "Web Scheduler Time"
+    id: web_scheduler_time
+    icon: mdi:clock
+    unit_of_measurement: "min"
+    accuracy_decimals: 0
+    lambda: |-
+      return id(main_scheduler).get_current_time_minutes();
+    update_interval: 10s
+
+# Binary sensor for scheduler status
+binary_sensor:
+  - platform: template
+    name: "Web Scheduler Active"
+    id: web_scheduler_active
+    device_class: running
+    lambda: |-
+      return id(main_scheduler).is_enabled();
+    
+# Additional info sensors
+text_sensor:
+  - platform: template
+    name: "Active Preset"
+    id: active_preset_sensor
+    icon: mdi:playlist-check
+    lambda: |-
+      // This would need to be implemented in the scheduler
+      return {"unknown"};
+    update_interval: 30s
+    
+  - platform: template  
+    name: "Schedule Status"
+    id: schedule_status_sensor
+    icon: mdi:information-outline
+    lambda: |-
+      int points = id(main_scheduler).get_schedule_point_count();
+      if (points == 0) {
+        return {"No schedule points"};
+      } else {
+        return {str_sprintf("%d schedule points", points)};
+      }
+    update_interval: 5s
+
+# Script to demonstrate complex operations
+script:
+  - id: web_quick_sunrise_demo
+    then:
+      - lambda: |-
+          // Clear existing schedule
+          id(main_scheduler).clear_schedule();
+          
+          // Add sunrise sequence
+          std::vector<float> off(8, 0.0);
+          std::vector<float> current(8, 2.0);
+          
+          // 6 AM - Start with deep blue
+          std::vector<float> dawn = {10, 5, 0, 0, 0, 0, 0, 0};
+          id(main_scheduler).set_schedule_point(360, dawn, current);
+          
+          // 7 AM - Add royal blue and violet
+          std::vector<float> early = {40, 30, 10, 5, 0, 0, 0, 0};
+          id(main_scheduler).set_schedule_point(420, early, current);
+          
+          // 8 AM - Morning colors
+          std::vector<float> morning = {80, 70, 30, 20, 10, 5, 0, 0};
+          id(main_scheduler).set_schedule_point(480, morning, current);
+          
+          // 12 PM - Peak daylight
+          std::vector<float> noon = {100, 100, 50, 80, 60, 20, 10, 5};
+          id(main_scheduler).set_schedule_point(720, noon, current);
+          
+          // 6 PM - Evening
+          std::vector<float> evening = {60, 50, 20, 40, 30, 30, 5, 10};
+          id(main_scheduler).set_schedule_point(1080, evening, current);
+          
+          // 8 PM - Sunset
+          std::vector<float> sunset = {20, 15, 5, 10, 20, 40, 0, 20};
+          id(main_scheduler).set_schedule_point(1200, sunset, current);
+          
+          // 9 PM - Off
+          id(main_scheduler).set_schedule_point(1260, off, current);
+          
+          ESP_LOGI("web", "Quick sunrise demo loaded");
+
+button:
+  - platform: template
+    name: "Load Sunrise Demo"
+    id: load_sunrise_demo_button
+    icon: mdi:weather-sunset-up
+    on_press:
+      - script.execute: web_quick_sunrise_demo

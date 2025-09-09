@@ -99,6 +99,10 @@ packages:
   channel8: !include { file: packages/channel.yaml, vars: { channel_number: "8", pwm_pin: "GPIO33", current_pin: "GPIO34" } }
   # Uncomment the line below to enable the LEDBrick Scheduler with Home Assistant services
   scheduler: !include packages/scheduler_services.yaml
+  
+  # Web server for HTTP control (comment out to disable)
+  # WARNING: Uses significant memory. Recommended for ESP32 only.
+  web_ui: !include packages/web_server.yaml
 
 output:
   # Fan PWM output - separate from channel packages
