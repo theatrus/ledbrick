@@ -6,21 +6,36 @@ This directory contains a comprehensive Home Assistant configuration demonstrati
 
 ```
 homeassistant/
-├── README.md                  # This file
-├── ledbrick_package.yaml      # Complete all-in-one package (RECOMMENDED)
+├── README.md                      # This file
+├── ledbrick_package.yaml          # Complete package for single or multiple units
 ├── dashboards/
-│   ├── main_dashboard.yaml    # Primary control dashboard
-│   ├── schedule_editor.yaml   # Schedule point editor
-│   ├── monitoring.yaml        # Real-time monitoring
-│   └── simple_card.yaml       # Simple card for quick setup
+│   ├── tank_group_dashboard.yaml  # Main dashboard for tank groups
+│   ├── main_dashboard.yaml        # Detailed control dashboard
+│   ├── schedule_editor.yaml       # Schedule point editor
+│   ├── monitoring.yaml            # Real-time monitoring
+│   └── simple_card.yaml           # Simple card for quick setup
 ├── automations/
-│   ├── feeding_modes.yaml     # Feeding and maintenance automations
-│   ├── seasonal.yaml          # Seasonal adjustments
-│   └── alerts.yaml           # Temperature and system alerts
+│   ├── feeding_modes.yaml         # Feeding and maintenance automations
+│   ├── seasonal.yaml              # Seasonal adjustments
+│   ├── alerts.yaml                # Temperature and system alerts
+│   └── multi_unit_examples.yaml   # Examples for coordinating multiple units
 └── scripts/
-    ├── quick_actions.yaml     # Common quick actions
-    └── schedule_presets.yaml  # Schedule preset management
+    ├── quick_actions.yaml         # Common quick actions
+    └── schedule_presets.yaml      # Schedule preset management
 ```
+
+## Tank Groups
+
+This package uses a tank group approach, perfect for:
+- **Large tanks** with multiple LEDBrick fixtures that need synchronized control
+- **Multiple tanks** each with their own group of lights
+- **Mixed setups** with both large multi-fixture tanks and smaller single-fixture tanks
+
+Examples:
+- 6-foot reef tank with 3 LEDBrick units (left, center, right)
+- 4-foot planted tank with 2 LEDBrick units
+- 2-foot frag tank with 1 LEDBrick unit
+- Quarantine tank with 1 LEDBrick unit
 
 ## Features Demonstrated
 
@@ -63,16 +78,54 @@ homeassistant/
 
 ## Installation
 
-### Recommended: Package Installation
-
 1. Copy `ledbrick_package.yaml` to your Home Assistant `packages` directory
-2. Ensure your `configuration.yaml` includes packages:
+
+2. Edit the `tank_groups` configuration in the package file:
+   ```yaml
+   tank_groups:
+     initial: >
+       {
+         "display_tank": ["ledbrick_left", "ledbrick_center", "ledbrick_right"],
+         "frag_tank": ["ledbrick_frag"],
+         "quarantine_tank": ["ledbrick_qt"]
+       }
+   ```
+
+3. Ensure your `configuration.yaml` includes packages:
    ```yaml
    homeassistant:
      packages: !include_dir_named packages
    ```
-3. Restart Home Assistant
-4. Add dashboard cards from the `dashboards` folder to your Lovelace UI
+
+4. Restart Home Assistant
+
+5. Add the `tank_group_dashboard.yaml` to your Lovelace UI
+
+## Configuration Examples
+
+### Single Unit Setup
+```json
+{
+  "main_tank": ["ledbrickplus"]
+}
+```
+
+### Multiple Units on One Tank
+```json
+{
+  "display_tank": ["ledbrick_1", "ledbrick_2", "ledbrick_3"],
+  "sump": ["ledbrick_sump"]
+}
+```
+
+### Multiple Tanks
+```json
+{
+  "display_tank": ["ledbrick_main_left", "ledbrick_main_right"],
+  "frag_tank": ["ledbrick_frag"],
+  "quarantine": ["ledbrick_qt"]
+}
+```
 
 ### Alternative: Manual Installation
 

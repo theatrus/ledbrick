@@ -1,28 +1,60 @@
-# LEDBrick Complete Home Assistant Package
+# LEDBrick Home Assistant Package - Tank Groups
 # 
-# This is the RECOMMENDED way to integrate LEDBrick with Home Assistant.
-# It includes everything you need in one file.
+# This package supports grouping multiple LEDBrick units per tank.
+# Perfect for large tanks requiring multiple light fixtures.
 #
 # Installation:
 # 1. Copy this file to your Home Assistant packages directory
-#    (usually /config/packages/)
-# 2. Add to configuration.yaml if not already present:
-#    homeassistant:
-#      packages: !include_dir_named packages
-# 3. Restart Home Assistant
-# 4. Optional: Add dashboard cards from the dashboards folder
+# 2. Configure your tank groups below (see tank_groups input_text)
+# 3. Add your ESPHome device names to the appropriate groups
+# 4. Restart Home Assistant
 #
-# This package includes:
-# - All input helpers and configuration entities
-# - Automations for feeding modes, tank types, and moon control
-# - Scripts for quick actions and presets
-# - Template sensors for monitoring
-# - Groups for easy entity management
+# Example Setup:
+# - Main Display Tank: 3 LEDBrick units (left, center, right)
+# - Frag Tank: 1 LEDBrick unit
+# - Quarantine Tank: 1 LEDBrick unit
 
-# Input helpers for configuration
+# Tank group configuration (stored as JSON)
+input_text:
+  # Define your tank groups here as JSON
+  # Example: {"display_tank": ["ledbrick_left", "ledbrick_center", "ledbrick_right"], "frag_tank": ["ledbrick_frag"]}
+  tank_groups:
+    name: "Tank Group Configuration"
+    initial: >
+      {
+        "display_tank": ["ledbrickplus"],
+        "frag_tank": [],
+        "quarantine_tank": []
+      }
+    max: 5000
+    mode: text
+
+# Active tank selection
+input_select:
+  active_tank:
+    name: "Active Tank"
+    options:
+      - "display_tank"
+      - "frag_tank"
+      - "quarantine_tank"
+    initial: "display_tank"
+    icon: mdi:fishbowl
+    
+  tank_type:
+    name: "Tank Type"
+    options:
+      - "Reef"
+      - "Planted"
+      - "Fish Only"
+      - "Coral Propagation"
+    initial: "Reef"
+    icon: mdi:coral
+
+# Global settings that apply to all units in a tank group
 input_number:
-  ledbrick_quick_brightness:
-    name: "LEDBrick Quick Brightness"
+  # Quick brightness for the selected tank
+  tank_brightness:
+    name: "Tank Brightness"
     min: 0
     max: 100
     step: 5
@@ -47,6 +79,7 @@ input_number:
     icon: mdi:camera
     initial: 85
     
+  # Moon simulation settings
   moon_blue_intensity:
     name: "Moon Blue Intensity"
     min: 0
@@ -66,16 +99,6 @@ input_number:
     initial: 1.5
 
 input_select:
-  tank_type:
-    name: "Tank Type"
-    options:
-      - "Reef"
-      - "Planted"
-      - "Fish Only"
-      - "Coral Propagation"
-    initial: "Reef"
-    icon: mdi:fishbowl
-    
   lighting_mode:
     name: "Lighting Mode"
     options:
@@ -84,6 +107,7 @@ input_select:
       - "Maintenance"
       - "Photography"
       - "Night Viewing"
+      - "Acclimation"
     initial: "Schedule"
     icon: mdi:lightbulb-group
     
@@ -98,34 +122,32 @@ input_select:
     icon: mdi:lightning-bolt
 
 input_boolean:
+  # Tank-specific toggles
+  tank_feeding_mode:
+    name: "Feeding Mode"
+    icon: mdi:fish
+    
+  tank_maintenance_mode:
+    name: "Maintenance Mode"
+    icon: mdi:wrench
+    
+  tank_storm_mode:
+    name: "Storm Mode"
+    icon: mdi:weather-lightning
+    
+  # Global settings
+  sync_all_tanks:
+    name: "Sync All Tanks"
+    icon: mdi:sync
+    initial: off
+    
   auto_seasonal_adjust:
     name: "Auto Seasonal Adjustment"
     icon: mdi:weather-sunny
     
-  storm_mode_enabled:
-    name: "Storm Mode"
-    icon: mdi:weather-lightning
-    
-  maintenance_mode:
-    name: "Maintenance Mode"
-    icon: mdi:wrench
-    
-  feeding_mode:
-    name: "Feeding Mode"
-    icon: mdi:fish
-    
   night_viewing:
     name: "Night Viewing Mode"
     icon: mdi:moon-waning-crescent
-
-input_text:
-  previous_pwm_scale:
-    name: "Previous PWM Scale"
-    initial: "100"
-    
-  previous_mode:
-    name: "Previous Mode"
-    initial: "Schedule"
 
 # Timers
 timer:
@@ -133,228 +155,335 @@ timer:
     name: "Feeding Timer"
     icon: mdi:timer-sand
 
-# Template sensors
+# Template sensors that work with tank groups
 sensor:
   - platform: template
     sensors:
-      ledbrick_power_consumption:
-        friendly_name: "LEDBrick Power"
+      # Current tank's unit list
+      active_tank_units:
+        friendly_name: "Active Tank Units"
+        value_template: >
+          {% set groups = states('input_text.tank_groups') | from_json %}
+          {% set tank = states('input_select.active_tank') %}
+          {{ groups[tank] | join(', ') if tank in groups else 'None' }}
+      
+      # Current tank's total power consumption
+      active_tank_power:
+        friendly_name: "Active Tank Power"
         unit_of_measurement: "W"
         device_class: power
         value_template: >
-          {% set ch1 = states('sensor.ledbrickplus_scheduler_current_channel_1') | float(0) %}
-          {% set ch2 = states('sensor.ledbrickplus_scheduler_current_channel_2') | float(0) %}
-          {% set ch3 = states('sensor.ledbrickplus_scheduler_current_channel_3') | float(0) %}
-          {% set ch4 = states('sensor.ledbrickplus_scheduler_current_channel_4') | float(0) %}
-          {% set total_current = ch1 + ch2 + ch3 + ch4 %}
-          {{ (24 * total_current * 2) | round(1) }}
+          {% set groups = states('input_text.tank_groups') | from_json %}
+          {% set tank = states('input_select.active_tank') %}
+          {% set units = groups.get(tank, []) %}
+          {% set ns = namespace(total=0) %}
+          {% for unit in units %}
+            {% set ch1 = states('sensor.' + unit + '_scheduler_current_channel_1') | float(0) %}
+            {% set ch2 = states('sensor.' + unit + '_scheduler_current_channel_2') | float(0) %}
+            {% set ch3 = states('sensor.' + unit + '_scheduler_current_channel_3') | float(0) %}
+            {% set ch4 = states('sensor.' + unit + '_scheduler_current_channel_4') | float(0) %}
+            {% set ns.total = ns.total + (24 * (ch1 + ch2 + ch3 + ch4) * 2) %}
+          {% endfor %}
+          {{ ns.total | round(1) }}
       
-      ledbrick_daily_energy:
-        friendly_name: "LEDBrick Daily Energy"
-        unit_of_measurement: "kWh"
-        device_class: energy
+      # All tanks total power
+      all_tanks_power:
+        friendly_name: "All Tanks Power"
+        unit_of_measurement: "W"
+        device_class: power
         value_template: >
-          {{ (states('sensor.ledbrick_power_consumption') | float(0) * 24 / 1000) | round(2) }}
+          {% set groups = states('input_text.tank_groups') | from_json %}
+          {% set ns = namespace(total=0) %}
+          {% for tank, units in groups.items() %}
+            {% for unit in units %}
+              {% set ch1 = states('sensor.' + unit + '_scheduler_current_channel_1') | float(0) %}
+              {% set ch2 = states('sensor.' + unit + '_scheduler_current_channel_2') | float(0) %}
+              {% set ch3 = states('sensor.' + unit + '_scheduler_current_channel_3') | float(0) %}
+              {% set ch4 = states('sensor.' + unit + '_scheduler_current_channel_4') | float(0) %}
+              {% set ns.total = ns.total + (24 * (ch1 + ch2 + ch3 + ch4) * 2) %}
+            {% endfor %}
+          {% endfor %}
+          {{ ns.total | round(1) }}
       
-      schedule_status:
-        friendly_name: "Schedule Status"
+      # Tank schedule status
+      active_tank_status:
+        friendly_name: "Active Tank Status"
         value_template: >
-          {% if is_state('switch.ledbrickplus_scheduler_enabled', 'on') %}
-            Active ({{ states('sensor.ledbrickplus_scheduler_current_time') }})
+          {% set groups = states('input_text.tank_groups') | from_json %}
+          {% set tank = states('input_select.active_tank') %}
+          {% set units = groups.get(tank, []) %}
+          {% if units | length == 0 %}
+            No units configured
           {% else %}
-            Disabled
-          {% endif %}
-      
-      moon_phase_description:
-        friendly_name: "Moon Phase"
-        value_template: >
-          {% set phase = states('sensor.ledbrickplus_moon_phase') | float(0) %}
-          {% if phase < 12.5 %}
-            🌑 New Moon
-          {% elif phase < 37.5 %}
-            🌒 Waxing Crescent
-          {% elif phase < 62.5 %}
-            🌓 First Quarter
-          {% elif phase < 87.5 %}
-            🌔 Waxing Gibbous
-          {% else %}
-            🌕 Full Moon
+            {% set first_unit = units[0] %}
+            {% if is_state('switch.' + first_unit + '_scheduler_enabled', 'on') %}
+              Scheduled ({{ states('sensor.' + first_unit + '_scheduler_current_time') }})
+            {% else %}
+              Manual Control
+            {% endif %}
           {% endif %}
 
-# Binary sensors for monitoring
-binary_sensor:
-  - platform: template
-    sensors:
-      ledbrick_temperature_alert:
-        friendly_name: "LEDBrick Temp Alert"
-        device_class: heat
-        value_template: >
-          {{ states('sensor.ledbrickplus_temperature') | float(0) > 65 }}
-
-# Main automations
+# Automations for tank groups
 automation:
-  # Feeding mode automation
-  - alias: "LEDBrick Feeding Mode"
-    id: ledbrick_feeding_mode
+  # Feeding mode - affects all units in active tank
+  - alias: "Tank Group - Feeding Mode Start"
+    id: tank_feeding_start
     trigger:
       - platform: state
-        entity_id: input_boolean.feeding_mode
+        entity_id: input_boolean.tank_feeding_mode
         to: "on"
     action:
-      - service: input_text.set_value
-        target:
-          entity_id: input_text.previous_pwm_scale
-        data:
-          value: "{{ states('number.ledbrickplus_pwm_scale') }}"
+      - variables:
+          groups: "{{ states('input_text.tank_groups') | from_json }}"
+          tank: "{{ states('input_select.active_tank') }}"
+          units: "{{ groups.get(tank, []) }}"
       
-      - service: number.set_value
-        target:
-          entity_id: number.ledbrickplus_pwm_scale
-        data:
-          value: 30
+      # Store current brightness for each unit
+      - repeat:
+          for_each: "{{ units }}"
+          sequence:
+            - service: input_text.set_value
+              target:
+                entity_id: "input_text.{{ repeat.item }}_saved_brightness"
+              data:
+                value: "{{ states('number.' + repeat.item + '_pwm_scale') | default(100) }}"
+      
+      # Dim all units in tank group simultaneously
+      - repeat:
+          for_each: "{{ units }}"
+          sequence:
+            - service: number.set_value
+              data:
+                entity_id: "number.{{ repeat.item }}_pwm_scale"
+                value: 30
+              continue_on_error: true
       
       - service: timer.start
         target:
           entity_id: timer.feeding_timer
         data:
           duration: "00:{{ states('input_number.feeding_duration') | int }}:00"
-  
-  - alias: "LEDBrick Feeding Mode End"
-    id: ledbrick_feeding_mode_end
-    trigger:
-      - platform: event
-        event_type: timer.finished
-        event_data:
-          entity_id: timer.feeding_timer
-    action:
-      - service: number.set_value
-        target:
-          entity_id: number.ledbrickplus_pwm_scale
-        data:
-          value: "{{ states('input_text.previous_pwm_scale') | float }}"
       
-      - service: input_boolean.turn_off
-        target:
-          entity_id: input_boolean.feeding_mode
+      - service: notify.mobile_app_phone
+        data:
+          title: "🐟 Feeding Mode Active"
+          message: "{{ tank | replace('_', ' ') | title }} dimmed to 30%"
   
-  # Tank type configuration
-  - alias: "LEDBrick Configure by Tank Type"
-    id: ledbrick_tank_type_config
+  # Apply settings to all units in tank group
+  - alias: "Tank Group - Sync Settings"
+    id: tank_sync_settings
     trigger:
       - platform: state
-        entity_id: input_select.tank_type
-    action:
-      - choose:
-          # Reef configuration
-          - conditions:
-              - condition: state
-                entity_id: input_select.tank_type
-                state: "Reef"
-            sequence:
-              - service: esphome.ledbrick_plus_set_moon_base_intensity_8ch
-                data:
-                  intensity_ch1: 4.0
-                  intensity_ch2: 0.0
-                  intensity_ch3: 0.0
-                  intensity_ch4: 2.0
-                  intensity_ch5: 0.0
-                  intensity_ch6: 0.5
-                  intensity_ch7: 3.0
-                  intensity_ch8: 0.0
-          
-          # Planted configuration
-          - conditions:
-              - condition: state
-                entity_id: input_select.tank_type
-                state: "Planted"
-            sequence:
-              - service: esphome.ledbrick_plus_set_moon_base_intensity_8ch
-                data:
-                  intensity_ch1: 1.5
-                  intensity_ch2: 0.0
-                  intensity_ch3: 0.0
-                  intensity_ch4: 0.5
-                  intensity_ch5: 0.3
-                  intensity_ch6: 0.0
-                  intensity_ch7: 0.0
-                  intensity_ch8: 0.0
-  
-  # Update moon intensity when sliders change
-  - alias: "LEDBrick Update Moon Intensity"
-    id: ledbrick_update_moon
-    trigger:
-      - platform: state
-        entity_id:
+        entity_id: 
           - input_number.moon_blue_intensity
           - input_number.moon_white_intensity
+          - input_select.tank_type
     action:
-      - service: esphome.ledbrick_plus_set_moon_base_intensity_8ch
-        data:
-          intensity_ch1: "{{ states('input_number.moon_blue_intensity') | float }}"
-          intensity_ch2: 0.0
-          intensity_ch3: 0.0
-          intensity_ch4: "{{ states('input_number.moon_white_intensity') | float }}"
-          intensity_ch5: 0.0
-          intensity_ch6: 0.0
-          intensity_ch7: 0.0
-          intensity_ch8: 0.0
+      - variables:
+          groups: "{{ states('input_text.tank_groups') | from_json }}"
+          tank: "{{ states('input_select.active_tank') }}"
+          units: "{{ groups.get(tank, []) }}"
+      
+      # Apply moon settings to all units in tank
+      - repeat:
+          for_each: "{{ units }}"
+          sequence:
+            - service: "esphome.{{ repeat.item }}_set_moon_base_intensity_8ch"
+              data:
+                intensity_ch1: "{{ states('input_number.moon_blue_intensity') | float }}"
+                intensity_ch2: 0.0
+                intensity_ch3: 0.0
+                intensity_ch4: "{{ states('input_number.moon_white_intensity') | float }}"
+                intensity_ch5: 0.0
+                intensity_ch6: 0.0
+                intensity_ch7: 0.0
+                intensity_ch8: 0.0
+              continue_on_error: true
+  
+  # Sync all units when changing tank brightness
+  - alias: "Tank Group - Brightness Sync"
+    id: tank_brightness_sync
+    trigger:
+      - platform: state
+        entity_id: input_number.tank_brightness
+    action:
+      - variables:
+          groups: "{{ states('input_text.tank_groups') | from_json }}"
+          tank: "{{ states('input_select.active_tank') }}"
+          units: "{{ groups.get(tank, []) }}"
+          brightness: "{{ trigger.to_state.state | float }}"
+      
+      # Set all units to same brightness
+      - repeat:
+          for_each: "{{ units }}"
+          sequence:
+            - service: number.set_value
+              data:
+                entity_id: "number.{{ repeat.item }}_pwm_scale"
+                value: "{{ brightness }}"
+              continue_on_error: true
 
-# Essential scripts
+# Scripts for tank group control
 script:
-  ledbrick_quick_brightness:
-    alias: "Set Quick Brightness"
+  # Set schedule for entire tank group
+  tank_set_schedule_point:
+    alias: "Set Schedule - Tank Group"
+    fields:
+      time_minutes:
+        description: "Time in minutes from midnight"
+        example: 720
+      pwm_values:
+        description: "PWM values for 8 channels"
+        example: [80, 80, 40, 90, 70, 30, 20, 10]
+      current_values:
+        description: "Current values for 8 channels"
+        example: [1.6, 1.6, 0.8, 1.8, 1.4, 0.6, 0.4, 0.2]
     sequence:
-      - service: number.set_value
-        target:
-          entity_id: number.ledbrickplus_pwm_scale
-        data:
-          value: "{{ states('input_number.ledbrick_quick_brightness') | int }}"
-  
-  ledbrick_load_reef_preset:
-    alias: "Load Reef Preset"
-    sequence:
-      - service: esphome.ledbrickplus_load_preset
-        data:
-          preset_name: "dynamic_sunrise_sunset"
+      - variables:
+          groups: "{{ states('input_text.tank_groups') | from_json }}"
+          tank: "{{ states('input_select.active_tank') }}"
+          units: "{{ groups.get(tank, []) }}"
       
-      - service: input_select.select_option
-        target:
-          entity_id: input_select.tank_type
-        data:
-          option: "Reef"
+      # Apply to all units in tank
+      - repeat:
+          for_each: "{{ units }}"
+          sequence:
+            - service: "esphome.{{ repeat.item }}_set_schedule_point_8ch"
+              data:
+                time_minutes: "{{ time_minutes }}"
+                pwm_ch1: "{{ pwm_values[0] }}"
+                pwm_ch2: "{{ pwm_values[1] }}"
+                pwm_ch3: "{{ pwm_values[2] }}"
+                pwm_ch4: "{{ pwm_values[3] }}"
+                pwm_ch5: "{{ pwm_values[4] }}"
+                pwm_ch6: "{{ pwm_values[5] }}"
+                pwm_ch7: "{{ pwm_values[6] }}"
+                pwm_ch8: "{{ pwm_values[7] }}"
+                current_ch1: "{{ current_values[0] }}"
+                current_ch2: "{{ current_values[1] }}"
+                current_ch3: "{{ current_values[2] }}"
+                current_ch4: "{{ current_values[3] }}"
+                current_ch5: "{{ current_values[4] }}"
+                current_ch6: "{{ current_values[5] }}"
+                current_ch7: "{{ current_values[6] }}"
+                current_ch8: "{{ current_values[7] }}"
+              continue_on_error: true
   
-  ledbrick_emergency_off:
-    alias: "Emergency Off"
+  # Load preset for entire tank group
+  tank_load_preset:
+    alias: "Load Preset - Tank Group"
+    fields:
+      preset_name:
+        description: "Preset name"
+        example: "dynamic_sunrise_sunset"
     sequence:
-      - service: switch.turn_off
-        target:
-          entity_id: switch.ledbrickplus_scheduler_enabled
+      - variables:
+          groups: "{{ states('input_text.tank_groups') | from_json }}"
+          tank: "{{ states('input_select.active_tank') }}"
+          units: "{{ groups.get(tank, []) }}"
       
-      - service: number.set_value
-        target:
-          entity_id: number.ledbrickplus_pwm_scale
+      - repeat:
+          for_each: "{{ units }}"
+          sequence:
+            - service: "esphome.{{ repeat.item }}_load_preset"
+              data:
+                preset_name: "{{ preset_name }}"
+              continue_on_error: true
+  
+  # Enable/disable scheduler for tank group
+  tank_scheduler_control:
+    alias: "Scheduler Control - Tank Group"
+    fields:
+      enabled:
+        description: "Enable or disable"
+        example: true
+    sequence:
+      - variables:
+          groups: "{{ states('input_text.tank_groups') | from_json }}"
+          tank: "{{ states('input_select.active_tank') }}"
+          units: "{{ groups.get(tank, []) }}"
+      
+      - repeat:
+          for_each: "{{ units }}"
+          sequence:
+            - service: "switch.turn_{{ 'on' if enabled else 'off' }}"
+              data:
+                entity_id: "switch.{{ repeat.item }}_scheduler_enabled"
+              continue_on_error: true
+  
+  # Storm effect for tank group
+  tank_storm_effect:
+    alias: "Storm Effect - Tank Group"
+    sequence:
+      - variables:
+          groups: "{{ states('input_text.tank_groups') | from_json }}"
+          tank: "{{ states('input_select.active_tank') }}"
+          units: "{{ groups.get(tank, []) }}"
+      
+      - repeat:
+          count: 20
+          sequence:
+            # Create lightning effect across all units
+            - repeat:
+                for_each: "{{ units }}"
+                sequence:
+                  - service: number.set_value
+                    data:
+                      entity_id: "number.{{ repeat.item }}_pwm_scale"
+                      value: "{{ range(20, 100) | random }}"
+                    continue_on_error: true
+            
+            - delay:
+                milliseconds: "{{ range(50, 200) | random }}"
+      
+      # Return to normal
+      - repeat:
+          for_each: "{{ units }}"
+          sequence:
+            - service: number.set_value
+              data:
+                entity_id: "number.{{ repeat.item }}_pwm_scale"
+                value: 100
+              continue_on_error: true
+  
+  # Emergency shutdown all tanks
+  all_tanks_emergency:
+    alias: "Emergency Shutdown - All Tanks"
+    sequence:
+      - variables:
+          groups: "{{ states('input_text.tank_groups') | from_json }}"
+      
+      # Turn off all units in all tanks
+      - repeat:
+          for_each: "{{ groups.values() | sum(start=[]) }}"
+          sequence:
+            - service: switch.turn_off
+              data:
+                entity_id: "switch.{{ repeat.item }}_scheduler_enabled"
+              continue_on_error: true
+            
+            - service: number.set_value
+              data:
+                entity_id: "number.{{ repeat.item }}_pwm_scale"
+                value: 0
+              continue_on_error: true
+      
+      - service: persistent_notification.create
         data:
-          value: 0
+          title: "🚨 All Tanks Emergency Shutdown"
+          message: "All LEDBrick units have been shut down"
+          notification_id: ledbrick_emergency
 
-# Groups
+# Groups for organization
 group:
-  ledbrick_all_channels:
-    name: "All LEDBrick Channels"
-    entities:
-      - light.ledbrickplus_channel_1
-      - light.ledbrickplus_channel_2
-      - light.ledbrickplus_channel_3
-      - light.ledbrickplus_channel_4
-      - light.ledbrickplus_channel_5
-      - light.ledbrickplus_channel_6
-      - light.ledbrickplus_channel_7
-      - light.ledbrickplus_channel_8
-  
-  ledbrick_controls:
-    name: "LEDBrick Controls"
-    entities:
-      - switch.ledbrickplus_scheduler_enabled
-      - switch.ledbrickplus_moon_simulation_enabled
-      - number.ledbrickplus_pwm_scale
-      - input_select.lighting_mode
-      - input_select.power_mode
+  display_tank_units:
+    name: "Display Tank LEDBricks"
+    entities: []  # Populated dynamically based on tank_groups
+    
+  frag_tank_units:
+    name: "Frag Tank LEDBricks"
+    entities: []  # Populated dynamically based on tank_groups
+    
+  all_ledbrick_units:
+    name: "All LEDBrick Units"
+    entities: []  # Populated dynamically based on tank_groups
