@@ -81,10 +81,10 @@ text_sensor:
   - platform: template
     name: "Ch${channel_number} Color"
     id: ch${channel_number}_color
+    icon: "mdi:palette"
     lambda: |-
       return id(main_scheduler).get_channel_color(${channel_number} - 1);
     update_interval: 300s  # Longer interval since we update via events
-    entity_category: config
     on_value:
       then:
         - lambda: |-

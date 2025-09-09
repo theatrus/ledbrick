@@ -64,7 +64,6 @@ void LEDBrickScheduler::update() {
   
   // Log current interpolated values every 10 seconds (reduce log spam)
   static uint32_t last_log_time = 0;
-  static uint32_t last_color_update = 0;
   uint32_t current_millis = millis();
   if (current_millis - last_log_time > 10000) {
     uint16_t current_time = get_current_time_minutes();
@@ -73,12 +72,6 @@ void LEDBrickScheduler::update() {
              values.pwm_values.size() > 0 ? values.pwm_values[0] : 0.0f,
              values.current_values.size() > 0 ? values.current_values[0] : 0.0f);
     last_log_time = current_millis;
-  }
-  
-  // Update color sensors every 60 seconds
-  if (current_millis - last_color_update > 60000) {
-    update_color_sensors();
-    last_color_update = current_millis;
   }
 }
 
@@ -658,13 +651,21 @@ void LEDBrickScheduler::add_color_text_sensor(uint8_t channel, text_sensor::Text
 }
 
 void LEDBrickScheduler::update_color_sensors() {
+  static std::map<uint8_t, std::string> last_colors_;
+  
   for (auto& pair : color_text_sensors_) {
     uint8_t channel = pair.first;
     text_sensor::TextSensor* sensor = pair.second;
     if (sensor) {
       std::string color = scheduler_.get_channel_color(channel);
-      sensor->publish_state(color);
-      ESP_LOGD(TAG, "Updated color sensor for channel %u: %s", channel, color.c_str());
+      
+      // Only update if color has changed
+      auto last_it = last_colors_.find(channel);
+      if (last_it == last_colors_.end() || last_it->second != color) {
+        sensor->publish_state(color);
+        last_colors_[channel] = color;
+        ESP_LOGD(TAG, "Updated color sensor for channel %u: %s", channel, color.c_str());
+      }
     }
   }
 }

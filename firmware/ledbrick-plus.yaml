@@ -19,6 +19,13 @@ esphome:
             id(main_scheduler).add_color_text_sensor(7, id(ch8_color));
             ESP_LOGI("main", "Color text sensors registered with scheduler");
             
+            // Force initial color sensor updates
+            for (int i = 0; i < 8; i++) {
+              std::string color = id(main_scheduler).get_channel_color(i);
+              ESP_LOGI("main", "Initial color for channel %d: %s", i, color.c_str());
+            }
+            id(main_scheduler).update_color_sensors();
+            
             // Register all light entities with the scheduler
             id(main_scheduler).add_light(0, id(lpwm1));
             id(main_scheduler).add_light(1, id(lpwm2));
