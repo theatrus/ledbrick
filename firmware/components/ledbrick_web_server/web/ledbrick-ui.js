@@ -583,54 +583,194 @@ async function updatePWMScale(value) {
     }
 }
 
+// Track last status to avoid unnecessary updates
+let lastStatus = {};
+
 async function updateStatus() {
     try {
         const status = await ledbrickAPI.getStatus();
         
-        // Update all status fields
-        document.getElementById('schedulerStatus').textContent = 
-            'Scheduler: ' + (status.enabled ? 'ON' : 'OFF');
-        document.getElementById('schedulerStatus').className = 
-            'scheduler-status ' + (status.enabled ? 'enabled' : 'disabled');
+        // Only update elements when values actually change
         
-        document.getElementById('currentTime').textContent = 
-            'Time: ' + (status.time_formatted || '--:--');
-        
-        document.getElementById('schedulePoints').textContent = 
-            (status.schedule_points || '0') + ' points';
-        
-        // Update PWM scale
-        const pwmScale = status.pwm_scale * 100;
-        document.getElementById('pwmScale').value = pwmScale;
-        document.getElementById('pwmScaleValue').textContent = pwmScale + '%';
-        
-        // Update location if provided
-        if (status.latitude !== undefined && status.longitude !== undefined) {
-            document.getElementById('latitude').value = status.latitude;
-            document.getElementById('longitude').value = status.longitude;
+        // Scheduler status
+        const schedulerText = 'Scheduler: ' + (status.enabled ? 'ON' : 'OFF');
+        const schedulerElement = document.getElementById('schedulerStatus');
+        if (schedulerElement.textContent !== schedulerText) {
+            schedulerElement.textContent = schedulerText;
+            schedulerElement.className = 'scheduler-status ' + (status.enabled ? 'enabled' : 'disabled');
         }
         
-        // Update time shift settings if provided
-        if (status.astronomical_projection !== undefined) {
-            document.getElementById('astronomicalProjection').checked = status.astronomical_projection;
+        // Current time
+        const timeText = 'Time: ' + (status.time_formatted || '--:--');
+        const timeElement = document.getElementById('currentTime');
+        if (timeElement.textContent !== timeText) {
+            timeElement.textContent = timeText;
+        }
+        
+        // Schedule points count
+        const pointsText = (status.schedule_points || '0') + ' points';
+        const pointsElement = document.getElementById('schedulePoints');
+        if (pointsElement.textContent !== pointsText) {
+            pointsElement.textContent = pointsText;
+        }
+        
+        // PWM scale - only update if not currently being edited
+        const pwmScale = Math.round(status.pwm_scale * 100);
+        const pwmSlider = document.getElementById('pwmScale');
+        const pwmValue = document.getElementById('pwmScaleValue');
+        if (pwmSlider && !pwmSlider.matches(':focus') && Math.abs(parseInt(pwmSlider.value) - pwmScale) > 0) {
+            pwmSlider.value = pwmScale;
+            pwmValue.textContent = pwmScale + '%';
+        }
+        
+        // Location - only update if not currently being edited
+        const latInput = document.getElementById('latitude');
+        const lonInput = document.getElementById('longitude');
+        if (status.latitude !== undefined && latInput && !latInput.matches(':focus')) {
+            if (Math.abs(parseFloat(latInput.value) - status.latitude) > 0.0001) {
+                latInput.value = status.latitude.toFixed(4);
+            }
+        }
+        if (status.longitude !== undefined && lonInput && !lonInput.matches(':focus')) {
+            if (Math.abs(parseFloat(lonInput.value) - status.longitude) > 0.0001) {
+                lonInput.value = status.longitude.toFixed(4);
+            }
+        }
+        
+        // Time shift settings - only update if not being edited
+        const astroProjection = document.getElementById('astronomicalProjection');
+        if (status.astronomical_projection !== undefined && astroProjection && 
+            astroProjection.checked !== status.astronomical_projection) {
+            astroProjection.checked = status.astronomical_projection;
             updateTimeShiftUI();
         }
-        if (status.time_shift_hours !== undefined) {
-            document.getElementById('timeShiftHours').value = status.time_shift_hours;
-        }
-        if (status.time_shift_minutes !== undefined) {
-            document.getElementById('timeShiftMinutes').value = status.time_shift_minutes;
+        
+        const hoursInput = document.getElementById('timeShiftHours');
+        if (status.time_shift_hours !== undefined && hoursInput && !hoursInput.matches(':focus')) {
+            if (parseInt(hoursInput.value) !== status.time_shift_hours) {
+                hoursInput.value = status.time_shift_hours;
+            }
         }
         
-        // Update toggle button
-        const toggleBtn = document.getElementById('toggleScheduler');
-        toggleBtn.innerHTML = `
-            <span class="icon">${status.enabled ? '⏸️' : '▶️'}</span>
-            <span>${status.enabled ? 'Disable' : 'Enable'} Scheduler</span>
-        `;
+        const minutesInput = document.getElementById('timeShiftMinutes');
+        if (status.time_shift_minutes !== undefined && minutesInput && !minutesInput.matches(':focus')) {
+            if (parseInt(minutesInput.value) !== status.time_shift_minutes) {
+                minutesInput.value = status.time_shift_minutes;
+            }
+        }
+        
+        // Update toggle button only if enabled state changed
+        if (lastStatus.enabled !== status.enabled) {
+            const toggleBtn = document.getElementById('toggleScheduler');
+            if (toggleBtn) {
+                toggleBtn.innerHTML = `
+                    <span class="icon">${status.enabled ? '⏸️' : '▶️'}</span>
+                    <span>${status.enabled ? 'Disable' : 'Enable'} Scheduler</span>
+                `;
+            }
+        }
+        
+        // Update current channel values display
+        updateCurrentChannelValues(status.channels);
+        
+        // Update chart with current time line
+        updateChartCurrentTimeLine(status.time_minutes);
+        
+        // Store current status for next comparison
+        lastStatus = { ...status };
         
     } catch (error) {
         console.error('Failed to update status:', error);
+    }
+}
+
+// Update current channel values display
+function updateCurrentChannelValues(channels) {
+    if (!channels || !Array.isArray(channels)) return;
+    
+    // Update current values display or create if it doesn't exist
+    let currentValuesContainer = document.getElementById('currentChannelValues');
+    if (!currentValuesContainer) {
+        // Create current values display in the status bar
+        const statusBar = document.querySelector('.status-bar');
+        if (statusBar) {
+            currentValuesContainer = document.createElement('div');
+            currentValuesContainer.id = 'currentChannelValues';
+            currentValuesContainer.className = 'current-values';
+            statusBar.appendChild(currentValuesContainer);
+        } else {
+            return;
+        }
+    }
+    
+    // Update or create channel value displays
+    channels.forEach((channel, index) => {
+        let channelDisplay = document.getElementById(`currentCh${channel.id}`);
+        if (!channelDisplay) {
+            channelDisplay = document.createElement('div');
+            channelDisplay.id = `currentCh${channel.id}`;
+            channelDisplay.className = 'channel-current';
+            currentValuesContainer.appendChild(channelDisplay);
+        }
+        
+        const pwmPercent = Math.round(channel.pwm || 0);
+        const currentAmps = (channel.current || 0).toFixed(2);
+        const color = channelColors[index] || '#FFFFFF';
+        
+        channelDisplay.innerHTML = `
+            <span class="channel-label" style="color: ${color}">Ch${channel.id}:</span>
+            <span class="channel-value">${pwmPercent}% (${currentAmps}A)</span>
+        `;
+        channelDisplay.style.borderLeft = `3px solid ${color}`;
+    });
+}
+
+// Update chart with current time vertical line using a dataset
+function updateChartCurrentTimeLine(currentTimeMinutes) {
+    if (!scheduleChart || currentTimeMinutes === undefined) return;
+    
+    // Convert minutes to time string
+    const hours = Math.floor(currentTimeMinutes / 60);
+    const minutes = currentTimeMinutes % 60;
+    const currentTimeStr = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+    
+    // Find or create the "now" line dataset
+    let nowDatasetIndex = scheduleChart.data.datasets.findIndex(ds => ds.id === 'currentTime');
+    
+    if (nowDatasetIndex === -1) {
+        // Create a new "now" line dataset
+        const nowDataset = {
+            id: 'currentTime',
+            label: 'Current Time',
+            data: [
+                { x: currentTimeStr, y: 0 },
+                { x: currentTimeStr, y: 100 }
+            ],
+            borderColor: 'rgba(255, 0, 0, 0.8)',
+            backgroundColor: 'rgba(255, 0, 0, 0.1)',
+            borderWidth: 3,
+            pointRadius: 0,
+            pointHoverRadius: 0,
+            tension: 0,
+            fill: false,
+            spanGaps: false,
+            showLine: true,
+            borderDash: [5, 5],
+            hidden: false
+        };
+        scheduleChart.data.datasets.push(nowDataset);
+        nowDatasetIndex = scheduleChart.data.datasets.length - 1;
+    } else {
+        // Update existing dataset
+        scheduleChart.data.datasets[nowDatasetIndex].data = [
+            { x: currentTimeStr, y: 0 },
+            { x: currentTimeStr, y: 100 }
+        ];
+    }
+    
+    // Only update the chart if it's not being actively modified
+    if (!document.querySelector('.chart-container:hover')) {
+        scheduleChart.update('none'); // Use 'none' mode for performance
     }
 }
 
