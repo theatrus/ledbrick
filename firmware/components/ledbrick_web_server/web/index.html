@@ -176,6 +176,88 @@
             </div>
         </section>
 
+        <!-- Moon Simulation -->
+        <section class="card">
+            <h2>Moon Simulation</h2>
+            <p class="help-text">Configure moonlight simulation for nighttime periods when all channels are dark.</p>
+            
+            <div class="form-row">
+                <label>
+                    <input type="checkbox" id="moonSimulationEnabled" onchange="updateMoonSimulationUI()">
+                    Enable Moon Simulation
+                </label>
+            </div>
+            
+            <div id="moonSimulationControls" style="display: none;">
+                <div class="form-row">
+                    <label>
+                        <input type="checkbox" id="moonPhaseScaling" checked>
+                        Scale intensity by moon phase
+                    </label>
+                </div>
+                
+                <h4>Moon Base Intensity (per channel):</h4>
+                <div class="moon-intensity-controls">
+                    <div class="channel-input" data-channel="1">
+                        <label>Ch1:</label>
+                        <input type="range" id="moonCh1" min="0" max="20" step="0.1" value="2">
+                        <input type="number" id="moonCh1Value" min="0" max="20" step="0.1" value="2">
+                        <span class="unit">%</span>
+                    </div>
+                    <div class="channel-input" data-channel="2">
+                        <label>Ch2:</label>
+                        <input type="range" id="moonCh2" min="0" max="20" step="0.1" value="2">
+                        <input type="number" id="moonCh2Value" min="0" max="20" step="0.1" value="2">
+                        <span class="unit">%</span>
+                    </div>
+                    <div class="channel-input" data-channel="3">
+                        <label>Ch3:</label>
+                        <input type="range" id="moonCh3" min="0" max="20" step="0.1" value="2">
+                        <input type="number" id="moonCh3Value" min="0" max="20" step="0.1" value="2">
+                        <span class="unit">%</span>
+                    </div>
+                    <div class="channel-input" data-channel="4">
+                        <label>Ch4:</label>
+                        <input type="range" id="moonCh4" min="0" max="20" step="0.1" value="2">
+                        <input type="number" id="moonCh4Value" min="0" max="20" step="0.1" value="2">
+                        <span class="unit">%</span>
+                    </div>
+                    <div class="channel-input" data-channel="5">
+                        <label>Ch5:</label>
+                        <input type="range" id="moonCh5" min="0" max="20" step="0.1" value="2">
+                        <input type="number" id="moonCh5Value" min="0" max="20" step="0.1" value="2">
+                        <span class="unit">%</span>
+                    </div>
+                    <div class="channel-input" data-channel="6">
+                        <label>Ch6:</label>
+                        <input type="range" id="moonCh6" min="0" max="20" step="0.1" value="2">
+                        <input type="number" id="moonCh6Value" min="0" max="20" step="0.1" value="2">
+                        <span class="unit">%</span>
+                    </div>
+                    <div class="channel-input" data-channel="7">
+                        <label>Ch7:</label>
+                        <input type="range" id="moonCh7" min="0" max="20" step="0.1" value="2">
+                        <input type="number" id="moonCh7Value" min="0" max="20" step="0.1" value="2">
+                        <span class="unit">%</span>
+                    </div>
+                    <div class="channel-input" data-channel="8">
+                        <label>Ch8:</label>
+                        <input type="range" id="moonCh8" min="0" max="20" step="0.1" value="2">
+                        <input type="number" id="moonCh8Value" min="0" max="20" step="0.1" value="2">
+                        <span class="unit">%</span>
+                    </div>
+                </div>
+                
+                <div class="button-row">
+                    <button onclick="setAllMoonChannels(0)" class="button secondary">🌑 All Off</button>
+                    <button onclick="setAllMoonChannels(2)" class="button secondary">🌘 Dim</button>
+                    <button onclick="setAllMoonChannels(5)" class="button secondary">🌕 Bright</button>
+                </div>
+            </div>
+            
+            <button onclick="saveMoonSimulation()" class="button primary">🌙 Save Moon Settings</button>
+        </section>
+
         <!-- Channel Configuration -->
         <section class="card">
             <h2>Channel Configuration</h2>

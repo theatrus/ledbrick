@@ -144,6 +144,14 @@ void LEDBrickWebServer::setup() {
   };
   httpd_register_uri_handler(this->server_, &api_time_shift);
   
+  httpd_uri_t api_moon_simulation = {
+    .uri = "/api/moon_simulation",
+    .method = HTTP_POST,
+    .handler = handle_api_moon_simulation_post,
+    .user_ctx = this
+  };
+  httpd_register_uri_handler(this->server_, &api_moon_simulation);
+  
   // ESPHome-compatible endpoints for scheduler control
   httpd_uri_t scheduler_enable_on = {
     .uri = "/switch/web_scheduler_enable/turn_on",
@@ -387,12 +395,21 @@ esp_err_t LEDBrickWebServer::handle_api_status_get(httpd_req_t *req) {
   doc["time_minutes"] = self->scheduler_->get_current_time_minutes();
   doc["schedule_points"] = self->scheduler_->get_schedule_size();
   doc["pwm_scale"] = self->scheduler_->get_pwm_scale();
-  doc["moon_simulation"] = self->scheduler_->is_moon_simulation_enabled();
   doc["latitude"] = self->scheduler_->get_latitude();
   doc["longitude"] = self->scheduler_->get_longitude();
   doc["astronomical_projection"] = self->scheduler_->is_astronomical_projection_enabled();
   doc["time_shift_hours"] = self->scheduler_->get_time_shift_hours();
   doc["time_shift_minutes"] = self->scheduler_->get_time_shift_minutes();
+  
+  // Add moon simulation data
+  auto moon_config = self->scheduler_->get_moon_simulation();
+  JsonObject moon_obj = doc["moon_simulation"].to<JsonObject>();
+  moon_obj["enabled"] = moon_config.enabled;
+  moon_obj["phase_scaling"] = moon_config.phase_scaling;
+  JsonArray moon_intensity = moon_obj["base_intensity"].to<JsonArray>();
+  for (float intensity : moon_config.base_intensity) {
+    moon_intensity.add(intensity);
+  }
   
   // Add current channel values
   JsonArray channels = doc["channels"].to<JsonArray>();
@@ -707,6 +724,85 @@ esp_err_t LEDBrickWebServer::handle_api_time_shift_post(httpd_req_t *req) {
   response_doc["time_shift_hours"] = time_shift_hours;
   response_doc["time_shift_minutes"] = time_shift_minutes;
   response_doc["message"] = "Time shift settings updated";
+  
+  self->send_json_response(req, 200, response_doc);
+  return ESP_OK;
+}
+
+esp_err_t LEDBrickWebServer::handle_api_moon_simulation_post(httpd_req_t *req) {
+  auto *self = get_instance(req);
+  if (!self->check_auth(req)) return ESP_OK;
+  
+  // Read the request body
+  char *buf = (char *)malloc(req->content_len + 1);
+  if (!buf) {
+    self->send_error(req, 500, "Out of memory");
+    return ESP_OK;
+  }
+  
+  int ret = httpd_req_recv(req, buf, req->content_len);
+  if (ret <= 0) {
+    free(buf);
+    self->send_error(req, 400, "Failed to read request body");
+    return ESP_OK;
+  }
+  buf[ret] = '\0';
+  
+  // Parse JSON
+  JsonDocument doc;
+  DeserializationError error = deserializeJson(doc, buf);
+  free(buf);
+  
+  if (error) {
+    self->send_error(req, 400, "Invalid JSON");
+    return ESP_OK;
+  }
+  
+  // Extract moon simulation settings
+  bool enabled = doc["enabled"] | false;
+  bool phase_scaling = doc["phase_scaling"] | true;
+  
+  // Extract base_intensity array
+  std::vector<float> base_intensity(8, 0.0f);
+  if (doc["base_intensity"].is<JsonArray>()) {
+    JsonArray intensity_array = doc["base_intensity"];
+    size_t i = 0;
+    for (JsonVariant v : intensity_array) {
+      if (i < 8) {
+        float intensity = v.as<float>();
+        // Validate intensity range (0-20%)
+        if (intensity < 0.0f) intensity = 0.0f;
+        if (intensity > 20.0f) intensity = 20.0f;
+        base_intensity[i++] = intensity;
+      }
+    }
+  }
+  
+  // Create moon simulation configuration
+  LEDScheduler::MoonSimulation moon_config;
+  moon_config.enabled = enabled;
+  moon_config.phase_scaling = phase_scaling;
+  moon_config.base_intensity = base_intensity;
+  
+  // Update the scheduler settings (auto-saves)
+  self->scheduler_->set_moon_simulation(moon_config);
+  
+  ESP_LOGI(TAG, "Updated moon simulation: enabled=%s, phase_scaling=%s", 
+           enabled ? "true" : "false",
+           phase_scaling ? "true" : "false");
+  
+  JsonDocument response_doc;
+  response_doc["success"] = true;
+  response_doc["enabled"] = enabled;
+  response_doc["phase_scaling"] = phase_scaling;
+  
+  // Add base_intensity to response
+  JsonArray intensity_array = response_doc["base_intensity"].to<JsonArray>();
+  for (float intensity : base_intensity) {
+    intensity_array.add(intensity);
+  }
+  
+  response_doc["message"] = "Moon simulation settings updated";
   
   self->send_json_response(req, 200, response_doc);
   return ESP_OK;

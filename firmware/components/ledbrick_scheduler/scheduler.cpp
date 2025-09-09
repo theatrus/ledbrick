@@ -1000,6 +1000,25 @@ std::string LEDScheduler::export_json() const {
         cJSON_AddItemToArray(points_array, point_obj);
     }
     
+    // Add moon simulation configuration
+    cJSON* moon_obj = cJSON_CreateObject();
+    if (moon_obj) {
+        cJSON_AddBoolToObject(moon_obj, "enabled", moon_simulation_.enabled);
+        cJSON_AddBoolToObject(moon_obj, "phase_scaling", moon_simulation_.phase_scaling);
+        
+        // Add base_intensity array
+        cJSON* intensity_array = cJSON_CreateArray();
+        if (intensity_array) {
+            for (float intensity : moon_simulation_.base_intensity) {
+                cJSON* number = cJSON_CreateNumber(intensity);
+                if (number) cJSON_AddItemToArray(intensity_array, number);
+            }
+            cJSON_AddItemToObject(moon_obj, "base_intensity", intensity_array);
+        }
+        
+        cJSON_AddItemToObject(root, "moon_simulation", moon_obj);
+    }
+    
     // Convert to string with formatting
     char* json_str = cJSON_Print(root);
     if (!json_str) return "{}";
@@ -1095,6 +1114,25 @@ std::string LEDScheduler::export_json_minified() const {
         
         // Add point to array
         cJSON_AddItemToArray(points_array, point_obj);
+    }
+    
+    // Add moon simulation configuration
+    cJSON* moon_obj = cJSON_CreateObject();
+    if (moon_obj) {
+        cJSON_AddBoolToObject(moon_obj, "enabled", moon_simulation_.enabled);
+        cJSON_AddBoolToObject(moon_obj, "phase_scaling", moon_simulation_.phase_scaling);
+        
+        // Add base_intensity array
+        cJSON* intensity_array = cJSON_CreateArray();
+        if (intensity_array) {
+            for (float intensity : moon_simulation_.base_intensity) {
+                cJSON* number = cJSON_CreateNumber(intensity);
+                if (number) cJSON_AddItemToArray(intensity_array, number);
+            }
+            cJSON_AddItemToObject(moon_obj, "base_intensity", intensity_array);
+        }
+        
+        cJSON_AddItemToObject(root, "moon_simulation", moon_obj);
     }
     
     // Convert to string WITHOUT formatting (minified)
@@ -1223,6 +1261,39 @@ bool LEDScheduler::import_json(const std::string& json_str) {
                 add_dynamic_schedule_point(time_type, offset_minutes, pwm_values, current_values);
             }
         }
+    }
+    
+    // Parse moon simulation configuration
+    cJSON* moon_obj = cJSON_GetObjectItem(root, "moon_simulation");
+    if (cJSON_IsObject(moon_obj)) {
+        MoonSimulation moon_config;
+        
+        // Parse enabled
+        cJSON* enabled_item = cJSON_GetObjectItem(moon_obj, "enabled");
+        if (cJSON_IsBool(enabled_item)) {
+            moon_config.enabled = cJSON_IsTrue(enabled_item);
+        }
+        
+        // Parse phase_scaling
+        cJSON* phase_scaling_item = cJSON_GetObjectItem(moon_obj, "phase_scaling");
+        if (cJSON_IsBool(phase_scaling_item)) {
+            moon_config.phase_scaling = cJSON_IsTrue(phase_scaling_item);
+        }
+        
+        // Parse base_intensity array
+        cJSON* intensity_array = cJSON_GetObjectItem(moon_obj, "base_intensity");
+        if (cJSON_IsArray(intensity_array)) {
+            moon_config.base_intensity.clear();
+            cJSON* intensity_item = NULL;
+            cJSON_ArrayForEach(intensity_item, intensity_array) {
+                if (cJSON_IsNumber(intensity_item)) {
+                    moon_config.base_intensity.push_back(static_cast<float>(intensity_item->valuedouble));
+                }
+            }
+        }
+        
+        // Apply moon simulation configuration
+        set_moon_simulation(moon_config);
     }
     
     return !schedule_points_.empty();

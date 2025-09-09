@@ -676,6 +676,9 @@ async function updateStatus() {
         // Update chart with current time line
         updateChartCurrentTimeLine(status.time_minutes);
         
+        // Update moon simulation settings if provided
+        updateMoonSimulationFromStatus(status);
+        
         // Store current status for next comparison
         lastStatus = { ...status };
         
@@ -853,6 +856,84 @@ async function saveTimeShift() {
     }
 }
 
+// Update moon simulation UI from status
+function updateMoonSimulationFromStatus(status) {
+    if (!status.moon_simulation) return;
+    
+    const moonSim = status.moon_simulation;
+    const enabledCheckbox = document.getElementById('moonSimulationEnabled');
+    const phaseScalingCheckbox = document.getElementById('moonPhaseScaling');
+    
+    // Update enabled state - only if not being edited
+    if (enabledCheckbox && !enabledCheckbox.matches(':focus')) {
+        if (enabledCheckbox.checked !== moonSim.enabled) {
+            enabledCheckbox.checked = moonSim.enabled;
+            updateMoonSimulationUI();
+        }
+    }
+    
+    // Update phase scaling - only if not being edited  
+    if (phaseScalingCheckbox && !phaseScalingCheckbox.matches(':focus')) {
+        if (phaseScalingCheckbox.checked !== moonSim.phase_scaling) {
+            phaseScalingCheckbox.checked = moonSim.phase_scaling;
+        }
+    }
+    
+    // Update base intensity values - only if not being edited
+    if (moonSim.base_intensity && Array.isArray(moonSim.base_intensity)) {
+        for (let i = 0; i < Math.min(moonSim.base_intensity.length, 8); i++) {
+            const slider = document.getElementById(`moonCh${i+1}`);
+            const input = document.getElementById(`moonCh${i+1}Value`);
+            
+            if (slider && input && !slider.matches(':focus') && !input.matches(':focus')) {
+                const value = moonSim.base_intensity[i].toFixed(1);
+                if (Math.abs(parseFloat(slider.value) - parseFloat(value)) > 0.05) {
+                    slider.value = value;
+                    input.value = value;
+                }
+            }
+        }
+    }
+}
+
+// Moon simulation functions
+function updateMoonSimulationUI() {
+    const enabled = document.getElementById('moonSimulationEnabled').checked;
+    document.getElementById('moonSimulationControls').style.display = enabled ? 'block' : 'none';
+}
+
+function setAllMoonChannels(value) {
+    for (let i = 1; i <= 8; i++) {
+        document.getElementById(`moonCh${i}`).value = value;
+        document.getElementById(`moonCh${i}Value`).value = value;
+    }
+}
+
+async function saveMoonSimulation() {
+    const enabled = document.getElementById('moonSimulationEnabled').checked;
+    const phaseScaling = document.getElementById('moonPhaseScaling').checked;
+    
+    // Collect base intensity values
+    const baseIntensity = [];
+    for (let i = 1; i <= 8; i++) {
+        const value = parseFloat(document.getElementById(`moonCh${i}Value`).value) || 0;
+        baseIntensity.push(value);
+    }
+    
+    const moonConfig = {
+        enabled: enabled,
+        phase_scaling: phaseScaling,
+        base_intensity: baseIntensity
+    };
+    
+    try {
+        const response = await ledbrickAPI.request('POST', '/api/moon_simulation', moonConfig);
+        showStatus('Moon simulation settings saved successfully', 'success');
+    } catch (error) {
+        showStatus('Failed to save moon simulation settings: ' + error.error, 'error');
+    }
+}
+
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
     initializeChart();
@@ -876,6 +957,20 @@ document.addEventListener('DOMContentLoaded', function() {
         rangeInput.addEventListener('input', function() {
             numberInput.value = this.value;
         });
+        
+        // Set up moon simulation input synchronization
+        const moonNumberInput = document.getElementById(`moonCh${i}Value`);
+        const moonRangeInput = document.getElementById(`moonCh${i}`);
+        
+        if (moonNumberInput && moonRangeInput) {
+            moonNumberInput.addEventListener('input', function() {
+                moonRangeInput.value = this.value;
+            });
+            
+            moonRangeInput.addEventListener('input', function() {
+                moonNumberInput.value = this.value;
+            });
+        }
     }
     
     // Automatically load schedule on page load

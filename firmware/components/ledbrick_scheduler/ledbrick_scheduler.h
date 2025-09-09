@@ -75,17 +75,18 @@ class LEDBrickScheduler : public PollingComponent {
   void set_pwm_scale(float scale);
   float get_pwm_scale() const { return pwm_scale_; }
   
-  // Moon simulation
-  void enable_moon_simulation(bool enabled) { scheduler_.enable_moon_simulation(enabled); }
-  void set_moon_base_intensity(const std::vector<float>& intensity) { scheduler_.set_moon_base_intensity(intensity); }
-  void set_moon_simulation(const LEDScheduler::MoonSimulation& config) { scheduler_.set_moon_simulation(config); }
+  // Moon simulation - with auto-save
+  void enable_moon_simulation(bool enabled);
+  void set_moon_base_intensity(const std::vector<float>& intensity);
+  void set_moon_simulation(const LEDScheduler::MoonSimulation& config);
   bool is_moon_simulation_enabled() const { return scheduler_.get_moon_simulation().enabled; }
+  LEDScheduler::MoonSimulation get_moon_simulation() const { return scheduler_.get_moon_simulation(); }
   
   // Channel configuration
   void set_channel_config(uint8_t channel, const LEDScheduler::ChannelConfig& config) { scheduler_.set_channel_config(channel, config); }
   LEDScheduler::ChannelConfig get_channel_config(uint8_t channel) const { return scheduler_.get_channel_config(channel); }
   void set_channel_color(uint8_t channel, const std::string& rgb_hex) { scheduler_.set_channel_color(channel, rgb_hex); }
-  void set_channel_max_current(uint8_t channel, float max_current) { scheduler_.set_channel_max_current(channel, max_current); }
+  void set_channel_max_current(uint8_t channel, float max_current);
   std::string get_channel_color(uint8_t channel) const { return scheduler_.get_channel_color(channel); }
   float get_channel_max_current(uint8_t channel) const { return scheduler_.get_channel_max_current(channel); }
   

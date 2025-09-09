@@ -68,6 +68,35 @@ header h1 {
     color: #666;
 }
 
+/* Moon simulation controls */
+.moon-intensity-controls {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin: 15px 0;
+}
+
+.moon-intensity-controls .channel-input {
+    background: rgba(0, 0, 0, 0.02);
+    padding: 10px;
+    border-radius: 6px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.moon-intensity-controls .channel-input label {
+    font-weight: 600;
+    color: #555;
+    margin-bottom: 5px;
+    display: block;
+}
+
+.button-row {
+    display: flex;
+    gap: 10px;
+    margin: 15px 0;
+    justify-content: center;
+}
+
 .status-indicator {
     display: inline-flex;
     align-items: center;

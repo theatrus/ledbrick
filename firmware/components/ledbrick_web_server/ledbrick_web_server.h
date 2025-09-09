@@ -47,6 +47,7 @@ class LEDBrickWebServer : public Component {
   static esp_err_t handle_api_point_post(httpd_req_t *req);
   static esp_err_t handle_api_location_post(httpd_req_t *req);
   static esp_err_t handle_api_time_shift_post(httpd_req_t *req);
+  static esp_err_t handle_api_moon_simulation_post(httpd_req_t *req);
   static esp_err_t handle_scheduler_enable(httpd_req_t *req);
   static esp_err_t handle_scheduler_disable(httpd_req_t *req);
   static esp_err_t handle_scheduler_state(httpd_req_t *req);

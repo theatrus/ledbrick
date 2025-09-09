@@ -607,6 +607,81 @@ void LEDBrickScheduler::set_time_shift(int hours, int minutes) {
   ESP_LOGI(TAG, "Time shift updated to %+d:%02d and saved", hours, abs(minutes));
 }
 
+void LEDBrickScheduler::set_channel_max_current(uint8_t channel, float max_current) {
+  // Check if value actually changed
+  float current_max = scheduler_.get_channel_max_current(channel);
+  if (abs(current_max - max_current) < 0.01f) {
+    return;  // No change, skip save
+  }
+  
+  scheduler_.set_channel_max_current(channel, max_current);
+  
+  // Save to persistent storage (scheduler JSON)
+  save_schedule_to_flash();
+  ESP_LOGI(TAG, "Channel %u max current updated to %.2fA and saved", channel, max_current);
+}
+
+void LEDBrickScheduler::enable_moon_simulation(bool enabled) {
+  // Check if value actually changed
+  if (scheduler_.get_moon_simulation().enabled == enabled) {
+    return;  // No change, skip save
+  }
+  
+  scheduler_.enable_moon_simulation(enabled);
+  
+  // Save to persistent storage (scheduler JSON)
+  save_schedule_to_flash();
+  ESP_LOGI(TAG, "Moon simulation %s and saved", enabled ? "enabled" : "disabled");
+}
+
+void LEDBrickScheduler::set_moon_base_intensity(const std::vector<float>& intensity) {
+  // Check if values actually changed
+  auto current_moon = scheduler_.get_moon_simulation();
+  if (current_moon.base_intensity.size() == intensity.size()) {
+    bool changed = false;
+    for (size_t i = 0; i < intensity.size(); i++) {
+      if (abs(current_moon.base_intensity[i] - intensity[i]) > 0.01f) {
+        changed = true;
+        break;
+      }
+    }
+    if (!changed) {
+      return;  // No change, skip save
+    }
+  }
+  
+  scheduler_.set_moon_base_intensity(intensity);
+  
+  // Save to persistent storage (scheduler JSON)
+  save_schedule_to_flash();
+  ESP_LOGI(TAG, "Moon base intensity updated and saved");
+}
+
+void LEDBrickScheduler::set_moon_simulation(const LEDScheduler::MoonSimulation& config) {
+  // Check if values actually changed  
+  auto current_moon = scheduler_.get_moon_simulation();
+  if (current_moon.enabled == config.enabled && 
+      current_moon.phase_scaling == config.phase_scaling &&
+      current_moon.base_intensity.size() == config.base_intensity.size()) {
+    bool changed = false;
+    for (size_t i = 0; i < config.base_intensity.size(); i++) {
+      if (abs(current_moon.base_intensity[i] - config.base_intensity[i]) > 0.01f) {
+        changed = true;
+        break;
+      }
+    }
+    if (!changed) {
+      return;  // No change, skip save
+    }
+  }
+  
+  scheduler_.set_moon_simulation(config);
+  
+  // Save to persistent storage (scheduler JSON)
+  save_schedule_to_flash();
+  ESP_LOGI(TAG, "Moon simulation configuration updated and saved");
+}
+
 void LEDBrickScheduler::update_astronomical_times_for_scheduler() {
   static uint32_t last_astro_update = 0;
   uint32_t current_millis = millis();

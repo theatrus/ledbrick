@@ -69,6 +69,12 @@ number:
     restore_value: true
     initial_value: 1.0
     entity_category: config
+    on_value:
+      then:
+        - lambda: |-
+            if (id(main_scheduler) != nullptr) {
+              id(main_scheduler)->set_channel_max_current(${channel_number} - 1, x);
+            }
 
 # Channel color configuration
 text_sensor:
