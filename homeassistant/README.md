@@ -7,20 +7,19 @@ This directory contains a comprehensive Home Assistant configuration demonstrati
 ```
 homeassistant/
 ├── README.md                  # This file
-├── configuration.yaml         # Main HA configuration snippet
+├── ledbrick_package.yaml      # Complete all-in-one package (RECOMMENDED)
 ├── dashboards/
 │   ├── main_dashboard.yaml    # Primary control dashboard
 │   ├── schedule_editor.yaml   # Schedule point editor
-│   └── monitoring.yaml        # Real-time monitoring
+│   ├── monitoring.yaml        # Real-time monitoring
+│   └── simple_card.yaml       # Simple card for quick setup
 ├── automations/
 │   ├── feeding_modes.yaml     # Feeding and maintenance automations
 │   ├── seasonal.yaml          # Seasonal adjustments
-│   ├── alerts.yaml           # Temperature and system alerts
-│   └── scenes.yaml           # Scene-based lighting
+│   └── alerts.yaml           # Temperature and system alerts
 └── scripts/
     ├── quick_actions.yaml     # Common quick actions
-    ├── schedule_presets.yaml  # Schedule preset management
-    └── maintenance.yaml       # Maintenance utilities
+    └── schedule_presets.yaml  # Schedule preset management
 ```
 
 ## Features Demonstrated
@@ -64,10 +63,22 @@ homeassistant/
 
 ## Installation
 
-1. Copy the configuration snippets to your Home Assistant configuration
-2. Restart Home Assistant to load the new configuration
-3. Add the dashboard cards to your Lovelace UI
-4. Configure your specific channel mappings
+### Recommended: Package Installation
+
+1. Copy `ledbrick_package.yaml` to your Home Assistant `packages` directory
+2. Ensure your `configuration.yaml` includes packages:
+   ```yaml
+   homeassistant:
+     packages: !include_dir_named packages
+   ```
+3. Restart Home Assistant
+4. Add dashboard cards from the `dashboards` folder to your Lovelace UI
+
+### Alternative: Manual Installation
+
+1. Copy individual configurations from the `automations`, `scripts`, and `dashboards` folders
+2. Add them to your existing Home Assistant configuration
+3. Restart Home Assistant
 
 ## Channel Mapping Example
 

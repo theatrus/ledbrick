@@ -1,14 +1,23 @@
 # LEDBrick Complete Home Assistant Package
 # 
+# This is the RECOMMENDED way to integrate LEDBrick with Home Assistant.
+# It includes everything you need in one file.
+#
 # Installation:
 # 1. Copy this file to your Home Assistant packages directory
-# 2. Add to configuration.yaml:
+#    (usually /config/packages/)
+# 2. Add to configuration.yaml if not already present:
 #    homeassistant:
 #      packages: !include_dir_named packages
 # 3. Restart Home Assistant
+# 4. Optional: Add dashboard cards from the dashboards folder
 #
-# This package includes all entities, automations, and scripts
-# needed for full LEDBrick control.
+# This package includes:
+# - All input helpers and configuration entities
+# - Automations for feeding modes, tank types, and moon control
+# - Scripts for quick actions and presets
+# - Template sensors for monitoring
+# - Groups for easy entity management
 
 # Input helpers for configuration
 input_number:
