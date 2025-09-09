@@ -35,7 +35,24 @@ class LEDBrickScheduler : public PollingComponent {
   void set_num_channels(uint8_t channels) { num_channels_ = channels; }
   void set_update_interval(uint32_t interval_ms) { update_interval_ = interval_ms; }
   void set_time_source(time::RealTimeClock *time_source) { time_source_ = time_source; }
-  void set_timezone(const std::string &timezone) { timezone_ = timezone; }
+  void set_timezone(const std::string &timezone) { 
+    timezone_ = timezone; 
+    // Convert timezone string to numeric offset for astronomical calculations
+    if (timezone == "America/Los_Angeles" || timezone == "America/Vancouver" || timezone == "US/Pacific") {
+      // Pacific Time: PST (UTC-8) in winter, PDT (UTC-7) in summer
+      // For simplicity, use PST (UTC-8) - this should ideally check DST
+      timezone_offset_hours_ = -8.0;
+    } else if (timezone == "America/Denver" || timezone == "US/Mountain") {
+      timezone_offset_hours_ = -7.0; // MST
+    } else if (timezone == "America/Chicago" || timezone == "US/Central") {
+      timezone_offset_hours_ = -6.0; // CST
+    } else if (timezone == "America/New_York" || timezone == "US/Eastern") {
+      timezone_offset_hours_ = -5.0; // EST
+    } else {
+      // Default to UTC if timezone not recognized
+      timezone_offset_hours_ = 0.0;
+    }
+  }
   void set_location(double latitude, double longitude);
   double get_latitude() const { return latitude_; }
   double get_longitude() const { return longitude_; }
