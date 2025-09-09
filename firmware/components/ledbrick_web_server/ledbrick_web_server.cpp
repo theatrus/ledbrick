@@ -29,7 +29,7 @@ void LEDBrickWebServer::setup() {
   config.server_port = this->port_;
   config.ctrl_port = this->port_;
   config.stack_size = 8192;
-  config.max_uri_handlers = 24;  // We register 22 handlers
+  config.max_uri_handlers = 26;  // We register 24 handlers
   config.recv_wait_timeout = 10;
   config.send_wait_timeout = 10;
   
@@ -222,6 +222,24 @@ void LEDBrickWebServer::setup() {
     .user_ctx = this
   };
   httpd_register_uri_handler(this->server_, &api_channel_control);
+  
+  // Channel configuration endpoint
+  httpd_uri_t api_channel_configs = {
+    .uri = "/api/channel/configs",
+    .method = HTTP_POST,
+    .handler = handle_api_channel_configs,
+    .user_ctx = this
+  };
+  httpd_register_uri_handler(this->server_, &api_channel_configs);
+  
+  // Time projection endpoint (alias for time_shift)
+  httpd_uri_t api_time_projection = {
+    .uri = "/api/time_projection",
+    .method = HTTP_POST,
+    .handler = handle_api_time_shift_post,  // Reuse the same handler
+    .user_ctx = this
+  };
+  httpd_register_uri_handler(this->server_, &api_time_projection);
   
   ESP_LOGI(TAG, "LEDBrick Web Server started successfully");
 }
@@ -670,6 +688,13 @@ esp_err_t LEDBrickWebServer::handle_api_location_post(httpd_req_t *req) {
   if (longitude < -180.0 || longitude > 180.0) {
     self->send_error(req, 400, "Longitude must be between -180 and 180");
     return ESP_OK;
+  }
+  
+  // Check if timezone_offset_hours is provided
+  if (doc["timezone_offset_hours"].is<JsonVariant>()) {
+    double timezone_offset = doc["timezone_offset_hours"];
+    self->scheduler_->set_timezone_offset_hours(timezone_offset);
+    ESP_LOGI(TAG, "Updated timezone offset to %.1f hours", timezone_offset);
   }
   
   // Update the scheduler location (auto-saves)
@@ -1129,6 +1154,80 @@ esp_err_t LEDBrickWebServer::handle_api_channel_control(httpd_req_t *req) {
   response_doc["pwm"] = pwm;
   response_doc["current"] = current;
   response_doc["message"] = "Channel control updated";
+  
+  self->send_json_response(req, 200, response_doc);
+  return ESP_OK;
+}
+
+esp_err_t LEDBrickWebServer::handle_api_channel_configs(httpd_req_t *req) {
+  auto *self = get_instance(req);
+  if (!self->check_auth(req)) return ESP_OK;
+  
+  // Read request body safely
+  auto buf = read_request_body(req);
+  if (!buf) return ESP_OK;  // Error already sent
+  
+  // Parse JSON
+  JsonDocument doc;
+  DeserializationError error = deserializeJson(doc, buf.get());
+  
+  if (error) {
+    self->send_error(req, 400, "Invalid JSON");
+    return ESP_OK;
+  }
+  
+  // Check if configs array exists
+  if (!doc["configs"].is<JsonArray>()) {
+    self->send_error(req, 400, "Missing configs array");
+    return ESP_OK;
+  }
+  
+  JsonArray configs = doc["configs"];
+  uint8_t num_channels = self->scheduler_->get_num_channels();
+  
+  // Validate array size
+  if (configs.size() != num_channels) {
+    self->send_error(req, 400, "Configs array size must match number of channels");
+    return ESP_OK;
+  }
+  
+  // Update each channel configuration
+  for (uint8_t i = 0; i < num_channels; i++) {
+    JsonObject config = configs[i];
+    
+    // Get current config
+    auto current_config = self->scheduler_->get_channel_config(i);
+    
+    // Update channel name
+    if (config["name"].is<const char*>()) {
+      current_config.name = std::string(config["name"]);
+    }
+    
+    // Update channel color
+    if (config["rgb_hex"].is<const char*>()) {
+      current_config.rgb_hex = std::string(config["rgb_hex"]);
+    }
+    
+    // Update max current
+    if (config["max_current"].is<JsonVariant>()) {
+      float max_current = config["max_current"];
+      if (max_current >= 0.0f && max_current <= 10.0f) {
+        current_config.max_current = max_current;
+      }
+    }
+    
+    // Set the updated config
+    self->scheduler_->set_channel_config(i, current_config);
+  }
+  
+  // Save to flash
+  self->scheduler_->save_schedule_to_flash();
+  
+  ESP_LOGI(TAG, "Updated channel configurations");
+  
+  JsonDocument response_doc;
+  response_doc["success"] = true;
+  response_doc["message"] = "Channel configurations updated";
   
   self->send_json_response(req, 200, response_doc);
   return ESP_OK;

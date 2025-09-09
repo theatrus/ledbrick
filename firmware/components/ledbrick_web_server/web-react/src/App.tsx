@@ -9,6 +9,7 @@ import { MoonSettings } from './components/MoonSettings';
 import { LocationSettings } from './components/LocationSettings';
 import { JsonModal } from './components/JsonModal';
 import { ScheduleDebug } from './components/ScheduleDebug';
+import { SettingsModal } from './components/SettingsModal';
 import type { Schedule, Status } from './types';
 
 export function App() {
@@ -18,6 +19,7 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [isJsonModalOpen, setIsJsonModalOpen] = useState(false);
   const [isDebugModalOpen, setIsDebugModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
   // Load schedule data (only when needed)
   const loadSchedule = useCallback(async () => {
@@ -102,6 +104,7 @@ export function App() {
       <Header 
         onOpenJsonModal={() => setIsJsonModalOpen(true)}
         onOpenDebugModal={() => setIsDebugModalOpen(true)}
+        onOpenSettingsModal={() => setIsSettingsModalOpen(true)}
       />
       
       <div className="container">
@@ -122,14 +125,6 @@ export function App() {
               schedule={schedule}
               onUpdate={loadData}
             />
-            <LocationSettings
-              latitude={status?.latitude || 37.4419}
-              longitude={status?.longitude || -122.1430}
-              astronomicalProjection={status?.astronomical_projection || false}
-              timeShiftHours={status?.time_shift_hours || 0}
-              timeShiftMinutes={status?.time_shift_minutes || 0}
-              onUpdate={loadData}
-            />
           </>
         )}
 
@@ -145,6 +140,13 @@ export function App() {
         {isDebugModalOpen && (
           <ScheduleDebug onClose={() => setIsDebugModalOpen(false)} />
         )}
+        
+        <SettingsModal
+          isOpen={isSettingsModalOpen}
+          onClose={() => setIsSettingsModalOpen(false)}
+          schedule={schedule}
+          onUpdate={loadData}
+        />
       </div>
     </div>
   );

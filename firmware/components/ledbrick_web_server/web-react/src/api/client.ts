@@ -146,6 +146,22 @@ class LEDBrickAPI {
   async setChannelManualControl(channel: number, pwm: number, current: number): Promise<any> {
     return this.request('POST', '/api/channel/control', { channel, pwm, current });
   }
+
+  async updateChannelConfigs(configs: Array<{name: string, rgb_hex: string, max_current: number}>): Promise<any> {
+    return this.request('POST', '/api/channel/configs', { configs });
+  }
+
+  async updateLocation(latitude: number, longitude: number, timezone_offset_hours: number): Promise<any> {
+    return this.request('POST', '/api/location', { latitude, longitude, timezone_offset_hours });
+  }
+
+  async updateTimeProjection(astronomical_projection: boolean, time_shift_hours: number, time_shift_minutes: number): Promise<any> {
+    return this.request('POST', '/api/time_projection', { 
+      astronomical_projection, 
+      time_shift_hours, 
+      time_shift_minutes 
+    });
+  }
 }
 
 export const api = new LEDBrickAPI();

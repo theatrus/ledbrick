@@ -56,6 +56,7 @@ class LEDBrickWebServer : public Component {
   static esp_err_t handle_api_timezone_get(httpd_req_t *req);
   static esp_err_t handle_api_timezone_post(httpd_req_t *req);
   static esp_err_t handle_api_channel_control(httpd_req_t *req);
+  static esp_err_t handle_api_channel_configs(httpd_req_t *req);
   static esp_err_t handle_not_found(httpd_req_t *req);
   
   // Helper methods
