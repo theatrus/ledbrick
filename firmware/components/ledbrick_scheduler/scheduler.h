@@ -92,9 +92,9 @@ public:
     // Moon simulation configuration
     struct MoonSimulation {
         bool enabled = false;
-        std::vector<float> base_intensity;  // Base moonlight intensity per channel (0-100%)
+        std::vector<float> base_intensity;  // Base moonlight PWM per channel (0-100%)
         std::vector<float> base_current;    // Base moonlight current per channel (0-max_current)
-        bool phase_scaling = true;         // Scale intensity by moon phase
+        bool phase_scaling = true;         // Scale PWM by moon phase
         
         MoonSimulation() = default;
         MoonSimulation(bool enable, std::vector<float> intensity, bool scale = true)

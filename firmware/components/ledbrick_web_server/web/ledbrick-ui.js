@@ -389,16 +389,30 @@ function editPoint(index) {
         document.getElementById('astroOffset').value = point.offset_minutes || 0;
     }
     
-    // Reset to intensity mode by default and set channel values
-    document.getElementById('controlMode').value = 'intensity';
-    updateControlModeFields();
-    
-    // Set channel values (use PWM values by default)
+    // Set both PWM and current values from the point data
     for (let i = 0; i < 8; i++) {
-        const value = point.pwm_values[i] || 0;
-        document.getElementById(`ch${i+1}Value`).value = value;
-        document.querySelector(`.channel-input[data-channel="${i+1}"] input[type="range"]`).value = value;
+        const pwmValue = point.pwm_values[i] || 0;
+        const currentValue = point.current_values[i] || 0;
+        
+        // Set PWM values
+        const pwmInput = document.getElementById(`ch${i+1}PwmValue`);
+        const pwmRange = document.getElementById(`ch${i+1}PwmRange`);
+        if (pwmInput && pwmRange) {
+            pwmInput.value = pwmValue;
+            pwmRange.value = pwmValue;
+        }
+        
+        // Set current values
+        const currentInput = document.getElementById(`ch${i+1}CurrentValue`);
+        const currentRange = document.getElementById(`ch${i+1}CurrentRange`);
+        if (currentInput && currentRange) {
+            currentInput.value = currentValue.toFixed(2);
+            currentRange.value = currentValue.toFixed(2);
+        }
     }
+    
+    // Update current input max values
+    updateChannelMaxCurrents();
     
     document.getElementById('pointDialog').style.display = 'flex';
 }
@@ -417,10 +431,28 @@ function resetPointDialog() {
     document.getElementById('pointType').value = 'fixed';
     document.getElementById('pointTime').value = '12:00';
     document.getElementById('astroOffset').value = '0';
-    document.getElementById('controlMode').value = 'intensity';
     updatePointTypeFields();
-    updateControlModeFields();
-    setAllChannels(0);
+    
+    // Reset all channels to 0 for both PWM and current
+    for (let i = 1; i <= 8; i++) {
+        // Reset PWM values
+        const pwmInput = document.getElementById(`ch${i}PwmValue`);
+        const pwmRange = document.getElementById(`ch${i}PwmRange`);
+        if (pwmInput && pwmRange) {
+            pwmInput.value = 0;
+            pwmRange.value = 0;
+        }
+        
+        // Reset current values
+        const currentInput = document.getElementById(`ch${i}CurrentValue`);
+        const currentRange = document.getElementById(`ch${i}CurrentRange`);
+        if (currentInput && currentRange) {
+            currentInput.value = 0;
+            currentRange.value = 0;
+        }
+    }
+    
+    updateChannelMaxCurrents();
 }
 
 function closePointDialog() {
@@ -435,45 +467,53 @@ function updatePointTypeFields() {
         pointType !== 'fixed' ? 'block' : 'none';
 }
 
-function updateControlModeFields() {
-    const controlMode = document.getElementById('controlMode').value;
-    const title = document.getElementById('channelValuesTitle');
-    
-    if (controlMode === 'current') {
-        title.textContent = 'Channel Current (0-3.0A)';
-        // Update input ranges for current mode
-        for (let i = 1; i <= 8; i++) {
-            const numberInput = document.getElementById(`ch${i}Value`);
-            const rangeInput = document.querySelector(`.channel-input[data-channel="${i}"] input[type="range"]`);
-            
-            // Get max current for this channel from schedule config
-            let maxCurrent = 3.0; // default
-            if (currentSchedule && currentSchedule.channel_configs && currentSchedule.channel_configs[i-1]) {
-                maxCurrent = currentSchedule.channel_configs[i-1].max_current || 3.0;
-            }
-            
-            numberInput.max = maxCurrent;
-            numberInput.value = Math.min(numberInput.value, maxCurrent);
-            rangeInput.max = maxCurrent;
-            rangeInput.value = numberInput.value;
+function updateChannelMaxCurrents() {
+    // Update current input max values based on channel configs
+    for (let i = 1; i <= 8; i++) {
+        let maxCurrent = 2.0; // default 2.0A
+        if (currentSchedule && currentSchedule.channel_configs && currentSchedule.channel_configs[i-1]) {
+            maxCurrent = currentSchedule.channel_configs[i-1].max_current || 2.0;
         }
-    } else {
-        title.textContent = 'Channel Intensity (0-100%)';
-        // Reset to intensity mode
-        for (let i = 1; i <= 8; i++) {
-            const numberInput = document.getElementById(`ch${i}Value`);
-            const rangeInput = document.querySelector(`.channel-input[data-channel="${i}"] input[type="range"]`);
-            
-            numberInput.max = 100;
-            rangeInput.max = 100;
+        
+        const currentInput = document.getElementById(`ch${i}CurrentValue`);
+        const currentRange = document.getElementById(`ch${i}CurrentRange`);
+        
+        if (currentInput && currentRange) {
+            currentInput.max = maxCurrent;
+            currentRange.max = maxCurrent;
+            // Clamp current values to new max
+            currentInput.value = Math.min(parseFloat(currentInput.value) || 0, maxCurrent);
+            currentRange.value = currentInput.value;
         }
     }
 }
 
 function setAllChannels(value) {
     for (let i = 1; i <= 8; i++) {
-        document.getElementById(`ch${i}Value`).value = value;
-        document.querySelector(`.channel-input[data-channel="${i}"] input[type="range"]`).value = value;
+        // Set PWM values
+        const pwmInput = document.getElementById(`ch${i}PwmValue`);
+        const pwmRange = document.getElementById(`ch${i}PwmRange`);
+        if (pwmInput && pwmRange) {
+            pwmInput.value = value;
+            pwmRange.value = value;
+        }
+        
+        // For current values, set to proportional current based on max current
+        let currentValue = 0;
+        if (value > 0) {
+            let maxCurrent = 2.0;
+            if (currentSchedule && currentSchedule.channel_configs && currentSchedule.channel_configs[i-1]) {
+                maxCurrent = currentSchedule.channel_configs[i-1].max_current || 2.0;
+            }
+            currentValue = (value / 100) * maxCurrent; // Scale based on PWM percentage
+        }
+        
+        const currentInput = document.getElementById(`ch${i}CurrentValue`);
+        const currentRange = document.getElementById(`ch${i}CurrentRange`);
+        if (currentInput && currentRange) {
+            currentInput.value = currentValue.toFixed(2);
+            currentRange.value = currentValue.toFixed(2);
+        }
     }
 }
 
@@ -516,37 +556,20 @@ async function saveSchedulePoint() {
         pointData.time_minutes = baseTimes[pointType] || 360;
     }
     
-    // Get channel values based on control mode
-    const controlMode = document.getElementById('controlMode').value;
+    // Get channel values - both PWM and current are independent, directly from inputs
     const pwmValues = [];
     const currentValues = [];
     
     for (let i = 1; i <= 8; i++) {
-        const inputValue = parseFloat(document.getElementById(`ch${i}Value`).value);
+        // Get PWM value directly from PWM input
+        const pwmInput = document.getElementById(`ch${i}PwmValue`);
+        const pwmValue = parseFloat(pwmInput ? pwmInput.value : '0') || 0;
+        pwmValues.push(pwmValue);
         
-        if (controlMode === 'current') {
-            // Current mode: input is in Amperes, calculate PWM from current
-            currentValues.push(inputValue);
-            
-            // Calculate PWM percentage based on max current for this channel
-            if (currentSchedule && currentSchedule.channel_configs && currentSchedule.channel_configs[i-1]) {
-                const maxCurrent = currentSchedule.channel_configs[i-1].max_current || 3.0;
-                pwmValues.push((inputValue / maxCurrent) * 100);
-            } else {
-                pwmValues.push((inputValue / 3.0) * 100); // Default 3A max
-            }
-        } else {
-            // Intensity mode: input is PWM percentage, calculate current from PWM
-            pwmValues.push(inputValue);
-            
-            // Calculate current based on PWM and max current from channel config
-            if (currentSchedule && currentSchedule.channel_configs && currentSchedule.channel_configs[i-1]) {
-                const maxCurrent = currentSchedule.channel_configs[i-1].max_current || 3.0;
-                currentValues.push((inputValue / 100) * maxCurrent);
-            } else {
-                currentValues.push(inputValue / 100 * 3.0); // Default 3A max
-            }
-        }
+        // Get current value directly from current input
+        const currentInput = document.getElementById(`ch${i}CurrentValue`);
+        const currentValue = parseFloat(currentInput ? currentInput.value : '0') || 0;
+        currentValues.push(currentValue);
     }
     
     pointData.pwm_values = pwmValues;
@@ -578,6 +601,8 @@ async function refreshSchedule() {
     try {
         currentSchedule = await ledbrickAPI.getSchedule();
         initializeChannelConfig(); // Initialize channel color configuration
+        updateChannelMaxCurrents(); // Update current input ranges
+        updateMoonChannelMaxCurrents(); // Update moon simulation current ranges
         updateScheduleChart(currentSchedule);
         updateScheduleTable(currentSchedule);
         document.getElementById('schedulePoints').textContent = 
@@ -1003,21 +1028,41 @@ function updateMoonSimulationFromStatus(status) {
         }
     }
     
-    // Only update base intensity values if server state changed
+    // Only update moon simulation values if server state changed
     if (moonSim.base_intensity && Array.isArray(moonSim.base_intensity)) {
         for (let i = 0; i < Math.min(moonSim.base_intensity.length, 8); i++) {
-            const serverValue = moonSim.base_intensity[i];
-            const lastValue = lastMoonSim && lastMoonSim.base_intensity ? lastMoonSim.base_intensity[i] : undefined;
+            const serverPwmValue = moonSim.base_intensity[i];
+            const lastPwmValue = lastMoonSim && lastMoonSim.base_intensity ? lastMoonSim.base_intensity[i] : undefined;
             
             // Only update if server value changed
-            if (lastValue === undefined || Math.abs(lastValue - serverValue) > 0.05) {
-                const slider = document.getElementById(`moonCh${i+1}`);
-                const input = document.getElementById(`moonCh${i+1}Value`);
+            if (lastPwmValue === undefined || Math.abs(lastPwmValue - serverPwmValue) > 0.05) {
+                const pwmInput = document.getElementById(`moonCh${i+1}PwmValue`);
+                const pwmRange = document.getElementById(`moonCh${i+1}PwmRange`);
                 
-                if (slider && input) {
-                    const value = serverValue.toFixed(1);
-                    slider.value = value;
-                    input.value = value;
+                if (pwmInput && pwmRange) {
+                    const value = serverPwmValue.toFixed(1);
+                    pwmInput.value = value;
+                    pwmRange.value = value;
+                }
+            }
+        }
+    }
+    
+    // Update moon current values if available
+    if (moonSim.base_current && Array.isArray(moonSim.base_current)) {
+        for (let i = 0; i < Math.min(moonSim.base_current.length, 8); i++) {
+            const serverCurrentValue = moonSim.base_current[i];
+            const lastCurrentValue = lastMoonSim && lastMoonSim.base_current ? lastMoonSim.base_current[i] : undefined;
+            
+            // Only update if server value changed
+            if (lastCurrentValue === undefined || Math.abs(lastCurrentValue - serverCurrentValue) > 0.001) {
+                const currentInput = document.getElementById(`moonCh${i+1}CurrentValue`);
+                const currentRange = document.getElementById(`moonCh${i+1}CurrentRange`);
+                
+                if (currentInput && currentRange) {
+                    const value = serverCurrentValue.toFixed(3);
+                    currentInput.value = value;
+                    currentRange.value = value;
                 }
             }
         }
@@ -1030,83 +1075,76 @@ function updateMoonSimulationUI() {
     document.getElementById('moonSimulationControls').style.display = enabled ? 'block' : 'none';
 }
 
-function updateMoonControlModeFields() {
-    const controlMode = document.getElementById('moonControlMode').value;
-    const title = document.getElementById('moonControlTitle');
-    
-    if (controlMode === 'current') {
-        title.textContent = 'Moon Base Current (per channel):';
-        // Update input ranges for current mode (max 1.0A for moonlight)
-        for (let i = 1; i <= 8; i++) {
-            const numberInput = document.getElementById(`moonCh${i}Value`);
-            const rangeInput = document.getElementById(`moonCh${i}`);
-            
-            // Get max current for this channel from schedule config
-            let maxCurrent = 1.0; // Default 1.0A for moonlight (much lower than normal)
-            if (currentSchedule && currentSchedule.channel_configs && currentSchedule.channel_configs[i-1]) {
-                maxCurrent = Math.min(currentSchedule.channel_configs[i-1].max_current || 3.0, 1.0);
-            }
-            
-            numberInput.max = maxCurrent;
-            numberInput.value = Math.min(numberInput.value, maxCurrent);
-            rangeInput.max = maxCurrent;
-            rangeInput.value = numberInput.value;
+function updateMoonChannelMaxCurrents() {
+    // Update current input max values based on channel configs for moon simulation
+    for (let i = 1; i <= 8; i++) {
+        let maxCurrent = 2.0; // Use full channel current range - no artificial limitations
+        if (currentSchedule && currentSchedule.channel_configs && currentSchedule.channel_configs[i-1]) {
+            maxCurrent = currentSchedule.channel_configs[i-1].max_current || 2.0;
         }
-    } else {
-        title.textContent = 'Moon Base Intensity (per channel):';
-        // Reset to intensity mode (max 20% for moonlight)
-        for (let i = 1; i <= 8; i++) {
-            const numberInput = document.getElementById(`moonCh${i}Value`);
-            const rangeInput = document.getElementById(`moonCh${i}`);
-            
-            numberInput.max = 20;
-            rangeInput.max = 20;
+        
+        const currentInput = document.getElementById(`moonCh${i}CurrentValue`);
+        const currentRange = document.getElementById(`moonCh${i}CurrentRange`);
+        
+        if (currentInput && currentRange) {
+            currentInput.max = maxCurrent;
+            currentRange.max = maxCurrent;
+            // Clamp current values to new max
+            currentInput.value = Math.min(parseFloat(currentInput.value) || 0, maxCurrent);
+            currentRange.value = currentInput.value;
         }
     }
 }
 
 function setAllMoonChannels(value) {
     for (let i = 1; i <= 8; i++) {
-        document.getElementById(`moonCh${i}`).value = value;
-        document.getElementById(`moonCh${i}Value`).value = value;
+        // Set PWM values
+        const pwmInput = document.getElementById(`moonCh${i}PwmValue`);
+        const pwmRange = document.getElementById(`moonCh${i}PwmRange`);
+        if (pwmInput && pwmRange) {
+            pwmInput.value = value;
+            pwmRange.value = value;
+        }
+        
+        // For current values, set proportional to PWM but use full current range
+        let currentValue = 0;
+        if (value > 0) {
+            // Get max current for this channel
+            let maxCurrent = 2.0;
+            if (currentSchedule && currentSchedule.channel_configs && currentSchedule.channel_configs[i-1]) {
+                maxCurrent = currentSchedule.channel_configs[i-1].max_current || 2.0;
+            }
+            // Scale PWM to current (20% PWM maps to full available current range)
+            currentValue = (value / 20) * maxCurrent;
+        }
+        
+        const currentInput = document.getElementById(`moonCh${i}CurrentValue`);
+        const currentRange = document.getElementById(`moonCh${i}CurrentRange`);
+        if (currentInput && currentRange) {
+            currentInput.value = currentValue.toFixed(3);
+            currentRange.value = currentValue.toFixed(3);
+        }
     }
 }
 
 async function saveMoonSimulation() {
     const enabled = document.getElementById('moonSimulationEnabled').checked;
     const phaseScaling = document.getElementById('moonPhaseScaling').checked;
-    const controlMode = document.getElementById('moonControlMode').value;
     
-    // Collect values based on control mode
+    // Collect both PWM and current values directly from dual inputs - they are independent
     const baseIntensity = [];
     const baseCurrent = [];
     
     for (let i = 1; i <= 8; i++) {
-        const inputValue = parseFloat(document.getElementById(`moonCh${i}Value`).value) || 0;
+        // Get PWM value directly from PWM input
+        const pwmInput = document.getElementById(`moonCh${i}PwmValue`);
+        const pwmValue = parseFloat(pwmInput ? pwmInput.value : '2') || 2;
+        baseIntensity.push(pwmValue);
         
-        if (controlMode === 'current') {
-            // Current mode: input is in Amperes, calculate intensity from current
-            baseCurrent.push(inputValue);
-            
-            // Calculate intensity percentage based on max current for this channel
-            if (currentSchedule && currentSchedule.channel_configs && currentSchedule.channel_configs[i-1]) {
-                const maxCurrent = currentSchedule.channel_configs[i-1].max_current || 3.0;
-                baseIntensity.push((inputValue / maxCurrent) * 100);
-            } else {
-                baseIntensity.push((inputValue / 3.0) * 100); // Default 3A max
-            }
-        } else {
-            // Intensity mode: input is intensity percentage, calculate current from intensity
-            baseIntensity.push(inputValue);
-            
-            // Calculate current based on intensity and max current from channel config
-            if (currentSchedule && currentSchedule.channel_configs && currentSchedule.channel_configs[i-1]) {
-                const maxCurrent = currentSchedule.channel_configs[i-1].max_current || 3.0;
-                baseCurrent.push((inputValue / 100) * maxCurrent);
-            } else {
-                baseCurrent.push(inputValue / 100 * 3.0); // Default 3A max
-            }
-        }
+        // Get current value directly from current input
+        const currentInput = document.getElementById(`moonCh${i}CurrentValue`);
+        const currentValue = parseFloat(currentInput ? currentInput.value : '0.01') || 0.01;
+        baseCurrent.push(currentValue);
     }
     
     const moonConfig = {
@@ -1135,30 +1173,62 @@ document.addEventListener('DOMContentLoaded', function() {
         ledbrickAPI.baseUrl = savedUrl;
     }
     
-    // Set up channel input synchronization
+    // Set up dual channel input synchronization - PWM and current controls
     for (let i = 1; i <= 8; i++) {
-        const numberInput = document.getElementById(`ch${i}Value`);
-        const rangeInput = document.querySelector(`.channel-input[data-channel="${i}"] input[type="range"]`);
+        // PWM controls synchronization
+        const pwmNumberInput = document.getElementById(`ch${i}PwmValue`);
+        const pwmRangeInput = document.getElementById(`ch${i}PwmRange`);
         
-        numberInput.addEventListener('input', function() {
-            rangeInput.value = this.value;
-        });
-        
-        rangeInput.addEventListener('input', function() {
-            numberInput.value = this.value;
-        });
-        
-        // Set up moon simulation input synchronization
-        const moonNumberInput = document.getElementById(`moonCh${i}Value`);
-        const moonRangeInput = document.getElementById(`moonCh${i}`);
-        
-        if (moonNumberInput && moonRangeInput) {
-            moonNumberInput.addEventListener('input', function() {
-                moonRangeInput.value = this.value;
+        if (pwmNumberInput && pwmRangeInput) {
+            pwmNumberInput.addEventListener('input', function() {
+                pwmRangeInput.value = this.value;
             });
             
-            moonRangeInput.addEventListener('input', function() {
-                moonNumberInput.value = this.value;
+            pwmRangeInput.addEventListener('input', function() {
+                pwmNumberInput.value = this.value;
+            });
+        }
+        
+        // Current controls synchronization
+        const currentNumberInput = document.getElementById(`ch${i}CurrentValue`);
+        const currentRangeInput = document.getElementById(`ch${i}CurrentRange`);
+        
+        if (currentNumberInput && currentRangeInput) {
+            currentNumberInput.addEventListener('input', function() {
+                currentRangeInput.value = this.value;
+            });
+            
+            currentRangeInput.addEventListener('input', function() {
+                currentNumberInput.value = this.value;
+            });
+        }
+        
+        // Set up moon simulation dual input synchronization
+        // PWM controls for moon simulation
+        const moonPwmNumberInput = document.getElementById(`moonCh${i}PwmValue`);
+        const moonPwmRangeInput = document.getElementById(`moonCh${i}PwmRange`);
+        
+        if (moonPwmNumberInput && moonPwmRangeInput) {
+            moonPwmNumberInput.addEventListener('input', function() {
+                moonPwmRangeInput.value = this.value;
+            });
+            
+            moonPwmRangeInput.addEventListener('input', function() {
+                moonPwmNumberInput.value = this.value;
+            });
+        }
+        
+        // Current controls for moon simulation
+        const moonCurrentNumberInput = document.getElementById(`moonCh${i}CurrentValue`);
+        const moonCurrentRangeInput = document.getElementById(`moonCh${i}CurrentRange`);
+        
+        if (moonCurrentNumberInput && moonCurrentRangeInput) {
+            moonCurrentNumberInput.addEventListener('input', function() {
+                moonCurrentRangeInput.value = this.value;
+            });
+            
+            moonCurrentRangeInput.addEventListener('input', function() {
+                moonCurrentNumberInput.value = this.value;
             });
         }
     }

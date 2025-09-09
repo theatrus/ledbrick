@@ -553,6 +553,7 @@ void LEDScheduler::enable_moon_simulation(bool enabled) {
 }
 
 void LEDScheduler::set_moon_base_intensity(const std::vector<float>& intensity) {
+    // Note: "intensity" here means PWM percentage (0-100%)
     moon_simulation_.base_intensity = intensity;
     moon_simulation_.base_intensity.resize(num_channels_, 0.0f);
 }
@@ -614,8 +615,9 @@ LEDScheduler::InterpolationResult LEDScheduler::apply_moon_simulation(const Inte
     }
     moon_brightness *= 2.0f; // Scale 0-0.5 to 0-1.0
     
-    // Apply moon simulation
+    // Apply moon simulation - PWM and current are independent
     for (size_t i = 0; i < num_channels_; i++) {
+        // Apply PWM values
         if (i < moon_simulation_.base_intensity.size()) {
             float moon_intensity = moon_simulation_.base_intensity[i];
             
@@ -624,20 +626,21 @@ LEDScheduler::InterpolationResult LEDScheduler::apply_moon_simulation(const Inte
                 moon_intensity *= moon_brightness;
             }
             
-            // Apply moonlight (additive to ensure it shows even if base is 0)
+            // Apply moonlight PWM
             result.pwm_values[i] = moon_intensity;
+        }
+        
+        // Apply current values independently - no fallback to PWM scaling
+        if (i < moon_simulation_.base_current.size()) {
+            float moon_current = moon_simulation_.base_current[i];
             
-            // Use base_current if available, otherwise scale from PWM
-            if (i < moon_simulation_.base_current.size()) {
-                float moon_current = moon_simulation_.base_current[i];
-                if (moon_simulation_.phase_scaling) {
-                    moon_current *= moon_brightness;
-                }
-                result.current_values[i] = moon_current;
-            } else {
-                // Fallback: scale current proportionally (moonlight uses much less current)
-                result.current_values[i] = moon_intensity * 0.02f; // 2% of PWM value as current
+            // Scale by moon phase if enabled
+            if (moon_simulation_.phase_scaling) {
+                moon_current *= moon_brightness;
             }
+            
+            // Apply moonlight current directly
+            result.current_values[i] = moon_current;
         }
     }
     
