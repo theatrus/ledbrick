@@ -4,6 +4,20 @@ esphome:
   project:
     name: "ledbrick.plus"
     version: "__VERSION__"
+  on_boot:
+    - priority: 600
+      then:
+        - lambda: |-
+            // Register all color text sensors with the scheduler
+            id(main_scheduler).add_color_text_sensor(0, id(ch1_color));
+            id(main_scheduler).add_color_text_sensor(1, id(ch2_color));
+            id(main_scheduler).add_color_text_sensor(2, id(ch3_color));
+            id(main_scheduler).add_color_text_sensor(3, id(ch4_color));
+            id(main_scheduler).add_color_text_sensor(4, id(ch5_color));
+            id(main_scheduler).add_color_text_sensor(5, id(ch6_color));
+            id(main_scheduler).add_color_text_sensor(6, id(ch7_color));
+            id(main_scheduler).add_color_text_sensor(7, id(ch8_color));
+            ESP_LOGI("main", "Color text sensors registered with scheduler");
 
 dashboard_import:
   package_import_url: github://theatrus/ledbrick/firmware/ledbrick-plus.yaml@master

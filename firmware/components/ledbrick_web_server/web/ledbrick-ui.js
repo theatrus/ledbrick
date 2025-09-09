@@ -61,6 +61,28 @@ function initializeChart() {
                             return context.dataset.label + ': ' + context.parsed.y + '%';
                         }
                     }
+                },
+                annotation: {
+                    annotations: {
+                        currentTimeLine: {
+                            type: 'line',
+                            xMin: 0,
+                            xMax: 0,
+                            borderColor: 'rgba(255, 0, 0, 0.8)',
+                            borderWidth: 3,
+                            borderDash: [5, 5],
+                            label: {
+                                display: true,
+                                content: 'Now',
+                                position: 'start',
+                                backgroundColor: 'rgba(255, 0, 0, 0.8)',
+                                color: 'white',
+                                font: {
+                                    size: 12
+                                }
+                            }
+                        }
+                    }
                 }
             },
             scales: {
@@ -877,7 +899,7 @@ function updateCurrentChannelValues(channels) {
     });
 }
 
-// Update chart with current time vertical line using a dataset
+// Update chart with current time vertical line using annotation plugin
 function updateChartCurrentTimeLine(currentTimeMinutes) {
     if (!scheduleChart || currentTimeMinutes === undefined) return;
     
@@ -886,44 +908,60 @@ function updateChartCurrentTimeLine(currentTimeMinutes) {
     const minutes = currentTimeMinutes % 60;
     const currentTimeStr = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
     
-    // Find or create the "now" line dataset
-    let nowDatasetIndex = scheduleChart.data.datasets.findIndex(ds => ds.id === 'currentTime');
+    // Find the index of the current time in the chart labels
+    const labels = scheduleChart.data.labels;
+    let currentIndex = -1;
     
-    if (nowDatasetIndex === -1) {
-        // Create a new "now" line dataset
-        const nowDataset = {
-            id: 'currentTime',
-            label: 'Current Time',
-            data: [
-                { x: currentTimeStr, y: 0 },
-                { x: currentTimeStr, y: 100 }
-            ],
-            borderColor: 'rgba(255, 0, 0, 0.8)',
-            backgroundColor: 'rgba(255, 0, 0, 0.1)',
-            borderWidth: 3,
-            pointRadius: 0,
-            pointHoverRadius: 0,
-            tension: 0,
-            fill: false,
-            spanGaps: false,
-            showLine: true,
-            borderDash: [5, 5],
-            hidden: false
-        };
-        scheduleChart.data.datasets.push(nowDataset);
-        nowDatasetIndex = scheduleChart.data.datasets.length - 1;
-    } else {
-        // Update existing dataset
-        scheduleChart.data.datasets[nowDatasetIndex].data = [
-            { x: currentTimeStr, y: 0 },
-            { x: currentTimeStr, y: 100 }
-        ];
+    // Find exact match or closest time
+    for (let i = 0; i < labels.length; i++) {
+        if (labels[i] === currentTimeStr) {
+            currentIndex = i;
+            break;
+        }
+        // Check if current time is between this label and the next
+        if (i < labels.length - 1) {
+            const thisTime = timeStringToMinutes(labels[i]);
+            const nextTime = timeStringToMinutes(labels[i + 1]);
+            if (currentTimeMinutes >= thisTime && currentTimeMinutes < nextTime) {
+                // Interpolate position between labels
+                const fraction = (currentTimeMinutes - thisTime) / (nextTime - thisTime);
+                currentIndex = i + fraction;
+                break;
+            }
+        }
     }
     
-    // Only update the chart if it's not being actively modified
-    if (!document.querySelector('.chart-container:hover')) {
-        scheduleChart.update('none'); // Use 'none' mode for performance
+    // If not found, check if it's before first or after last
+    if (currentIndex === -1) {
+        const firstTime = timeStringToMinutes(labels[0]);
+        const lastTime = timeStringToMinutes(labels[labels.length - 1]);
+        
+        if (currentTimeMinutes < firstTime) {
+            currentIndex = 0;
+        } else if (currentTimeMinutes > lastTime) {
+            currentIndex = labels.length - 1;
+        }
     }
+    
+    // Update the annotation position
+    if (currentIndex >= 0 && scheduleChart.options.plugins.annotation) {
+        scheduleChart.options.plugins.annotation.annotations.currentTimeLine.xMin = currentIndex;
+        scheduleChart.options.plugins.annotation.annotations.currentTimeLine.xMax = currentIndex;
+        
+        // Update label with current time
+        scheduleChart.options.plugins.annotation.annotations.currentTimeLine.label.content = `Now (${currentTimeStr})`;
+        
+        // Only update the chart if it's not being actively modified
+        if (!document.querySelector('.chart-container:hover')) {
+            scheduleChart.update('none'); // Use 'none' mode for performance
+        }
+    }
+}
+
+// Helper function to convert time string to minutes
+function timeStringToMinutes(timeStr) {
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    return hours * 60 + minutes;
 }
 
 function showStatus(message, type = 'info') {

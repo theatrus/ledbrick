@@ -26,7 +26,7 @@ console.log(`Proxying API requests to http://${DEVICE_IP}`);
 
 const app = express();
 
-// API proxy middleware
+// API proxy middleware - MUST be created before body parsing middleware
 const apiProxy = createProxyMiddleware({
     target: `http://${DEVICE_IP}`,
     changeOrigin: true,
@@ -35,7 +35,9 @@ const apiProxy = createProxyMiddleware({
     proxyTimeout: 5000,
     onProxyReq: (proxyReq, req, res) => {
         console.log(`[Proxy Request] ${req.method} ${req.path} -> http://${DEVICE_IP}${req.path}`);
-        console.log('[Request Headers]', req.headers);
+        if (req.method === 'POST' || req.method === 'PUT') {
+            console.log('[Request Headers]', req.headers);
+        }
     },
     onProxyRes: (proxyRes, req, res) => {
         console.log(`[Proxy Response] ${proxyRes.statusCode} from ${req.path}`);
@@ -82,15 +84,17 @@ app.get('/health', async (req, res) => {
     }
 });
 
-// Proxy all /api/* requests
-app.use('/api', apiProxy);
+// Serve static files first - if file exists locally, serve it
+app.use(express.static(__dirname, {
+    index: 'index.html',
+    // Don't fall through to next handler if file not found
+    fallthrough: true
+}));
 
-// Serve static files from current directory
-app.use(express.static(__dirname));
-
-// Fallback to index.html for SPA routing
-app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
+// For any request that didn't match a static file, proxy to device
+app.use((req, res, next) => {
+    console.log(`[Proxy] No local file for ${req.path}, proxying to device...`);
+    apiProxy(req, res, next);
 });
 
 // Start server

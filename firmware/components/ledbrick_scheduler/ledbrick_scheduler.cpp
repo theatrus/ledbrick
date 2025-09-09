@@ -38,6 +38,9 @@ void LEDBrickScheduler::setup() {
     save_schedule_to_flash();  // Save the default schedule
   }
   
+  // Update color sensors with initial values
+  update_color_sensors();
+  
   ESP_LOGCONFIG(TAG, "LEDBrick Scheduler setup complete");
 }
 
