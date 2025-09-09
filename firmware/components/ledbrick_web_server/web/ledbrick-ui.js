@@ -361,32 +361,9 @@ function editPoint(index) {
     
     document.getElementById('dialogTitle').textContent = 'Edit Schedule Point';
     
-    // Set type based on time_type
+    // Set type directly from time_type
     let pointType = 'fixed';
-    if (point.time_type) {
-        if (point.time_type === 'sunrise_relative') pointType = 'sunrise';
-        else if (point.time_type === 'sunset_relative') pointType = 'sunset';
-        else if (point.time_type !== 'fixed') pointType = 'astronomical';
-    }
-    document.getElementById('pointType').value = pointType;
-    updatePointTypeFields();
-    
-    // Set time
-    const hours = Math.floor(point.time_minutes / 60);
-    const minutes = point.time_minutes % 60;
-    document.getElementById('pointTime').value = 
-        `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-    
-    // Set channel values
-    for (let i = 0; i < 8; i++) {
-        const value = point.pwm_values[i];
-        document.getElementById(`ch${i+1}Value`).value = value;
-        document.querySelector(`.channel-input[data-channel="${i+1}"] input[type="range"]`).value = value;
-    }
-    
-    // Set astronomical fields based on time_type
     if (point.time_type && point.time_type !== 'fixed') {
-        // Extract base event from time_type
         const eventMap = {
             'sunrise_relative': 'sunrise',
             'solar_noon': 'solar_noon',
@@ -396,9 +373,27 @@ function editPoint(index) {
             'nautical_dawn_relative': 'nautical_dawn',
             'nautical_dusk_relative': 'nautical_dusk'
         };
-        const baseEvent = eventMap[point.time_type] || 'sunrise';
-        document.getElementById('astroEvent').value = baseEvent;
+        pointType = eventMap[point.time_type] || 'sunrise';
+    }
+    document.getElementById('pointType').value = pointType;
+    updatePointTypeFields();
+    
+    // Set time (for fixed points)
+    const hours = Math.floor(point.time_minutes / 60);
+    const minutes = point.time_minutes % 60;
+    document.getElementById('pointTime').value = 
+        `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+    
+    // Set offset for astronomical points
+    if (point.time_type && point.time_type !== 'fixed') {
         document.getElementById('astroOffset').value = point.offset_minutes || 0;
+    }
+    
+    // Set channel values
+    for (let i = 0; i < 8; i++) {
+        const value = point.pwm_values[i];
+        document.getElementById(`ch${i+1}Value`).value = value;
+        document.querySelector(`.channel-input[data-channel="${i+1}"] input[type="range"]`).value = value;
     }
     
     document.getElementById('pointDialog').style.display = 'flex';
@@ -417,7 +412,6 @@ function deletePoint(index) {
 function resetPointDialog() {
     document.getElementById('pointType').value = 'fixed';
     document.getElementById('pointTime').value = '12:00';
-    document.getElementById('astroEvent').value = 'sunrise';
     document.getElementById('astroOffset').value = '0';
     updatePointTypeFields();
     setAllChannels(0);
