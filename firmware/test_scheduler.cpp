@@ -53,33 +53,20 @@ void test_presets(TestRunner& runner) {
     
     LEDScheduler scheduler(4);
     
-    // Test sunrise/sunset preset
-    scheduler.load_preset("sunrise_sunset");
-    runner.assert_false(scheduler.is_schedule_empty(), "Sunrise/sunset preset loaded");
+    // Test default preset
+    scheduler.load_preset("default");
+    runner.assert_false(scheduler.is_schedule_empty(), "Default preset loaded");
     runner.assert_true(scheduler.get_schedule_size() > 0, "Preset has schedule points");
     
-    // Test full spectrum preset
-    scheduler.load_preset("full_spectrum");
-    runner.assert_false(scheduler.is_schedule_empty(), "Full spectrum preset loaded");
-    
-    // Test simple preset
-    scheduler.load_preset("simple");
-    runner.assert_false(scheduler.is_schedule_empty(), "Simple preset loaded");
-    
-    // Test custom preset
+    // Also test with legacy name
     scheduler.clear_schedule();
-    scheduler.set_schedule_point(600, {25.0f, 35.0f, 45.0f, 55.0f}, {0.5f, 0.7f, 0.9f, 1.1f});
-    scheduler.save_preset("custom_test");
+    scheduler.load_preset("sunrise_sunset");
+    runner.assert_false(scheduler.is_schedule_empty(), "Legacy preset name still works");
     
+    // Test that preset names only returns default
     auto preset_names = scheduler.get_preset_names();
-    bool found_custom = false;
-    for (const auto& name : preset_names) {
-        if (name == "custom_test") {
-            found_custom = true;
-            break;
-        }
-    }
-    runner.assert_true(found_custom, "Custom preset saved and found");
+    runner.assert_equals(1, static_cast<int>(preset_names.size()), "Only one preset available");
+    runner.assert_true(preset_names[0] == "default", "Default preset name returned");
 }
 
 void test_serialization(TestRunner& runner) {
@@ -361,9 +348,9 @@ void test_dynamic_schedule_points(TestRunner& runner) {
     runner.assert_true(result.valid, "Dynamic interpolation valid");
     runner.assert_equals(80.0f, result.pwm_values[0], 1.0f, "Dynamic PWM value at solar noon (expected: 80.0, actual: " + std::to_string(result.pwm_values[0]) + ")");
     
-    // Test dynamic preset
-    scheduler.load_preset("dynamic_sunrise_sunset");
-    runner.assert_equals(7, static_cast<int>(scheduler.get_schedule_size()), "Dynamic preset loaded");
+    // Test default preset (which is now dynamic)
+    scheduler.load_preset("default");
+    runner.assert_equals(5, static_cast<int>(scheduler.get_schedule_size()), "Default preset loaded");
     
     // Test JSON export includes dynamic info
     std::string json = scheduler.export_json();

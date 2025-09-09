@@ -77,21 +77,6 @@ export function JsonModal({ isOpen, onClose, schedule, onUpdate }: JsonModalProp
     }
   };
 
-  const handleLoadPreset = async (preset: string) => {
-    try {
-      await api.loadPreset(preset);
-      setStatus({ message: `Loaded preset: ${preset}`, type: 'success' });
-      setTimeout(() => {
-        onUpdate();
-        onClose();
-      }, 1000);
-    } catch (error) {
-      setStatus({ 
-        message: `Failed to load preset: ${(error as any).message || 'Unknown error'}`, 
-        type: 'error' 
-      });
-    }
-  };
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -131,20 +116,6 @@ export function JsonModal({ isOpen, onClose, schedule, onUpdate }: JsonModalProp
             </button>
           </div>
 
-          <div className="presets-section">
-            <h3>Load Preset:</h3>
-            <div className="preset-buttons">
-              <button onClick={() => handleLoadPreset('sunrise_sunset')} className="preset-button">
-                Sunrise/Sunset
-              </button>
-              <button onClick={() => handleLoadPreset('full_spectrum')} className="preset-button">
-                Full Spectrum
-              </button>
-              <button onClick={() => handleLoadPreset('simple')} className="preset-button">
-                Simple On/Off
-              </button>
-            </div>
-          </div>
         </div>
 
         <div className="modal-footer">

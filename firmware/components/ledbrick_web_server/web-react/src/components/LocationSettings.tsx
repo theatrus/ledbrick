@@ -10,6 +10,32 @@ interface LocationSettingsProps {
   onUpdate: () => void;
 }
 
+// Tropical reef locations around the world
+const REEF_PRESETS = [
+  // Pacific Ocean
+  { name: 'Great Barrier Reef, Australia', lat: -16.2859, lon: 145.7781 },
+  { name: 'Coral Triangle, Indonesia', lat: -2.5416, lon: 120.7590 },
+  { name: 'Palau Rock Islands', lat: 7.5150, lon: 134.5825 },
+  { name: 'Fiji Coral Reefs', lat: -17.7134, lon: 178.0650 },
+  { name: 'Tubbataha Reefs, Philippines', lat: 8.8575, lon: 119.9200 },
+  { name: 'French Polynesia Atolls', lat: -17.6797, lon: -149.4068 },
+  // Indian Ocean
+  { name: 'Maldives Atolls', lat: 3.2028, lon: 73.2207 },
+  { name: 'Andaman Sea Reefs, Thailand', lat: 9.1537, lon: 98.3366 },
+  { name: 'Seychelles Coral Reefs', lat: -4.6796, lon: 55.4920 },
+  { name: 'Chagos Archipelago', lat: -6.3400, lon: 71.8800 },
+  // Atlantic Ocean
+  { name: 'Caribbean Coral Reef, Puerto Rico', lat: 18.2208, lon: -66.5901 },
+  { name: 'Belize Barrier Reef', lat: 17.1899, lon: -87.9407 },
+  { name: 'Bahamas Banks', lat: 24.0954, lon: -76.0000 },
+  { name: 'Florida Keys Reef', lat: 24.6631, lon: -81.2717 },
+  { name: 'Turks and Caicos', lat: 21.6940, lon: -71.7979 },
+  // Red Sea
+  { name: 'Red Sea Coral Reefs, Egypt', lat: 27.2946, lon: 33.8317 },
+  { name: 'Eilat Coral Beach, Israel', lat: 29.5035, lon: 34.9200 },
+  { name: 'Farasan Islands, Saudi Arabia', lat: 16.7056, lon: 42.0361 },
+];
+
 export function LocationSettings({
   latitude,
   longitude,
@@ -26,6 +52,7 @@ export function LocationSettings({
   const [shiftMinutes, setShiftMinutes] = useState(timeShiftMinutes);
   const [isSaving, setIsSaving] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showReefPresets, setShowReefPresets] = useState(false);
 
   // Track if values differ from props
   useEffect(() => {
@@ -129,27 +156,84 @@ export function LocationSettings({
         </div>
 
         <div className="location-presets">
-          <p style={{ marginBottom: '10px', color: '#999' }}>Presets:</p>
-          <div className="preset-buttons">
+          <p style={{ marginBottom: '10px', color: '#999' }}>
+            Presets: 
             <button 
-              onClick={() => { setLat(37.4419); setLon(-122.1430); }} 
-              className="preset-button"
+              onClick={() => setShowReefPresets(!showReefPresets)}
+              style={{ 
+                marginLeft: '10px',
+                background: 'none',
+                border: 'none',
+                color: '#4a9eff',
+                cursor: 'pointer',
+                fontSize: '12px',
+                textDecoration: 'underline'
+              }}
             >
-              Palo Alto, CA
+              {showReefPresets ? 'Hide' : 'Show'} Reef Locations
             </button>
-            <button 
-              onClick={() => { setLat(33.4484); setLon(-112.0740); }} 
-              className="preset-button"
-            >
-              Phoenix, AZ
-            </button>
-            <button 
-              onClick={() => { setLat(1.3521); setLon(103.8198); }} 
-              className="preset-button"
-            >
-              Singapore
-            </button>
-          </div>
+          </p>
+          
+          {!showReefPresets ? (
+            <div className="preset-buttons">
+              <button 
+                onClick={() => { setLat(37.4419); setLon(-122.1430); }} 
+                className="preset-button"
+              >
+                Palo Alto, CA
+              </button>
+              <button 
+                onClick={() => { setLat(33.4484); setLon(-112.0740); }} 
+                className="preset-button"
+              >
+                Phoenix, AZ
+              </button>
+              <button 
+                onClick={() => { setLat(1.3521); setLon(103.8198); }} 
+                className="preset-button"
+              >
+                Singapore
+              </button>
+            </div>
+          ) : (
+            <div style={{ 
+              maxHeight: '300px', 
+              overflowY: 'auto',
+              marginTop: '10px',
+              padding: '10px',
+              background: '#1a1a1a',
+              borderRadius: '4px',
+              border: '1px solid #444'
+            }}>
+              <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gap: '8px'
+              }}>
+                {REEF_PRESETS.map((preset, index) => (
+                  <button
+                    key={index}
+                    onClick={() => {
+                      setLat(preset.lat);
+                      setLon(preset.lon);
+                    }}
+                    className="preset-button"
+                    style={{ 
+                      fontSize: '12px',
+                      padding: '6px 10px',
+                      textAlign: 'left',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis'
+                    }}
+                    title={preset.name}
+                  >
+                    {preset.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

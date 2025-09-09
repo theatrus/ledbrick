@@ -164,11 +164,8 @@ public:
     std::string export_json_minified() const;  // Compact JSON without formatting
     bool import_json(const std::string& json_str);
     
-    // Built-in presets
-    void create_sunrise_sunset_preset(uint16_t sunrise_minutes = 420, uint16_t sunset_minutes = 1020);
-    void create_full_spectrum_preset();
-    void create_simple_preset();
-    void create_dynamic_sunrise_sunset_preset();
+    // Built-in preset (only one default)
+    void create_default_astronomical_preset();
     
     // Channel configuration
     void set_channel_config(uint8_t channel, const ChannelConfig& config);

@@ -335,13 +335,7 @@ esp_err_t LEDBrickWebServer::handle_api_presets_get(httpd_req_t *req) {
   JsonDocument doc;
   JsonArray presets = doc["presets"].to<JsonArray>();
   
-  // Add built-in presets
-  presets.add("dynamic_sunrise_sunset");
-  presets.add("full_spectrum");
-  presets.add("simple");
-  presets.add("reef_natural");
-  presets.add("planted_co2");
-  presets.add("moonlight_only");
+  // No presets - we only have one default that's loaded automatically
   
   self->send_json_response(req, 200, doc);
   return ESP_OK;

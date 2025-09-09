@@ -648,31 +648,13 @@ LEDScheduler::InterpolationResult LEDScheduler::apply_moon_simulation(const Inte
 }
 
 void LEDScheduler::load_preset(const std::string& preset_name) {
-    if (preset_name == "sunrise_sunset") {
-        create_sunrise_sunset_preset();
+    // Only one default preset - astronomical schedule
+    if (preset_name == "default" || preset_name == "sunrise_sunset") {
+        create_default_astronomical_preset();
         return;
     }
     
-    if (preset_name == "dynamic_sunrise_sunset") {
-        create_dynamic_sunrise_sunset_preset();
-        return;
-    }
-    
-    if (preset_name == "full_spectrum") {
-        create_full_spectrum_preset();
-        return;
-    }
-    
-    if (preset_name == "simple") {
-        create_simple_preset();
-        return;
-    }
-    
-    auto it = presets_.find(preset_name);
-    if (it != presets_.end()) {
-        schedule_points_ = it->second;
-        sort_schedule_points();
-    }
+    // No other presets supported
 }
 
 void LEDScheduler::save_preset(const std::string& preset_name) {
@@ -681,15 +663,7 @@ void LEDScheduler::save_preset(const std::string& preset_name) {
 
 std::vector<std::string> LEDScheduler::get_preset_names() const {
     std::vector<std::string> names;
-    names.push_back("sunrise_sunset");
-    names.push_back("dynamic_sunrise_sunset");
-    names.push_back("full_spectrum");
-    names.push_back("simple");
-    
-    for (const auto& preset : presets_) {
-        names.push_back(preset.first);
-    }
-    
+    names.push_back("default");
     return names;
 }
 
@@ -697,116 +671,34 @@ void LEDScheduler::clear_preset(const std::string& preset_name) {
     presets_.erase(preset_name);
 }
 
-void LEDScheduler::create_sunrise_sunset_preset(uint16_t sunrise_minutes, uint16_t sunset_minutes) {
-    clear_schedule();
-    
-    // Calculate solar noon (midpoint between sunrise and sunset)
-    uint16_t noon_minutes = 720; // Default 12:00 PM
-    if (sunset_minutes > sunrise_minutes) {
-        noon_minutes = (sunrise_minutes + sunset_minutes) / 2;
-    }
-    
-    // Sunrise - Dawn (gradually increasing warm light)
-    add_schedule_point(SchedulePoint(sunrise_minutes,
-        std::vector<float>(num_channels_, 20.0f),  // 20% PWM
-        std::vector<float>(num_channels_, 0.3f)));  // 0.3A current
-    
-    // Solar noon - Peak intensity
-    add_schedule_point(SchedulePoint(noon_minutes,
-        std::vector<float>(num_channels_, 85.0f),  // 85% PWM
-        std::vector<float>(num_channels_, 1.8f)));  // 1.8A current
-    
-    // Sunset - Evening (warm, dimmer light)
-    add_schedule_point(SchedulePoint(sunset_minutes,
-        std::vector<float>(num_channels_, 15.0f),  // 15% PWM  
-        std::vector<float>(num_channels_, 0.2f)));  // 0.2A current
-    
-    // Night - Off
-    add_schedule_point(SchedulePoint(sunset_minutes + 60,
-        std::vector<float>(num_channels_, 0.0f),   // 0% PWM
-        std::vector<float>(num_channels_, 0.0f))); // 0A current
-}
 
-void LEDScheduler::create_full_spectrum_preset() {
+void LEDScheduler::create_default_astronomical_preset() {
     clear_schedule();
     
-    // Create varied spectrum throughout the day
-    std::vector<float> morning_pwm = {40, 60, 80, 100, 80, 60, 40, 20};
-    std::vector<float> morning_current = {0.6f, 1.0f, 1.5f, 2.0f, 1.5f, 1.0f, 0.6f, 0.3f};
-    morning_pwm.resize(num_channels_, morning_pwm.back());
-    morning_current.resize(num_channels_, morning_current.back());
-    
-    std::vector<float> noon_pwm = {80, 100, 100, 100, 100, 100, 80, 60};
-    std::vector<float> noon_current = {1.5f, 2.0f, 2.0f, 2.0f, 2.0f, 2.0f, 1.5f, 1.0f};
-    noon_pwm.resize(num_channels_, noon_pwm.back());
-    noon_current.resize(num_channels_, noon_current.back());
-    
-    std::vector<float> afternoon_pwm = {60, 80, 100, 100, 80, 60, 40, 30};
-    std::vector<float> afternoon_current = {1.0f, 1.5f, 2.0f, 2.0f, 1.5f, 1.0f, 0.6f, 0.4f};
-    afternoon_pwm.resize(num_channels_, afternoon_pwm.back());
-    afternoon_current.resize(num_channels_, afternoon_current.back());
-    
-    std::vector<float> evening_pwm = {20, 30, 40, 60, 40, 30, 20, 10};
-    std::vector<float> evening_current = {0.3f, 0.4f, 0.6f, 1.0f, 0.6f, 0.4f, 0.3f, 0.1f};
-    evening_pwm.resize(num_channels_, evening_pwm.back());
-    evening_current.resize(num_channels_, evening_current.back());
-    
-    add_schedule_point(SchedulePoint(480, morning_pwm, morning_current));     // 8 AM
-    add_schedule_point(SchedulePoint(720, noon_pwm, noon_current));          // 12 PM
-    add_schedule_point(SchedulePoint(960, afternoon_pwm, afternoon_current)); // 4 PM
-    add_schedule_point(SchedulePoint(1200, evening_pwm, evening_current));   // 8 PM
-}
-
-void LEDScheduler::create_simple_preset() {
-    clear_schedule();
-    
-    // Simple on/off schedule
-    add_schedule_point(SchedulePoint(480,  // 8 AM - On
-        std::vector<float>(num_channels_, 70.0f),
-        std::vector<float>(num_channels_, 1.2f)));
-    
-    add_schedule_point(SchedulePoint(1200, // 8 PM - Off
-        std::vector<float>(num_channels_, 0.0f),
-        std::vector<float>(num_channels_, 0.0f)));
-}
-
-void LEDScheduler::create_dynamic_sunrise_sunset_preset() {
-    clear_schedule();
-    
-    // Pre-dawn (30 minutes before sunrise) - Moonlight simulation
+    // Dark before sunrise - 30 minutes before
     add_dynamic_schedule_point(DynamicTimeType::SUNRISE_RELATIVE, -30,
-        std::vector<float>(num_channels_, 5.0f),   // 5% PWM - moonlight
-        std::vector<float>(num_channels_, 0.1f));  // 0.1A current
+        std::vector<float>(num_channels_, 0.0f),   // 0% PWM - dark
+        std::vector<float>(num_channels_, 0.0f));  // 0A current
     
-    // Sunrise - Dawn begins
-    add_dynamic_schedule_point(DynamicTimeType::SUNRISE_RELATIVE, 0,
-        std::vector<float>(num_channels_, 20.0f),  // 20% PWM
-        std::vector<float>(num_channels_, 0.3f));  // 0.3A current
-    
-    // Post-sunrise (30 minutes after) - Morning ramp up
+    // Sunrise + 30 minutes - Morning ramp complete
     add_dynamic_schedule_point(DynamicTimeType::SUNRISE_RELATIVE, 30,
-        std::vector<float>(num_channels_, 50.0f),  // 50% PWM
-        std::vector<float>(num_channels_, 1.0f));  // 1.0A current
+        std::vector<float>(num_channels_, 100.0f),  // 100% PWM
+        std::vector<float>(num_channels_, 2.0f));   // 2.0A current
     
-    // Solar noon - Peak intensity
+    // Solar noon - Peak intensity maintained
     add_dynamic_schedule_point(DynamicTimeType::SOLAR_NOON, 0,
-        std::vector<float>(num_channels_, 85.0f),  // 85% PWM
-        std::vector<float>(num_channels_, 1.8f));  // 1.8A current
+        std::vector<float>(num_channels_, 100.0f),  // 100% PWM
+        std::vector<float>(num_channels_, 2.0f));   // 2.0A current
     
-    // Pre-sunset (30 minutes before) - Evening ramp down
+    // Sunset - 30 minutes - Start ramping down
     add_dynamic_schedule_point(DynamicTimeType::SUNSET_RELATIVE, -30,
-        std::vector<float>(num_channels_, 50.0f),  // 50% PWM
-        std::vector<float>(num_channels_, 1.0f));  // 1.0A current
+        std::vector<float>(num_channels_, 100.0f),  // 100% PWM
+        std::vector<float>(num_channels_, 2.0f));   // 2.0A current
     
-    // Sunset - Dusk begins
-    add_dynamic_schedule_point(DynamicTimeType::SUNSET_RELATIVE, 0,
-        std::vector<float>(num_channels_, 20.0f),  // 20% PWM
-        std::vector<float>(num_channels_, 0.3f));  // 0.3A current
-    
-    // Post-sunset (30 minutes after) - Night/Moonlight
+    // Sunset + 30 minutes - Dark again
     add_dynamic_schedule_point(DynamicTimeType::SUNSET_RELATIVE, 30,
-        std::vector<float>(num_channels_, 5.0f),   // 5% PWM - moonlight
-        std::vector<float>(num_channels_, 0.1f));  // 0.1A current
+        std::vector<float>(num_channels_, 0.0f),   // 0% PWM - dark
+        std::vector<float>(num_channels_, 0.0f));  // 0A current
 }
 
 LEDScheduler::SerializedData LEDScheduler::serialize() const {

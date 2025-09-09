@@ -31,10 +31,10 @@ void LEDBrickScheduler::setup() {
   // Load schedule from flash storage
   load_schedule_from_flash();
   
-  // Load default sunrise/sunset schedule if no points exist
+  // Load default astronomical schedule if no points exist
   if (scheduler_.is_schedule_empty()) {
     ESP_LOGI(TAG, "No saved schedule found, loading default preset");
-    load_preset("sunrise_sunset");
+    load_preset("default");
     save_schedule_to_flash();  // Save the default schedule
   }
   
@@ -226,8 +226,9 @@ void LEDBrickScheduler::create_sunrise_sunset_preset_with_astro_data() const {
            sunrise_minutes / 60, sunrise_minutes % 60,
            sunset_minutes / 60, sunset_minutes % 60);
   
-  // Use the standalone scheduler to create the preset with astronomical data
-  const_cast<LEDScheduler&>(scheduler_).create_sunrise_sunset_preset(sunrise_minutes, sunset_minutes);
+  // Use the standalone scheduler to create the default astronomical preset
+  // Note: The new default preset is dynamic and doesn't use specific sunrise/sunset times
+  const_cast<LEDScheduler&>(scheduler_).create_default_astronomical_preset();
 }
 
 void LEDBrickScheduler::apply_values(const InterpolationResult &values) {
