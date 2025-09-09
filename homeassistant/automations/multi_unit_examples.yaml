@@ -1,5 +1,18 @@
 # Multi-Unit Automation Examples
 # These automations show how to coordinate multiple LEDBrick units
+#
+# IMPORTANT: This file contains EXAMPLE automations for multi-unit setups.
+# You MUST replace all unit names (like "ledbrickplus", "ledbrick_tank1", etc.) 
+# with your actual ESPHome device names.
+# 
+# The examples show patterns for:
+# - Coordinating multiple units across tanks
+# - Tank-specific configurations  
+# - Staggered startup sequences
+# - Temperature protection
+#
+# These are NOT meant to work out-of-the-box - they are templates
+# for you to customize based on your setup.
 
 automation:
   # Synchronized feeding mode across all tanks
@@ -78,55 +91,79 @@ automation:
       - platform: time
         at: "04:00:00"  # Daily reconfiguration
     action:
-      # Configure main reef tank
-      - service: esphome.ledbrickplus_load_preset
-        data:
-          preset_name: "dynamic_sunrise_sunset"
+      # Example: Configure units based on tank type
+      # Note: Replace 'unit_name' with your actual ESPHome device names
+      - variables:
+          reef_units: ["ledbrick_reef_1", "ledbrick_reef_2"]  # Replace with your unit names
+          planted_units: ["ledbrick_planted"]  # Replace with your unit names
       
-      - service: esphome.ledbrickplus_set_moon_base_intensity_8ch
-        data:
-          intensity_ch1: 4.0  # Blue moonlight
-          intensity_ch2: 0.0
-          intensity_ch3: 0.0
-          intensity_ch4: 2.0  # White moonlight
-          intensity_ch5: 0.0
-          intensity_ch6: 0.0
-          intensity_ch7: 3.0  # Royal blue
-          intensity_ch8: 0.0
+      # Configure reef tank units
+      - repeat:
+          for_each: "{{ reef_units }}"
+          sequence:
+            - service: "esphome.{{ repeat.item }}_load_preset"
+              data:
+                preset_name: "dynamic_sunrise_sunset"
+              continue_on_error: true
+            
+            - service: "esphome.{{ repeat.item }}_set_moon_base_intensity_8ch"
+              data:
+                intensity_ch1: 4.0  # Blue moonlight
+                intensity_ch2: 0.0
+                intensity_ch3: 0.0
+                intensity_ch4: 2.0  # White moonlight
+                intensity_ch5: 0.0
+                intensity_ch6: 0.0
+                intensity_ch7: 3.0  # Royal blue
+                intensity_ch8: 0.0
+              continue_on_error: true
       
-      # Configure planted tank differently
-      - service: esphome.ledbrick_tank1_clear_schedule
+      # Configure planted tank units differently
+      - repeat:
+          for_each: "{{ planted_units }}"
+          sequence:
+            - service: "esphome.{{ repeat.item }}_clear_schedule"
+              continue_on_error: true
+            
+            - service: "esphome.{{ repeat.item }}_set_schedule_point_8ch"
+              data:
+                time_minutes: 420  # 7 AM
+                pwm_ch1: 20    # Less blue
+                pwm_ch2: 10
+                pwm_ch3: 0
+                pwm_ch4: 60    # More white
+                pwm_ch5: 80    # Warm white
+                pwm_ch6: 50    # Red for plants
+                pwm_ch7: 30    # Green
+                pwm_ch8: 40    # Far red
+                current_ch1: 0.4
+                current_ch2: 0.2
+                current_ch3: 0
+                current_ch4: 1.2
+                current_ch5: 1.6
+                current_ch6: 1.0
+                current_ch7: 0.6
+                current_ch8: 0.8
+              continue_on_error: true
       
-      - service: esphome.ledbrick_tank1_set_schedule_point_8ch
-        data:
-          time_minutes: 420  # 7 AM
-          pwm_ch1: 20    # Less blue
-          pwm_ch2: 10
-          pwm_ch3: 0
-          pwm_ch4: 60    # More white
-          pwm_ch5: 80    # Warm white
-          pwm_ch6: 50    # Red for plants
-          pwm_ch7: 30    # Green
-          pwm_ch8: 40    # Far red
-          current_ch1: 0.4
-          current_ch2: 0.2
-          current_ch3: 0
-          current_ch4: 1.2
-          current_ch5: 1.6
-          current_ch6: 1.0
-          current_ch7: 0.6
-          current_ch8: 0.8
+      # Configure frag tank units with extended photoperiod
+      - variables:
+          frag_units: ["ledbrick_frag"]  # Replace with your unit names
       
-      # Configure frag tank with extended photoperiod
-      - service: esphome.ledbrick_frag_load_preset
-        data:
-          preset_name: "full_spectrum"
-      
-      - service: number.set_value
-        target:
-          entity_id: number.ledbrick_frag_pwm_scale
-        data:
-          value: 120  # Higher intensity for coral growth
+      - repeat:
+          for_each: "{{ frag_units }}"
+          sequence:
+            - service: "esphome.{{ repeat.item }}_load_preset"
+              data:
+                preset_name: "full_spectrum"
+              continue_on_error: true
+            
+            - service: number.set_value
+              target:
+                entity_id: "number.{{ repeat.item }}_pwm_scale"
+              data:
+                value: 120  # Higher intensity for coral growth
+              continue_on_error: true
   
   # Staggered startup to avoid power surge
   - alias: "Multi-Tank Staggered Morning Startup"
@@ -136,44 +173,37 @@ automation:
         event: sunrise
         offset: "-00:30:00"
     action:
-      # Start frag tank first (smallest load)
-      - service: switch.turn_on
-        target:
-          entity_id: switch.ledbrick_frag_scheduler_enabled
+      - variables:
+          # Define your units in startup order (smallest to largest load)
+          # Replace with your actual unit names
+          startup_order:
+            - "ledbrick_frag"      # Frag tank
+            - "ledbrick_planted"   # Planted tank  
+            - "ledbrick_reef_1"    # Main reef left
+            - "ledbrick_reef_2"    # Main reef right
       
-      - delay:
-          seconds: 30
-      
-      # Start planted tank
-      - service: switch.turn_on
-        target:
-          entity_id: switch.ledbrick_tank1_scheduler_enabled
-      
-      - delay:
-          seconds: 30
-      
-      # Start main reef tank
-      - service: switch.turn_on
-        target:
-          entity_id: switch.ledbrickplus_scheduler_enabled
-      
-      # Start secondary reef tank
-      - delay:
-          seconds: 30
-      
-      - service: switch.turn_on
-        target:
-          entity_id: switch.ledbrick_tank2_scheduler_enabled
+      # Start units in sequence with delays
+      - repeat:
+          for_each: "{{ startup_order }}"
+          sequence:
+            - service: switch.turn_on
+              target:
+                entity_id: "switch.{{ repeat.item }}_scheduler_enabled"
+              continue_on_error: true
+            
+            - delay:
+                seconds: 30
   
   # Temperature-based protection for all units
   - alias: "Multi-Tank Temperature Protection"
     id: multi_tank_temp_protection
+    # Note: Add your actual temperature sensor entity IDs below
     trigger:
       - platform: numeric_state
         entity_id: 
-          - sensor.ledbrickplus_temperature
-          - sensor.ledbrick_tank1_temperature
-          - sensor.ledbrick_tank2_temperature
+          - sensor.ledbrick_reef_1_temperature     # Replace with your sensors
+          - sensor.ledbrick_reef_2_temperature
+          - sensor.ledbrick_planted_temperature
           - sensor.ledbrick_frag_temperature
         above: 65
         for:

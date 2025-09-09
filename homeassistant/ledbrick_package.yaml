@@ -26,7 +26,7 @@ input_text:
         "frag_tank": [],
         "quarantine_tank": []
       }
-    max: 5000
+    max: 255
     mode: text
 
 # Active tank selection
@@ -334,10 +334,10 @@ script:
         example: 720
       pwm_values:
         description: "PWM values for 8 channels"
-        example: [80, 80, 40, 90, 70, 30, 20, 10]
+        example: "[80, 80, 40, 90, 70, 30, 20, 10]"
       current_values:
         description: "Current values for 8 channels"
-        example: [1.6, 1.6, 0.8, 1.8, 1.4, 0.6, 0.4, 0.2]
+        example: "[1.6, 1.6, 0.8, 1.8, 1.4, 0.6, 0.4, 0.2]"
     sequence:
       - variables:
           groups: "{{ states('input_text.tank_groups') | from_json }}"
