@@ -1,0 +1,214 @@
+# Alert and Notification Automations
+
+automation:
+  # High temperature alert
+  - alias: "LED High Temperature Alert"
+    id: led_high_temp_alert
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.ledbrickplus_temperature
+        above: 65
+        for:
+          minutes: 2
+    action:
+      - service: notify.mobile_app_phone
+        data:
+          title: "⚠️ LED Temperature Warning"
+          message: "LED driver temperature is {{ states('sensor.ledbrickplus_temperature') }}°C"
+          data:
+            importance: high
+            tag: led_temp
+            color: red
+            actions:
+              - action: "REDUCE_BRIGHTNESS"
+                title: "Reduce to 70%"
+              - action: "EMERGENCY_OFF"
+                title: "Turn Off"
+      
+      - service: persistent_notification.create
+        data:
+          title: "LED High Temperature"
+          message: >
+            LED driver temperature has exceeded safe limits.
+            Current: {{ states('sensor.ledbrickplus_temperature') }}°C
+            Consider improving ventilation or reducing intensity.
+          notification_id: led_temp_warning
+  
+  # Handle temperature alert actions
+  - alias: "Handle Temperature Alert Actions"
+    id: handle_temp_alert_actions
+    trigger:
+      - platform: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: "REDUCE_BRIGHTNESS"
+      - platform: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: "EMERGENCY_OFF"
+    action:
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ trigger.event.data.action == 'REDUCE_BRIGHTNESS' }}"
+            sequence:
+              - service: number.set_value
+                target:
+                  entity_id: number.ledbrickplus_pwm_scale
+                data:
+                  value: 70
+          
+          - conditions:
+              - condition: template
+                value_template: "{{ trigger.event.data.action == 'EMERGENCY_OFF' }}"
+            sequence:
+              - service: switch.turn_off
+                target:
+                  entity_id: switch.ledbrickplus_scheduler_enabled
+  
+  # Connection lost alert
+  - alias: "LEDBrick Connection Lost"
+    id: ledbrick_connection_lost
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.ledbrickplus_status
+        to: "off"
+        for:
+          minutes: 5
+    action:
+      - service: notify.mobile_app_phone
+        data:
+          title: "🔌 LEDBrick Offline"
+          message: "Lost connection to LEDBrick controller"
+          data:
+            importance: high
+            tag: connection_lost
+            persistent: true
+  
+  # Connection restored
+  - alias: "LEDBrick Connection Restored"
+    id: ledbrick_connection_restored
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.ledbrickplus_status
+        to: "on"
+        from: "off"
+    action:
+      - service: notify.mobile_app_phone
+        data:
+          title: "✅ LEDBrick Online"
+          message: "Connection restored"
+          data:
+            tag: connection_lost
+      
+      - service: persistent_notification.dismiss
+        data:
+          notification_id: ledbrick_offline
+  
+  # Schedule disabled during peak hours
+  - alias: "Schedule Disabled Warning"
+    id: schedule_disabled_warning
+    trigger:
+      - platform: state
+        entity_id: switch.ledbrickplus_scheduler_enabled
+        to: "off"
+        for:
+          minutes: 30
+    condition:
+      - condition: time
+        after: "08:00:00"
+        before: "20:00:00"
+    action:
+      - service: notify.mobile_app_phone
+        data:
+          title: "📅 Scheduler Disabled"
+          message: "The lighting schedule has been off for 30 minutes during peak hours"
+          data:
+            tag: schedule_warning
+            actions:
+              - action: "ENABLE_SCHEDULE"
+                title: "Enable Now"
+  
+  # Power consumption alert
+  - alias: "High Power Consumption Alert"
+    id: high_power_alert
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.ledbrick_power_consumption
+        above: 200
+        for:
+          minutes: 10
+    action:
+      - service: notify.mobile_app_phone
+        data:
+          title: "⚡ High Power Usage"
+          message: "LEDBrick consuming {{ states('sensor.ledbrick_power_consumption') }}W"
+          data:
+            importance: default
+            tag: power_alert
+  
+  # Moon simulation reminder
+  - alias: "Moon Simulation Reminder"
+    id: moon_sim_reminder
+    trigger:
+      - platform: sun
+        event: sunset
+        offset: "01:00:00"
+    condition:
+      - condition: state
+        entity_id: switch.ledbrickplus_moon_simulation_enabled
+        state: "off"
+      - condition: numeric_state
+        entity_id: sensor.ledbrickplus_moon_phase
+        above: 40  # Significant moon phase
+    action:
+      - service: notify.mobile_app_phone
+        data:
+          title: "🌙 Moon Simulation"
+          message: "Moon phase is {{ states('sensor.ledbrickplus_moon_phase') }}%. Enable moon simulation?"
+          data:
+            tag: moon_reminder
+            actions:
+              - action: "ENABLE_MOON"
+                title: "Enable"
+  
+  # Daily status report
+  - alias: "Daily LEDBrick Status Report"
+    id: daily_status_report
+    trigger:
+      - platform: time
+        at: "21:00:00"
+    action:
+      - service: notify.mobile_app_phone
+        data:
+          title: "📊 Daily Lighting Report"
+          message: >
+            Power used: {{ states('sensor.ledbrick_daily_energy') }} kWh
+            Max temp: {{ states.sensor.ledbrickplus_temperature.attributes.max_value | default('N/A') }}°C
+            Schedule: {{ 'Active' if is_state('switch.ledbrickplus_scheduler_enabled', 'on') else 'Inactive' }}
+          data:
+            tag: daily_report
+            group: ledbrick_reports
+  
+  # Maintenance reminder
+  - alias: "Monthly Maintenance Reminder"
+    id: maintenance_reminder
+    trigger:
+      - platform: time
+        at: "10:00:00"
+    condition:
+      - condition: template
+        value_template: "{{ now().day == 1 }}"  # First of month
+    action:
+      - service: notify.mobile_app_phone
+        data:
+          title: "🔧 Maintenance Reminder"
+          message: "Time for monthly LED inspection and cleaning"
+          data:
+            tag: maintenance_reminder
+            persistent: true
+            actions:
+              - action: "MARK_COMPLETE"
+                title: "Done"
+              - action: "REMIND_LATER"
+                title: "Later"

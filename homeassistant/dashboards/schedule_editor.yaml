@@ -1,0 +1,379 @@
+# LEDBrick Schedule Editor Dashboard
+# Advanced schedule point management interface
+
+views:
+  - title: Schedule Editor
+    path: ledbrick-schedule
+    icon: mdi:calendar-clock
+    cards:
+      # Current Schedule Overview
+      - type: markdown
+        content: |
+          # 📅 Schedule Point Editor
+          Configure individual schedule points or dynamic time-based events.
+          
+          **Current Time:** {{ states('sensor.ledbrickplus_scheduler_current_time') }}
+          **Active Points:** {{ state_attr('sensor.ledbrickplus_schedule_info', 'point_count') | default('Unknown') }}
+      
+      # Time Selection
+      - type: entities
+        title: Schedule Time
+        show_header_toggle: false
+        entities:
+          - type: section
+            label: Fixed Time Point
+            
+          - entity: input_number.schedule_hour
+            name: Hour (0-23)
+            
+          - entity: input_number.schedule_minute
+            name: Minute (0-59)
+            
+          - type: section
+            label: Dynamic Time Point
+            
+          - entity: input_select.dynamic_time_type
+            name: Reference Time
+            
+          - entity: input_number.time_offset
+            name: Offset (minutes)
+      
+      # Channel Values Configuration
+      - type: vertical-stack
+        cards:
+          # PWM Values
+          - type: entities
+            title: PWM Values (0-100%)
+            show_header_toggle: false
+            entities:
+              - type: custom:slider-entity-row
+                entity: input_number.pwm_channel_1
+                name: Ch1 - Blue
+                hide_state: false
+                
+              - type: custom:slider-entity-row
+                entity: input_number.pwm_channel_2
+                name: Ch2 - Royal Blue
+                hide_state: false
+                
+              - type: custom:slider-entity-row
+                entity: input_number.pwm_channel_3
+                name: Ch3 - UV
+                hide_state: false
+                
+              - type: custom:slider-entity-row
+                entity: input_number.pwm_channel_4
+                name: Ch4 - Cool White
+                hide_state: false
+                
+              - type: custom:slider-entity-row
+                entity: input_number.pwm_channel_5
+                name: Ch5 - Warm White
+                hide_state: false
+                
+              - type: custom:slider-entity-row
+                entity: input_number.pwm_channel_6
+                name: Ch6 - Red
+                hide_state: false
+                
+              - type: custom:slider-entity-row
+                entity: input_number.pwm_channel_7
+                name: Ch7 - Green
+                hide_state: false
+                
+              - type: custom:slider-entity-row
+                entity: input_number.pwm_channel_8
+                name: Ch8 - Far Red
+                hide_state: false
+          
+          # Current Values
+          - type: entities
+            title: Current Limits (0-5A)
+            show_header_toggle: false
+            entities:
+              - type: custom:slider-entity-row
+                entity: input_number.current_channel_1
+                name: Ch1 Current
+                hide_state: false
+                
+              - type: custom:slider-entity-row
+                entity: input_number.current_channel_2
+                name: Ch2 Current
+                hide_state: false
+                
+              - type: custom:slider-entity-row
+                entity: input_number.current_channel_3
+                name: Ch3 Current
+                hide_state: false
+                
+              - type: custom:slider-entity-row
+                entity: input_number.current_channel_4
+                name: Ch4 Current
+                hide_state: false
+      
+      # Action Buttons
+      - type: entities
+        title: Schedule Actions
+        show_header_toggle: false
+        entities:
+          - type: buttons
+            entities:
+              - name: Add Fixed Point
+                icon: mdi:plus-circle
+                tap_action:
+                  action: call-service
+                  service: script.add_fixed_schedule_point
+                  
+              - name: Add Dynamic Point
+                icon: mdi:plus-circle-outline
+                tap_action:
+                  action: call-service
+                  service: script.add_dynamic_schedule_point
+                  
+              - name: Remove Point
+                icon: mdi:minus-circle
+                tap_action:
+                  action: call-service
+                  service: script.remove_schedule_point
+          
+          - type: divider
+          
+          - type: section
+            label: Quick Templates
+            
+          - type: buttons
+            entities:
+              - name: Dawn
+                icon: mdi:weather-sunset-up
+                tap_action:
+                  action: call-service
+                  service: script.apply_dawn_template
+                  
+              - name: Noon
+                icon: mdi:white-balance-sunny
+                tap_action:
+                  action: call-service
+                  service: script.apply_noon_template
+                  
+              - name: Dusk
+                icon: mdi:weather-sunset-down
+                tap_action:
+                  action: call-service
+                  service: script.apply_dusk_template
+                  
+              - name: Night
+                icon: mdi:weather-night
+                tap_action:
+                  action: call-service
+                  service: script.apply_night_template
+      
+      # Schedule Visualization
+      - type: custom:apexcharts-card
+        header:
+          show: true
+          title: Schedule Preview
+        graph_span: 24h
+        span:
+          start: day
+        yaxis:
+          - id: pwm
+            min: 0
+            max: 100
+            apex_config:
+              tickAmount: 5
+        series:
+          - entity: sensor.ledbrickplus_scheduler_pwm_channel_1
+            name: Blue
+            color: blue
+            yaxis_id: pwm
+            show:
+              legend_value: false
+          - entity: sensor.ledbrickplus_scheduler_pwm_channel_4
+            name: White
+            color: cyan
+            yaxis_id: pwm
+            show:
+              legend_value: false
+          - entity: sensor.ledbrickplus_scheduler_pwm_channel_6
+            name: Red
+            color: red
+            yaxis_id: pwm
+            show:
+              legend_value: false
+      
+      # Import/Export
+      - type: entities
+        title: Schedule Import/Export
+        show_header_toggle: false
+        entities:
+          - type: section
+            label: JSON Data Management
+            
+          - entity: input_text.schedule_json
+            name: JSON Data
+            
+          - type: buttons
+            entities:
+              - name: Import JSON
+                icon: mdi:import
+                tap_action:
+                  action: call-service
+                  service: script.import_schedule_json
+                  
+              - name: Export to Log
+                icon: mdi:export
+                tap_action:
+                  action: call-service
+                  service: esphome.ledbrickplus_get_schedule_json
+                  
+              - name: Save to File
+                icon: mdi:content-save
+                tap_action:
+                  action: call-service
+                  service: script.save_schedule_to_file
+
+# Input helpers for this dashboard
+input_number:
+  schedule_hour:
+    name: Schedule Hour
+    min: 0
+    max: 23
+    step: 1
+    mode: box
+    icon: mdi:clock-outline
+    
+  schedule_minute:
+    name: Schedule Minute
+    min: 0
+    max: 59
+    step: 1
+    mode: box
+    icon: mdi:clock-outline
+    
+  time_offset:
+    name: Time Offset
+    min: -1439
+    max: 1439
+    step: 5
+    mode: box
+    unit_of_measurement: "min"
+    icon: mdi:timer-plus-outline
+    
+  # PWM channels
+  pwm_channel_1:
+    name: PWM Channel 1
+    min: 0
+    max: 100
+    step: 1
+    unit_of_measurement: "%"
+    icon: mdi:led-on
+    
+  pwm_channel_2:
+    name: PWM Channel 2
+    min: 0
+    max: 100
+    step: 1
+    unit_of_measurement: "%"
+    icon: mdi:led-on
+    
+  pwm_channel_3:
+    name: PWM Channel 3
+    min: 0
+    max: 100
+    step: 1
+    unit_of_measurement: "%"
+    icon: mdi:led-on
+    
+  pwm_channel_4:
+    name: PWM Channel 4
+    min: 0
+    max: 100
+    step: 1
+    unit_of_measurement: "%"
+    icon: mdi:led-on
+    
+  pwm_channel_5:
+    name: PWM Channel 5
+    min: 0
+    max: 100
+    step: 1
+    unit_of_measurement: "%"
+    icon: mdi:led-on
+    
+  pwm_channel_6:
+    name: PWM Channel 6
+    min: 0
+    max: 100
+    step: 1
+    unit_of_measurement: "%"
+    icon: mdi:led-on
+    
+  pwm_channel_7:
+    name: PWM Channel 7
+    min: 0
+    max: 100
+    step: 1
+    unit_of_measurement: "%"
+    icon: mdi:led-on
+    
+  pwm_channel_8:
+    name: PWM Channel 8
+    min: 0
+    max: 100
+    step: 1
+    unit_of_measurement: "%"
+    icon: mdi:led-on
+    
+  # Current channels
+  current_channel_1:
+    name: Current Channel 1
+    min: 0
+    max: 5
+    step: 0.1
+    unit_of_measurement: "A"
+    icon: mdi:current-dc
+    
+  current_channel_2:
+    name: Current Channel 2
+    min: 0
+    max: 5
+    step: 0.1
+    unit_of_measurement: "A"
+    icon: mdi:current-dc
+    
+  current_channel_3:
+    name: Current Channel 3
+    min: 0
+    max: 5
+    step: 0.1
+    unit_of_measurement: "A"
+    icon: mdi:current-dc
+    
+  current_channel_4:
+    name: Current Channel 4
+    min: 0
+    max: 5
+    step: 0.1
+    unit_of_measurement: "A"
+    icon: mdi:current-dc
+
+input_select:
+  dynamic_time_type:
+    name: Dynamic Time Type
+    options:
+      - "sunrise_relative"
+      - "sunset_relative"
+      - "solar_noon"
+      - "civil_dawn"
+      - "civil_dusk"
+      - "nautical_dawn"
+      - "nautical_dusk"
+      - "astronomical_dawn"
+      - "astronomical_dusk"
+    icon: mdi:sun-clock
+
+input_text:
+  schedule_json:
+    name: Schedule JSON
+    max: 2048
+    mode: text

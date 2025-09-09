@@ -4,6 +4,12 @@
 #include <iomanip>
 #include <cstring>
 
+// Use cJSON for lightweight JSON parsing
+// cJSON is a single-file library perfect for embedded systems
+extern "C" {
+    #include "cJSON.h"
+}
+
 LEDScheduler::LEDScheduler(uint8_t num_channels) 
     : num_channels_(num_channels) {
 }
@@ -847,62 +853,245 @@ bool LEDScheduler::deserialize(const SerializedData& data) {
 }
 
 std::string LEDScheduler::export_json() const {
-    std::ostringstream json;
-    json << std::fixed << std::setprecision(2);
+    // Create root object
+    cJSON* root = cJSON_CreateObject();
+    if (!root) return "{}";
     
-    json << "{\n";
-    json << "  \"num_channels\": " << static_cast<int>(num_channels_) << ",\n";
-    json << "  \"schedule_points\": [\n";
+    // Use RAII to ensure cleanup
+    struct JSONDeleter {
+        cJSON* json;
+        ~JSONDeleter() { if (json) cJSON_Delete(json); }
+    } deleter{root};
     
-    for (size_t i = 0; i < schedule_points_.size(); i++) {
-        const auto& point = schedule_points_[i];
+    // Add num_channels
+    cJSON_AddNumberToObject(root, "num_channels", num_channels_);
+    
+    // Create schedule_points array
+    cJSON* points_array = cJSON_CreateArray();
+    if (!points_array) return "{}";
+    cJSON_AddItemToObject(root, "schedule_points", points_array);
+    
+    // Add each schedule point
+    for (const auto& point : schedule_points_) {
+        cJSON* point_obj = cJSON_CreateObject();
+        if (!point_obj) continue;
         
-        json << "    {\n";
+        // Add time_type
+        cJSON_AddStringToObject(point_obj, "time_type", 
+                               dynamic_time_type_to_string(point.time_type).c_str());
         
-        // Add time type information
-        json << "      \"time_type\": \"" << dynamic_time_type_to_string(point.time_type) << "\",\n";
-        
+        // Add offset_minutes for dynamic points
         if (point.time_type != DynamicTimeType::FIXED) {
-            json << "      \"offset_minutes\": " << point.offset_minutes << ",\n";
+            cJSON_AddNumberToObject(point_obj, "offset_minutes", point.offset_minutes);
         }
         
-        json << "      \"time_minutes\": " << point.time_minutes << ",\n";
-        json << "      \"time_formatted\": \"" << std::setfill('0') << std::setw(2) 
-             << (point.time_minutes / 60) << ":" << std::setfill('0') << std::setw(2) 
-             << (point.time_minutes % 60) << "\",\n";
+        // Add time_minutes
+        cJSON_AddNumberToObject(point_obj, "time_minutes", point.time_minutes);
         
-        json << "      \"pwm_values\": [";
-        for (size_t j = 0; j < point.pwm_values.size(); j++) {
-            if (j > 0) json << ", ";
-            json << point.pwm_values[j];
+        // Add time_formatted
+        char time_str[6];
+        snprintf(time_str, sizeof(time_str), "%02d:%02d", 
+                 point.time_minutes / 60, point.time_minutes % 60);
+        cJSON_AddStringToObject(point_obj, "time_formatted", time_str);
+        
+        // Add pwm_values array
+        cJSON* pwm_array = cJSON_CreateArray();
+        if (pwm_array) {
+            for (float value : point.pwm_values) {
+                cJSON* number = cJSON_CreateNumber(value);
+                if (number) cJSON_AddItemToArray(pwm_array, number);
+            }
+            cJSON_AddItemToObject(point_obj, "pwm_values", pwm_array);
         }
-        json << "],\n";
         
-        json << "      \"current_values\": [";
-        for (size_t j = 0; j < point.current_values.size(); j++) {
-            if (j > 0) json << ", ";
-            json << point.current_values[j];
+        // Add current_values array
+        cJSON* current_array = cJSON_CreateArray();
+        if (current_array) {
+            for (float value : point.current_values) {
+                cJSON* number = cJSON_CreateNumber(value);
+                if (number) cJSON_AddItemToArray(current_array, number);
+            }
+            cJSON_AddItemToObject(point_obj, "current_values", current_array);
         }
-        json << "]\n";
         
-        json << "    }";
-        if (i < schedule_points_.size() - 1) json << ",";
-        json << "\n";
+        // Add point to array
+        cJSON_AddItemToArray(points_array, point_obj);
     }
     
-    json << "  ]\n";
-    json << "}\n";
+    // Convert to string with formatting
+    char* json_str = cJSON_Print(root);
+    if (!json_str) return "{}";
     
-    return json.str();
+    std::string result(json_str);
+    cJSON_free(json_str);
+    
+    return result;
+}
+
+std::string LEDScheduler::export_json_minified() const {
+    // Create root object
+    cJSON* root = cJSON_CreateObject();
+    if (!root) return "{}";
+    
+    // Use RAII to ensure cleanup
+    struct JSONDeleter {
+        cJSON* json;
+        ~JSONDeleter() { if (json) cJSON_Delete(json); }
+    } deleter{root};
+    
+    // Add num_channels
+    cJSON_AddNumberToObject(root, "num_channels", num_channels_);
+    
+    // Create schedule_points array
+    cJSON* points_array = cJSON_CreateArray();
+    if (!points_array) return "{}";
+    cJSON_AddItemToObject(root, "schedule_points", points_array);
+    
+    // Add each schedule point
+    for (const auto& point : schedule_points_) {
+        cJSON* point_obj = cJSON_CreateObject();
+        if (!point_obj) continue;
+        
+        // Add time_type
+        cJSON_AddStringToObject(point_obj, "time_type", 
+                               dynamic_time_type_to_string(point.time_type).c_str());
+        
+        // Add offset_minutes for dynamic points
+        if (point.time_type != DynamicTimeType::FIXED) {
+            cJSON_AddNumberToObject(point_obj, "offset_minutes", point.offset_minutes);
+        }
+        
+        // Add time_minutes
+        cJSON_AddNumberToObject(point_obj, "time_minutes", point.time_minutes);
+        
+        // Add time_formatted
+        char time_str[6];
+        snprintf(time_str, sizeof(time_str), "%02d:%02d", 
+                 point.time_minutes / 60, point.time_minutes % 60);
+        cJSON_AddStringToObject(point_obj, "time_formatted", time_str);
+        
+        // Add pwm_values array
+        cJSON* pwm_array = cJSON_CreateArray();
+        if (pwm_array) {
+            for (float value : point.pwm_values) {
+                cJSON* number = cJSON_CreateNumber(value);
+                if (number) cJSON_AddItemToArray(pwm_array, number);
+            }
+            cJSON_AddItemToObject(point_obj, "pwm_values", pwm_array);
+        }
+        
+        // Add current_values array
+        cJSON* current_array = cJSON_CreateArray();
+        if (current_array) {
+            for (float value : point.current_values) {
+                cJSON* number = cJSON_CreateNumber(value);
+                if (number) cJSON_AddItemToArray(current_array, number);
+            }
+            cJSON_AddItemToObject(point_obj, "current_values", current_array);
+        }
+        
+        // Add point to array
+        cJSON_AddItemToArray(points_array, point_obj);
+    }
+    
+    // Convert to string WITHOUT formatting (minified)
+    char* json_str = cJSON_PrintUnformatted(root);
+    if (!json_str) return "{}";
+    
+    std::string result(json_str);
+    cJSON_free(json_str);
+    
+    return result;
 }
 
 bool LEDScheduler::import_json(const std::string& json_str) {
-    // Simple JSON parser for our specific format
-    // This is a basic implementation - in production you'd use a proper JSON library
+    // Parse JSON using cJSON library
+    cJSON* root = cJSON_Parse(json_str.c_str());
+    if (!root) {
+        return false;
+    }
     
-    // For now, return false as we'd need a proper JSON parser
-    // This is a placeholder for the full implementation
-    return false;
+    // Use RAII to ensure cleanup
+    struct JSONDeleter {
+        cJSON* json;
+        ~JSONDeleter() { if (json) cJSON_Delete(json); }
+    } deleter{root};
+    
+    // Clear existing schedule
+    clear_schedule();
+    
+    // Parse num_channels
+    cJSON* num_channels_item = cJSON_GetObjectItem(root, "num_channels");
+    if (cJSON_IsNumber(num_channels_item)) {
+        set_num_channels(static_cast<uint8_t>(num_channels_item->valueint));
+    }
+    
+    // Parse schedule_points array
+    cJSON* points_array = cJSON_GetObjectItem(root, "schedule_points");
+    if (!cJSON_IsArray(points_array)) {
+        return false;
+    }
+    
+    cJSON* point_item = NULL;
+    cJSON_ArrayForEach(point_item, points_array) {
+        if (!cJSON_IsObject(point_item)) continue;
+        
+        // Parse time_type
+        DynamicTimeType time_type = DynamicTimeType::FIXED;
+        cJSON* time_type_item = cJSON_GetObjectItem(point_item, "time_type");
+        if (cJSON_IsString(time_type_item)) {
+            time_type = string_to_dynamic_time_type(time_type_item->valuestring);
+        }
+        
+        // Parse offset_minutes (for dynamic points)
+        int offset_minutes = 0;
+        cJSON* offset_item = cJSON_GetObjectItem(point_item, "offset_minutes");
+        if (cJSON_IsNumber(offset_item)) {
+            offset_minutes = offset_item->valueint;
+        }
+        
+        // Parse time_minutes
+        uint16_t time_minutes = 0;
+        cJSON* time_item = cJSON_GetObjectItem(point_item, "time_minutes");
+        if (cJSON_IsNumber(time_item)) {
+            time_minutes = static_cast<uint16_t>(time_item->valueint);
+        }
+        
+        // Parse pwm_values array
+        std::vector<float> pwm_values;
+        cJSON* pwm_array = cJSON_GetObjectItem(point_item, "pwm_values");
+        if (cJSON_IsArray(pwm_array)) {
+            cJSON* value = NULL;
+            cJSON_ArrayForEach(value, pwm_array) {
+                if (cJSON_IsNumber(value)) {
+                    pwm_values.push_back(static_cast<float>(value->valuedouble));
+                }
+            }
+        }
+        
+        // Parse current_values array
+        std::vector<float> current_values;
+        cJSON* current_array = cJSON_GetObjectItem(point_item, "current_values");
+        if (cJSON_IsArray(current_array)) {
+            cJSON* value = NULL;
+            cJSON_ArrayForEach(value, current_array) {
+                if (cJSON_IsNumber(value)) {
+                    current_values.push_back(static_cast<float>(value->valuedouble));
+                }
+            }
+        }
+        
+        // Add the schedule point
+        if (!pwm_values.empty() && !current_values.empty()) {
+            if (time_type == DynamicTimeType::FIXED) {
+                set_schedule_point(time_minutes, pwm_values, current_values);
+            } else {
+                add_dynamic_schedule_point(time_type, offset_minutes, pwm_values, current_values);
+            }
+        }
+    }
+    
+    return !schedule_points_.empty();
 }
 
 void LEDScheduler::write_uint16(std::vector<uint8_t>& data, size_t& pos, uint16_t value) const {

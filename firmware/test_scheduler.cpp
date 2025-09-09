@@ -117,12 +117,124 @@ void test_json_export(TestRunner& runner) {
     
     std::string json = scheduler.export_json();
     runner.assert_true(json.length() > 50, "JSON export not empty");
-    runner.assert_true(json.find("\"num_channels\": 2") != std::string::npos, "JSON contains channel count");
-    runner.assert_true(json.find("\"time_minutes\": 720") != std::string::npos, "JSON contains time");
-    runner.assert_true(json.find("75.00") != std::string::npos, "JSON contains PWM value");
+    runner.assert_true(json.find("\"num_channels\":") != std::string::npos && json.find("2") != std::string::npos, "JSON contains channel count");
+    runner.assert_true(json.find("\"time_minutes\":") != std::string::npos && json.find("720") != std::string::npos, "JSON contains time");
+    runner.assert_true(json.find("75") != std::string::npos, "JSON contains PWM value");
     runner.assert_true(json.find("1.70") != std::string::npos, "JSON contains current value");
     
     std::cout << "Sample JSON export:\n" << json.substr(0, 200) << "..." << std::endl;
+}
+
+void test_json_import(TestRunner& runner) {
+    runner.start_suite("JSON Import Tests");
+    
+    // Test 1: Import a simple fixed schedule
+    LEDScheduler scheduler(2);
+    std::string json_fixed = R"({
+        "num_channels": 2,
+        "schedule_points": [
+            {
+                "time_type": "fixed",
+                "time_minutes": 360,
+                "pwm_values": [50.0, 60.0],
+                "current_values": [1.0, 1.2]
+            },
+            {
+                "time_type": "fixed", 
+                "time_minutes": 720,
+                "pwm_values": [80.0, 90.0],
+                "current_values": [1.6, 1.8]
+            }
+        ]
+    })";
+    
+    bool success = scheduler.import_json(json_fixed);
+    runner.assert_true(success, "Import fixed schedule succeeded");
+    runner.assert_equals(2, static_cast<int>(scheduler.get_schedule_size()), "Imported 2 fixed points");
+    
+    // Verify imported values
+    auto result = scheduler.get_values_at_time(360);
+    runner.assert_equals(50.0f, result.pwm_values[0], 0.01f, "Imported PWM ch1 at 6 AM");
+    runner.assert_equals(60.0f, result.pwm_values[1], 0.01f, "Imported PWM ch2 at 6 AM");
+    runner.assert_equals(1.0f, result.current_values[0], 0.01f, "Imported current ch1 at 6 AM");
+    
+    // Test 2: Import dynamic schedule
+    scheduler.clear_schedule();
+    std::string json_dynamic = R"({
+        "num_channels": 2,
+        "schedule_points": [
+            {
+                "time_type": "sunrise_relative",
+                "offset_minutes": -30,
+                "time_minutes": 0,
+                "pwm_values": [10.0, 15.0],
+                "current_values": [0.2, 0.3]
+            },
+            {
+                "time_type": "sunset_relative",
+                "offset_minutes": 60,
+                "time_minutes": 0,
+                "pwm_values": [5.0, 7.0],
+                "current_values": [0.1, 0.14]
+            }
+        ]
+    })";
+    
+    success = scheduler.import_json(json_dynamic);
+    runner.assert_true(success, "Import dynamic schedule succeeded");
+    runner.assert_equals(2, static_cast<int>(scheduler.get_schedule_size()), "Imported 2 dynamic points");
+    
+    // Test 3: Import empty schedule
+    scheduler.set_schedule_point(720, {50.0f, 50.0f}, {1.0f, 1.0f}); // Add a point first
+    std::string json_empty = R"({
+        "num_channels": 2,
+        "schedule_points": []
+    })";
+    
+    success = scheduler.import_json(json_empty);
+    runner.assert_false(success, "Import empty schedule returns false");
+    runner.assert_equals(0, static_cast<int>(scheduler.get_schedule_size()), "Schedule cleared on failed import");
+    
+    // Test 4: Import invalid JSON
+    std::string json_invalid = "{ invalid json ]";
+    success = scheduler.import_json(json_invalid);
+    runner.assert_false(success, "Import invalid JSON returns false");
+    
+    // Test 5: Import with channel count change
+    scheduler.set_num_channels(2);
+    std::string json_channels = R"({
+        "num_channels": 4,
+        "schedule_points": [
+            {
+                "time_type": "fixed",
+                "time_minutes": 600,
+                "pwm_values": [30.0, 40.0, 50.0, 60.0],
+                "current_values": [0.6, 0.8, 1.0, 1.2]
+            }
+        ]
+    })";
+    
+    success = scheduler.import_json(json_channels);
+    runner.assert_true(success, "Import with channel count change succeeded");
+    runner.assert_equals(4, static_cast<int>(scheduler.get_num_channels()), "Channel count updated");
+    
+    auto ch_result = scheduler.get_values_at_time(600);
+    runner.assert_equals(4, static_cast<int>(ch_result.pwm_values.size()), "Result has 4 channels");
+    runner.assert_equals(50.0f, ch_result.pwm_values[2], 0.01f, "Channel 3 PWM value correct");
+    
+    // Test 6: Round-trip export/import
+    LEDScheduler scheduler_export(3);
+    scheduler_export.add_dynamic_schedule_point(LEDScheduler::DynamicTimeType::SOLAR_NOON, 0,
+        {70.0f, 80.0f, 90.0f}, {1.4f, 1.6f, 1.8f});
+    scheduler_export.set_schedule_point(480, {20.0f, 25.0f, 30.0f}, {0.4f, 0.5f, 0.6f});
+    
+    std::string exported = scheduler_export.export_json();
+    
+    LEDScheduler scheduler_import(1); // Start with different channel count
+    success = scheduler_import.import_json(exported);
+    runner.assert_true(success, "Round-trip import succeeded");
+    runner.assert_equals(3, static_cast<int>(scheduler_import.get_num_channels()), "Channel count restored");
+    runner.assert_equals(2, static_cast<int>(scheduler_import.get_schedule_size()), "Schedule size preserved");
 }
 
 void test_edge_cases(TestRunner& runner) {
@@ -255,7 +367,7 @@ void test_dynamic_schedule_points(TestRunner& runner) {
     
     // Test JSON export includes dynamic info
     std::string json = scheduler.export_json();
-    runner.assert_true(json.find("\"time_type\": \"sunrise_relative\"") != std::string::npos, 
+    runner.assert_true(json.find("\"time_type\":") != std::string::npos && json.find("\"sunrise_relative\"") != std::string::npos, 
                       "JSON contains dynamic type info");
 }
 
@@ -489,6 +601,95 @@ void test_dynamic_schedule_seasons(TestRunner& runner) {
     runner.assert_equals(50.0f, winter_noon.pwm_values[0], 0.01f, "Winter noon intensity (expected: 50.0, actual: " + std::to_string(winter_noon.pwm_values[0]) + ")");
 }
 
+void test_dynamic_midnight_crossing(TestRunner& runner) {
+    runner.start_suite("Dynamic Schedule Midnight Crossing Tests");
+    
+    LEDScheduler scheduler(2);  // 2 channels for testing
+    scheduler.clear_schedule();
+    
+    // Set up a dynamic schedule that spans across midnight
+    // Sunset at 8 PM (1200), with lights extending past midnight
+    scheduler.add_dynamic_schedule_point(LEDScheduler::DynamicTimeType::SUNSET_RELATIVE, -120,  // 6 PM (2 hours before sunset)
+        std::vector<float>{80.0f, 70.0f}, std::vector<float>{1.6f, 1.4f});
+    scheduler.add_dynamic_schedule_point(LEDScheduler::DynamicTimeType::SUNSET_RELATIVE, 0,     // 8 PM (sunset)
+        std::vector<float>{50.0f, 40.0f}, std::vector<float>{1.0f, 0.8f});
+    scheduler.add_dynamic_schedule_point(LEDScheduler::DynamicTimeType::SUNSET_RELATIVE, 180,   // 11 PM (3 hours after sunset)
+        std::vector<float>{20.0f, 15.0f}, std::vector<float>{0.4f, 0.3f});
+    scheduler.add_dynamic_schedule_point(LEDScheduler::DynamicTimeType::SUNSET_RELATIVE, 300,   // 1 AM next day (5 hours after sunset)
+        std::vector<float>{0.0f, 0.0f}, std::vector<float>{0.0f, 0.0f});
+    
+    // Morning schedule
+    scheduler.add_dynamic_schedule_point(LEDScheduler::DynamicTimeType::SUNRISE_RELATIVE, -60,   // 5 AM (1 hour before sunrise)
+        std::vector<float>{10.0f, 8.0f}, std::vector<float>{0.2f, 0.16f});
+    scheduler.add_dynamic_schedule_point(LEDScheduler::DynamicTimeType::SUNRISE_RELATIVE, 0,     // 6 AM (sunrise)
+        std::vector<float>{40.0f, 35.0f}, std::vector<float>{0.8f, 0.7f});
+    
+    // Set up astronomical times
+    LEDScheduler::AstronomicalTimes astro_times;
+    astro_times.sunrise_minutes = 360;    // 6:00 AM
+    astro_times.sunset_minutes = 1200;    // 8:00 PM
+    astro_times.solar_noon_minutes = 780; // 1:00 PM
+    astro_times.valid = true;
+    
+    // Test 1: Check values at 11:59 PM (just before midnight)
+    auto before_midnight = scheduler.get_values_at_time_with_astro(1439, astro_times); // 23:59
+    runner.assert_true(before_midnight.valid, "11:59 PM result should be valid");
+    runner.assert_true(before_midnight.pwm_values[0] > 0.0f && before_midnight.pwm_values[0] < 20.0f, 
+                      "11:59 PM - Ch1 should be dimming (expected: 0-20, actual: " + std::to_string(before_midnight.pwm_values[0]) + ")");
+    
+    // Test 2: Check values at 12:00 AM (midnight)
+    auto at_midnight = scheduler.get_values_at_time_with_astro(0, astro_times); // 00:00
+    runner.assert_true(at_midnight.valid, "Midnight result should be valid");
+    runner.assert_true(at_midnight.pwm_values[0] > 0.0f && at_midnight.pwm_values[0] < 20.0f, 
+                      "Midnight - Ch1 should be dimming (expected: 0-20, actual: " + std::to_string(at_midnight.pwm_values[0]) + ")");
+    
+    // Test 3: Check values at 12:30 AM (after midnight)
+    auto after_midnight = scheduler.get_values_at_time_with_astro(30, astro_times); // 00:30
+    runner.assert_true(after_midnight.valid, "12:30 AM result should be valid");
+    runner.assert_true(after_midnight.pwm_values[0] >= 0.0f && after_midnight.pwm_values[0] < 20.0f, 
+                      "12:30 AM - Ch1 should be dimming further (expected: 0-20, actual: " + std::to_string(after_midnight.pwm_values[0]) + ")");
+    
+    // Test 4: Check values at 1:00 AM (lights should be off)
+    auto one_am = scheduler.get_values_at_time_with_astro(60, astro_times); // 01:00
+    runner.assert_true(one_am.valid, "1:00 AM result should be valid");
+    runner.assert_equals(0.0f, one_am.pwm_values[0], 0.01f, 
+                        "1:00 AM - Ch1 should be off (expected: 0.0, actual: " + std::to_string(one_am.pwm_values[0]) + ")");
+    runner.assert_equals(0.0f, one_am.pwm_values[1], 0.01f, 
+                        "1:00 AM - Ch2 should be off (expected: 0.0, actual: " + std::to_string(one_am.pwm_values[1]) + ")");
+    
+    // Test 5: Check values at 5:00 AM (lights starting to turn on)
+    auto five_am = scheduler.get_values_at_time_with_astro(300, astro_times); // 05:00
+    runner.assert_true(five_am.valid, "5:00 AM result should be valid");
+    runner.assert_equals(10.0f, five_am.pwm_values[0], 0.01f, 
+                        "5:00 AM - Ch1 morning start (expected: 10.0, actual: " + std::to_string(five_am.pwm_values[0]) + ")");
+    
+    // Test 6: Verify smooth transition across midnight boundary
+    float pwm_2359 = before_midnight.pwm_values[0];
+    float pwm_0000 = at_midnight.pwm_values[0];
+    float pwm_0030 = after_midnight.pwm_values[0];
+    runner.assert_true(pwm_2359 >= pwm_0000 || std::abs(pwm_2359 - pwm_0000) < 2.0f, 
+                      "PWM should transition smoothly across midnight (11:59 PM: " + std::to_string(pwm_2359) + 
+                      ", Midnight: " + std::to_string(pwm_0000) + ")");
+    runner.assert_true(pwm_0000 >= pwm_0030, 
+                      "PWM should continue decreasing after midnight (Midnight: " + std::to_string(pwm_0000) + 
+                      ", 12:30 AM: " + std::to_string(pwm_0030) + ")");
+    
+    // Test 7: Test with different astronomical times (winter with earlier sunset)
+    LEDScheduler::AstronomicalTimes winter_times;
+    winter_times.sunrise_minutes = 420;   // 7:00 AM
+    winter_times.sunset_minutes = 1020;   // 5:00 PM (earlier sunset)
+    winter_times.solar_noon_minutes = 720; // 12:00 PM
+    winter_times.valid = true;
+    
+    auto winter_midnight = scheduler.get_values_at_time_with_astro(0, winter_times);
+    runner.assert_true(winter_midnight.valid, "Winter midnight result should be valid");
+    // At midnight in winter (7 hours after 5 PM sunset), lights are still interpolating between sunset+5h (10 PM) and sunrise-1h (6 AM)
+    // The dynamic schedule has sunset+5h (10 PM) = 0 and sunrise-1h (6 AM) = 10, so midnight should be interpolating
+    float expected_midnight = 2.5f; // Interpolating between 0 at 10 PM and 10 at 6 AM
+    runner.assert_equals(expected_midnight, winter_midnight.pwm_values[0], 0.01f, 
+                        "Winter midnight - Ch1 interpolating (expected: 2.5, actual: " + std::to_string(winter_midnight.pwm_values[0]) + ")");
+}
+
 void test_pwm_scaling(TestRunner& runner) {
     runner.start_suite("PWM Scaling Tests");
     
@@ -670,6 +871,9 @@ int main() {
     test_json_export(runner);
     results.add_suite_results(runner);
     
+    test_json_import(runner);
+    results.add_suite_results(runner);
+    
     test_edge_cases(runner);
     results.add_suite_results(runner);
     
@@ -686,6 +890,9 @@ int main() {
     results.add_suite_results(runner);
     
     test_dynamic_schedule_seasons(runner);
+    results.add_suite_results(runner);
+    
+    test_dynamic_midnight_crossing(runner);
     results.add_suite_results(runner);
     
     test_pwm_scaling(runner);

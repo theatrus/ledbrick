@@ -1,0 +1,107 @@
+# LEDBrick Simple Dashboard Card
+# Copy this directly into your Lovelace dashboard editor
+
+type: vertical-stack
+cards:
+  # Header with status
+  - type: markdown
+    content: |
+      # 🐠 LEDBrick Lighting
+      **Status:** {{ states('sensor.schedule_status') }}
+      **Power:** {{ states('sensor.ledbrick_power_consumption') | default('0') }}W
+      **Moon:** {{ states('sensor.moon_phase_description') | default('Unknown') }}
+  
+  # Main controls
+  - type: entities
+    entities:
+      - entity: switch.ledbrickplus_scheduler_enabled
+        name: Scheduler
+        icon: mdi:calendar-clock
+        
+      - entity: number.ledbrickplus_pwm_scale
+        name: Brightness
+        icon: mdi:brightness-percent
+        
+      - entity: switch.ledbrickplus_moon_simulation_enabled
+        name: Moon Simulation
+        icon: mdi:moon-waning-crescent
+  
+  # Quick actions
+  - type: horizontal-stack
+    cards:
+      - type: button
+        name: Feed
+        icon: mdi:fish
+        tap_action:
+          action: call-service
+          service: script.turn_on
+          target:
+            entity_id: script.feeding_mode_start
+        entity: input_boolean.feeding_mode
+        show_state: true
+        
+      - type: button
+        name: Photo
+        icon: mdi:camera
+        tap_action:
+          action: call-service
+          service: number.set_value
+          target:
+            entity_id: number.ledbrickplus_pwm_scale
+          data:
+            value: 85
+        
+      - type: button
+        name: Night
+        icon: mdi:weather-night
+        tap_action:
+          action: call-service
+          service: switch.turn_off
+          target:
+            entity_id: switch.ledbrickplus_scheduler_enabled
+  
+  # Channel overview
+  - type: glance
+    title: Channel Status
+    entities:
+      - entity: sensor.ledbrickplus_scheduler_pwm_channel_1
+        name: Blue
+      - entity: sensor.ledbrickplus_scheduler_pwm_channel_4
+        name: White
+      - entity: sensor.ledbrickplus_scheduler_pwm_channel_6
+        name: Red
+      - entity: sensor.ledbrickplus_scheduler_current_channel_1
+        name: Current
+    columns: 4
+    show_icon: false
+    show_state: true
+  
+  # Preset loader
+  - type: entities
+    title: Presets
+    entities:
+      - type: buttons
+        entities:
+          - name: Dynamic
+            icon: mdi:auto-fix
+            tap_action:
+              action: call-service
+              service: esphome.ledbrickplus_load_preset
+              data:
+                preset_name: "dynamic_sunrise_sunset"
+                
+          - name: Full
+            icon: mdi:white-balance-sunny
+            tap_action:
+              action: call-service
+              service: esphome.ledbrickplus_load_preset
+              data:
+                preset_name: "full_spectrum"
+                
+          - name: Simple
+            icon: mdi:lightbulb
+            tap_action:
+              action: call-service
+              service: esphome.ledbrickplus_load_preset
+              data:
+                preset_name: "simple"

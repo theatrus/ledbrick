@@ -1,0 +1,260 @@
+# LEDBrick Main Control Dashboard
+# Add this to your Lovelace dashboard configuration
+
+views:
+  - title: LEDBrick Control
+    path: ledbrick
+    icon: mdi:led-strip-variant
+    cards:
+      # Status Overview Card
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: |
+              # 🐠 Aquarium Lighting Control
+              **Status:** {{ states('sensor.schedule_status') }}
+              **Power:** {{ states('sensor.ledbrick_power_consumption') }}W
+              **Moon:** {{ states('sensor.moon_phase_description') }}
+          
+          - type: horizontal-stack
+            cards:
+              - type: entity-button
+                entity: switch.ledbrickplus_scheduler_enabled
+                name: Scheduler
+                show_state: true
+                tap_action:
+                  action: toggle
+              
+              - type: entity-button
+                entity: switch.ledbrickplus_moon_simulation_enabled
+                name: Moon Sim
+                show_state: true
+                tap_action:
+                  action: toggle
+      
+      # Quick Controls Card
+      - type: entities
+        title: Quick Controls
+        show_header_toggle: false
+        entities:
+          - entity: number.ledbrickplus_pwm_scale
+            name: Global Brightness
+            
+          - entity: input_select.lighting_mode
+            name: Mode
+            
+          - entity: input_select.power_mode
+            name: Power Setting
+            
+          - type: divider
+          
+          - type: buttons
+            entities:
+              - entity: input_boolean.feeding_mode
+                name: Feed
+                icon: mdi:fish
+                tap_action:
+                  action: call-service
+                  service: script.feeding_mode_start
+                  
+              - entity: input_boolean.maintenance_mode
+                name: Maint
+                icon: mdi:wrench
+                tap_action:
+                  action: call-service
+                  service: script.maintenance_mode_toggle
+                  
+              - entity: input_boolean.night_viewing
+                name: Night
+                icon: mdi:moon-waning-crescent
+                tap_action:
+                  action: call-service
+                  service: script.night_viewing_toggle
+      
+      # Channel Status Grid
+      - type: grid
+        title: Channel Status
+        columns: 4
+        cards:
+          # Channel 1 - Blue
+          - type: tile
+            entity: sensor.ledbrickplus_scheduler_pwm_channel_1
+            name: Blue
+            color: blue
+            show_entity_picture: false
+            vertical: true
+            tap_action:
+              action: more-info
+          
+          # Channel 2 - Royal Blue  
+          - type: tile
+            entity: sensor.ledbrickplus_scheduler_pwm_channel_2
+            name: Royal
+            color: indigo
+            show_entity_picture: false
+            vertical: true
+            
+          # Channel 3 - UV
+          - type: tile
+            entity: sensor.ledbrickplus_scheduler_pwm_channel_3
+            name: UV
+            color: deep-purple
+            show_entity_picture: false
+            vertical: true
+            
+          # Channel 4 - Cool White
+          - type: tile
+            entity: sensor.ledbrickplus_scheduler_pwm_channel_4
+            name: Cool W
+            color: cyan
+            show_entity_picture: false
+            vertical: true
+            
+          # Channel 5 - Warm White
+          - type: tile
+            entity: sensor.ledbrickplus_scheduler_pwm_channel_5
+            name: Warm W
+            color: orange
+            show_entity_picture: false
+            vertical: true
+            
+          # Channel 6 - Red
+          - type: tile
+            entity: sensor.ledbrickplus_scheduler_pwm_channel_6
+            name: Red
+            color: red
+            show_entity_picture: false
+            vertical: true
+            
+          # Channel 7 - Green
+          - type: tile
+            entity: sensor.ledbrickplus_scheduler_pwm_channel_7
+            name: Green
+            color: green
+            show_entity_picture: false
+            vertical: true
+            
+          # Channel 8 - Far Red
+          - type: tile
+            entity: sensor.ledbrickplus_scheduler_pwm_channel_8
+            name: Far Red
+            color: pink
+            show_entity_picture: false
+            vertical: true
+      
+      # Schedule Management
+      - type: entities
+        title: Schedule Management
+        show_header_toggle: false
+        entities:
+          - type: section
+            label: Presets
+            
+          - type: buttons
+            entities:
+              - name: Sunrise/Sunset
+                icon: mdi:weather-sunset
+                tap_action:
+                  action: call-service
+                  service: esphome.ledbrickplus_load_preset
+                  data:
+                    preset_name: "sunrise_sunset"
+                    
+              - name: Dynamic
+                icon: mdi:auto-fix
+                tap_action:
+                  action: call-service
+                  service: esphome.ledbrickplus_load_preset
+                  data:
+                    preset_name: "dynamic_sunrise_sunset"
+                    
+              - name: Full Spectrum
+                icon: mdi:white-balance-sunny
+                tap_action:
+                  action: call-service
+                  service: esphome.ledbrickplus_load_preset
+                  data:
+                    preset_name: "full_spectrum"
+                    
+              - name: Simple
+                icon: mdi:lightbulb
+                tap_action:
+                  action: call-service
+                  service: esphome.ledbrickplus_load_preset
+                  data:
+                    preset_name: "simple"
+          
+          - type: section
+            label: Actions
+            
+          - type: button
+            name: Clear Schedule
+            icon: mdi:delete-sweep
+            action_name: CLEAR
+            tap_action:
+              action: call-service
+              service: esphome.ledbrickplus_clear_schedule
+              confirmation:
+                text: Clear all schedule points?
+                
+          - type: button
+            name: Export Schedule
+            icon: mdi:download
+            action_name: EXPORT
+            tap_action:
+              action: call-service
+              service: esphome.ledbrickplus_get_schedule_json
+      
+      # Power and Environment
+      - type: horizontal-stack
+        cards:
+          - type: gauge
+            entity: sensor.ledbrick_power_consumption
+            name: Power Usage
+            unit: "W"
+            severity:
+              green: 0
+              yellow: 100
+              red: 200
+            max: 250
+            
+          - type: gauge
+            entity: sensor.ledbrickplus_temperature
+            name: LED Temp
+            unit: "°C"
+            severity:
+              green: 0
+              yellow: 50
+              red: 60
+            max: 80
+      
+      # Moon Simulation Settings
+      - type: conditional
+        conditions:
+          - entity: switch.ledbrickplus_moon_simulation_enabled
+            state: "on"
+        card:
+          type: entities
+          title: Moon Simulation
+          entities:
+            - entity: sensor.moon_phase_description
+              name: Current Phase
+              
+            - type: section
+              label: Base Intensity Settings
+              
+            - type: custom:slider-entity-row
+              entity: input_number.moon_blue_intensity
+              name: Blue Moonlight
+              
+            - type: custom:slider-entity-row
+              entity: input_number.moon_white_intensity
+              name: White Moonlight
+              
+            - type: button
+              name: Update Intensities
+              icon: mdi:moon-waning-crescent
+              action_name: UPDATE
+              tap_action:
+                action: call-service
+                service: script.update_moon_intensity

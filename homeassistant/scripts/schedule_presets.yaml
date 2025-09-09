@@ -1,0 +1,324 @@
+# Schedule Preset Management Scripts
+
+script:
+  # Load reef tank preset
+  load_reef_preset:
+    alias: "Load Reef Tank Preset"
+    sequence:
+      - service: esphome.ledbrickplus_clear_schedule
+      
+      # Dawn - 6:00 AM
+      - service: esphome.ledbrickplus_set_dynamic_schedule_point_8ch
+        data:
+          time_type: "civil_dawn"
+          offset_minutes: 0
+          pwm_ch1: 10   # Blue
+          pwm_ch2: 5    # Royal Blue
+          pwm_ch3: 0    # UV
+          pwm_ch4: 5    # Cool White
+          pwm_ch5: 0    # Warm White
+          pwm_ch6: 0    # Red
+          pwm_ch7: 0    # Green
+          pwm_ch8: 0    # Far Red
+          current_ch1: 0.2
+          current_ch2: 0.1
+          current_ch3: 0
+          current_ch4: 0.1
+          current_ch5: 0
+          current_ch6: 0
+          current_ch7: 0
+          current_ch8: 0
+      
+      # Morning ramp - Sunrise
+      - service: esphome.ledbrickplus_set_dynamic_schedule_point_8ch
+        data:
+          time_type: "sunrise_relative"
+          offset_minutes: 0
+          pwm_ch1: 40   # Blue
+          pwm_ch2: 30   # Royal Blue
+          pwm_ch3: 10   # UV
+          pwm_ch4: 20   # Cool White
+          pwm_ch5: 5    # Warm White
+          pwm_ch6: 5    # Red
+          pwm_ch7: 5    # Green
+          pwm_ch8: 0    # Far Red
+          current_ch1: 0.8
+          current_ch2: 0.6
+          current_ch3: 0.2
+          current_ch4: 0.4
+          current_ch5: 0.1
+          current_ch6: 0.1
+          current_ch7: 0.1
+          current_ch8: 0
+      
+      # Peak - Solar noon
+      - service: esphome.ledbrickplus_set_dynamic_schedule_point_8ch
+        data:
+          time_type: "solar_noon"
+          offset_minutes: 0
+          pwm_ch1: 100  # Blue - max
+          pwm_ch2: 90   # Royal Blue
+          pwm_ch3: 50   # UV
+          pwm_ch4: 80   # Cool White
+          pwm_ch5: 20   # Warm White
+          pwm_ch6: 15   # Red
+          pwm_ch7: 10   # Green
+          pwm_ch8: 5    # Far Red
+          current_ch1: 2.0
+          current_ch2: 1.8
+          current_ch3: 1.0
+          current_ch4: 1.6
+          current_ch5: 0.4
+          current_ch6: 0.3
+          current_ch7: 0.2
+          current_ch8: 0.1
+      
+      # Sunset
+      - service: esphome.ledbrickplus_set_dynamic_schedule_point_8ch
+        data:
+          time_type: "sunset_relative"
+          offset_minutes: 0
+          pwm_ch1: 30   # Blue
+          pwm_ch2: 20   # Royal Blue
+          pwm_ch3: 5    # UV
+          pwm_ch4: 15   # Cool White
+          pwm_ch5: 10   # Warm White
+          pwm_ch6: 20   # Red - more at sunset
+          pwm_ch7: 10   # Green
+          pwm_ch8: 15   # Far Red - more at sunset
+          current_ch1: 0.6
+          current_ch2: 0.4
+          current_ch3: 0.1
+          current_ch4: 0.3
+          current_ch5: 0.2
+          current_ch6: 0.4
+          current_ch7: 0.2
+          current_ch8: 0.3
+      
+      # Dusk - Civil dusk
+      - service: esphome.ledbrickplus_set_dynamic_schedule_point_8ch
+        data:
+          time_type: "civil_dusk"
+          offset_minutes: 0
+          pwm_ch1: 5    # Blue moonlight
+          pwm_ch2: 0    # Royal Blue
+          pwm_ch3: 0    # UV
+          pwm_ch4: 2    # Cool White moonlight
+          pwm_ch5: 0    # Warm White
+          pwm_ch6: 0    # Red
+          pwm_ch7: 0    # Green
+          pwm_ch8: 0    # Far Red
+          current_ch1: 0.1
+          current_ch2: 0
+          current_ch3: 0
+          current_ch4: 0.04
+          current_ch5: 0
+          current_ch6: 0
+          current_ch7: 0
+          current_ch8: 0
+      
+      # Enable moon simulation
+      - service: esphome.ledbrick_plus_set_moon_base_intensity_8ch
+        data:
+          intensity_ch1: 3.0   # Blue moonlight
+          intensity_ch2: 1.0   # Royal Blue moonlight
+          intensity_ch3: 0     # UV
+          intensity_ch4: 1.5   # Cool White moonlight
+          intensity_ch5: 0     # Warm White
+          intensity_ch6: 0     # Red
+          intensity_ch7: 0     # Green
+          intensity_ch8: 0     # Far Red
+      
+      - service: switch.turn_on
+        target:
+          entity_id: switch.ledbrickplus_moon_simulation_enabled
+  
+  # Load planted tank preset
+  load_planted_preset:
+    alias: "Load Planted Tank Preset"
+    sequence:
+      - service: esphome.ledbrickplus_clear_schedule
+      
+      # Morning - 7:00 AM
+      - service: esphome.ledbrickplus_set_schedule_point_8ch
+        data:
+          time_minutes: 420  # 7:00 AM
+          pwm_ch1: 20   # Blue
+          pwm_ch2: 10   # Royal Blue
+          pwm_ch3: 0    # UV
+          pwm_ch4: 40   # Cool White
+          pwm_ch5: 60   # Warm White - more for plants
+          pwm_ch6: 30   # Red - important for plants
+          pwm_ch7: 20   # Green
+          pwm_ch8: 20   # Far Red
+          current_ch1: 0.4
+          current_ch2: 0.2
+          current_ch3: 0
+          current_ch4: 0.8
+          current_ch5: 1.2
+          current_ch6: 0.6
+          current_ch7: 0.4
+          current_ch8: 0.4
+      
+      # Midday - 12:00 PM
+      - service: esphome.ledbrickplus_set_schedule_point_8ch
+        data:
+          time_minutes: 720  # 12:00 PM
+          pwm_ch1: 40   # Blue
+          pwm_ch2: 30   # Royal Blue
+          pwm_ch3: 10   # UV
+          pwm_ch4: 80   # Cool White
+          pwm_ch5: 90   # Warm White
+          pwm_ch6: 70   # Red - high for photosynthesis
+          pwm_ch7: 50   # Green
+          pwm_ch8: 60   # Far Red
+          current_ch1: 0.8
+          current_ch2: 0.6
+          current_ch3: 0.2
+          current_ch4: 1.6
+          current_ch5: 1.8
+          current_ch6: 1.4
+          current_ch7: 1.0
+          current_ch8: 1.2
+      
+      # Evening - 7:00 PM
+      - service: esphome.ledbrickplus_set_schedule_point_8ch
+        data:
+          time_minutes: 1140  # 7:00 PM
+          pwm_ch1: 10   # Blue
+          pwm_ch2: 5    # Royal Blue
+          pwm_ch3: 0    # UV
+          pwm_ch4: 20   # Cool White
+          pwm_ch5: 40   # Warm White
+          pwm_ch6: 30   # Red
+          pwm_ch7: 15   # Green
+          pwm_ch8: 25   # Far Red - evening emphasis
+          current_ch1: 0.2
+          current_ch2: 0.1
+          current_ch3: 0
+          current_ch4: 0.4
+          current_ch5: 0.8
+          current_ch6: 0.6
+          current_ch7: 0.3
+          current_ch8: 0.5
+      
+      # Night - 9:00 PM
+      - service: esphome.ledbrickplus_set_schedule_point_8ch
+        data:
+          time_minutes: 1260  # 9:00 PM
+          pwm_ch1: 0
+          pwm_ch2: 0
+          pwm_ch3: 0
+          pwm_ch4: 0
+          pwm_ch5: 0
+          pwm_ch6: 0
+          pwm_ch7: 0
+          pwm_ch8: 0
+          current_ch1: 0
+          current_ch2: 0
+          current_ch3: 0
+          current_ch4: 0
+          current_ch5: 0
+          current_ch6: 0
+          current_ch7: 0
+          current_ch8: 0
+  
+  # Add schedule point from UI
+  add_fixed_schedule_point:
+    alias: "Add Fixed Schedule Point"
+    sequence:
+      - service: esphome.ledbrickplus_set_schedule_point_8ch
+        data:
+          time_minutes: >
+            {{ states('input_number.schedule_hour') | int * 60 + 
+               states('input_number.schedule_minute') | int }}
+          pwm_ch1: "{{ states('input_number.pwm_channel_1') | float }}"
+          pwm_ch2: "{{ states('input_number.pwm_channel_2') | float }}"
+          pwm_ch3: "{{ states('input_number.pwm_channel_3') | float }}"
+          pwm_ch4: "{{ states('input_number.pwm_channel_4') | float }}"
+          pwm_ch5: "{{ states('input_number.pwm_channel_5') | float }}"
+          pwm_ch6: "{{ states('input_number.pwm_channel_6') | float }}"
+          pwm_ch7: "{{ states('input_number.pwm_channel_7') | float }}"
+          pwm_ch8: "{{ states('input_number.pwm_channel_8') | float }}"
+          current_ch1: "{{ states('input_number.current_channel_1') | float }}"
+          current_ch2: "{{ states('input_number.current_channel_2') | float }}"
+          current_ch3: "{{ states('input_number.current_channel_3') | float }}"
+          current_ch4: "{{ states('input_number.current_channel_4') | float }}"
+          current_ch5: "{{ (states('input_number.pwm_channel_5') | float / 50) }}"
+          current_ch6: "{{ (states('input_number.pwm_channel_6') | float / 50) }}"
+          current_ch7: "{{ (states('input_number.pwm_channel_7') | float / 50) }}"
+          current_ch8: "{{ (states('input_number.pwm_channel_8') | float / 50) }}"
+  
+  # Add dynamic schedule point
+  add_dynamic_schedule_point:
+    alias: "Add Dynamic Schedule Point"
+    sequence:
+      - service: esphome.ledbrickplus_set_dynamic_schedule_point_8ch
+        data:
+          time_type: "{{ states('input_select.dynamic_time_type') }}"
+          offset_minutes: "{{ states('input_number.time_offset') | int }}"
+          pwm_ch1: "{{ states('input_number.pwm_channel_1') | float }}"
+          pwm_ch2: "{{ states('input_number.pwm_channel_2') | float }}"
+          pwm_ch3: "{{ states('input_number.pwm_channel_3') | float }}"
+          pwm_ch4: "{{ states('input_number.pwm_channel_4') | float }}"
+          pwm_ch5: "{{ states('input_number.pwm_channel_5') | float }}"
+          pwm_ch6: "{{ states('input_number.pwm_channel_6') | float }}"
+          pwm_ch7: "{{ states('input_number.pwm_channel_7') | float }}"
+          pwm_ch8: "{{ states('input_number.pwm_channel_8') | float }}"
+          current_ch1: "{{ states('input_number.current_channel_1') | float }}"
+          current_ch2: "{{ states('input_number.current_channel_2') | float }}"
+          current_ch3: "{{ states('input_number.current_channel_3') | float }}"
+          current_ch4: "{{ states('input_number.current_channel_4') | float }}"
+          current_ch5: "{{ (states('input_number.pwm_channel_5') | float / 50) }}"
+          current_ch6: "{{ (states('input_number.pwm_channel_6') | float / 50) }}"
+          current_ch7: "{{ (states('input_number.pwm_channel_7') | float / 50) }}"
+          current_ch8: "{{ (states('input_number.pwm_channel_8') | float / 50) }}"
+  
+  # Template applications
+  apply_dawn_template:
+    alias: "Apply Dawn Template"
+    sequence:
+      - service: input_number.set_value
+        data:
+          entity_id:
+            - input_number.pwm_channel_1
+            - input_number.pwm_channel_2
+            - input_number.pwm_channel_3
+            - input_number.pwm_channel_4
+            - input_number.pwm_channel_5
+            - input_number.pwm_channel_6
+            - input_number.pwm_channel_7
+            - input_number.pwm_channel_8
+          value: 10
+      
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.pwm_channel_4
+        data:
+          value: 20
+  
+  apply_noon_template:
+    alias: "Apply Noon Template"
+    sequence:
+      - service: input_number.set_value
+        data:
+          entity_id:
+            - input_number.pwm_channel_1
+            - input_number.pwm_channel_2
+            - input_number.pwm_channel_4
+          value: 90
+      
+      - service: input_number.set_value
+        data:
+          entity_id:
+            - input_number.pwm_channel_3
+            - input_number.pwm_channel_5
+            - input_number.pwm_channel_6
+          value: 60
+      
+      - service: input_number.set_value
+        data:
+          entity_id:
+            - input_number.pwm_channel_7
+            - input_number.pwm_channel_8
+          value: 40

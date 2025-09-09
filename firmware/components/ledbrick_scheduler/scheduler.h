@@ -146,6 +146,7 @@ public:
     
     // JSON export/import
     std::string export_json() const;
+    std::string export_json_minified() const;  // Compact JSON without formatting
     bool import_json(const std::string& json_str);
     
     // Built-in presets

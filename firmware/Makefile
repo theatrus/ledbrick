@@ -13,7 +13,7 @@ TEST_DIR := tests
 
 # Source files
 ASTRO_SOURCES := $(COMPONENT_DIR)/astronomical_calculator.cpp
-SCHEDULER_SOURCES := $(COMPONENT_DIR)/scheduler.cpp
+SCHEDULER_SOURCES := $(COMPONENT_DIR)/scheduler.cpp $(COMPONENT_DIR)/cJSON.c
 TEST_FRAMEWORK := test_framework.h
 
 # Test executables
