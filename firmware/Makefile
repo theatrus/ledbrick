@@ -22,7 +22,7 @@ SCHEDULER_TEST := $(BUILD_DIR)/test_scheduler
 ALL_TESTS := $(ASTRO_TEST) $(SCHEDULER_TEST)
 
 # Phony targets
-.PHONY: all test test-astro test-scheduler clean help setup esphome
+.PHONY: all test test-astro test-scheduler clean help setup esphome web dev
 
 # Default target
 all: test
@@ -83,10 +83,23 @@ test-verbose: $(ALL_TESTS)
 	@echo
 	@echo "=== ALL TESTS COMPLETED ==="
 
-# ESPHome compilation
-esphome:
+# ESPHome compilation (depends on web build)
+esphome: web
 	@echo "🏗️  Compiling ESPHome firmware..."
 	uv run esphome compile ledbrick-plus.yaml
+
+# Build React web UI
+web:
+	@echo "🌐 Building React web UI..."
+	@cd components/ledbrick_web_server/web-react && \
+		npm install --silent && \
+		npm run build && \
+		npm run generate-cpp
+	@echo "✅ Web UI built and C++ generated"
+
+# Development server for React UI
+dev:
+	@cd components/ledbrick_web_server/web-react && LEDBRICK_IP=$(LEDBRICK_IP) npm run dev:server
 
 # Setup development environment
 setup:
@@ -126,7 +139,9 @@ help:
 	@echo "  test-scheduler  - Run scheduler tests only"
 	@echo "  test-clang      - Run tests with clang++ compiler"
 	@echo "  test-verbose    - Run tests with verbose output"
-	@echo "  esphome         - Compile ESPHome firmware"
+	@echo "  web             - Build React web UI"
+	@echo "  dev             - Start React development server"
+	@echo "  esphome         - Compile ESPHome firmware (includes web build)"
 	@echo "  setup           - Verify development environment"
 	@echo "  clean           - Clean build artifacts"
 	@echo "  clean-all       - Clean all build artifacts including ESPHome"

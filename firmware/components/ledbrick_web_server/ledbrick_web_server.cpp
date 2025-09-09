@@ -46,6 +46,16 @@ void LEDBrickWebServer::setup() {
   };
   httpd_register_uri_handler(this->server_, &index_uri);
   
+  // React build serves single app.js
+  httpd_uri_t app_js_uri = {
+    .uri = "/app.js",
+    .method = HTTP_GET,
+    .handler = handle_js,
+    .user_ctx = this
+  };
+  httpd_register_uri_handler(this->server_, &app_js_uri);
+  
+  // Legacy compatibility endpoints
   httpd_uri_t js_uri = {
     .uri = "/ledbrick_api.js",
     .method = HTTP_GET,
@@ -62,6 +72,16 @@ void LEDBrickWebServer::setup() {
   };
   httpd_register_uri_handler(this->server_, &ui_js_uri);
   
+  // React CSS
+  httpd_uri_t app_css_uri = {
+    .uri = "/app.css",
+    .method = HTTP_GET,
+    .handler = handle_css,
+    .user_ctx = this
+  };
+  httpd_register_uri_handler(this->server_, &app_css_uri);
+  
+  // Legacy CSS compatibility
   httpd_uri_t css_uri = {
     .uri = "/style.css",
     .method = HTTP_GET,

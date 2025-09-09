@@ -46,18 +46,27 @@ async def to_code(config):
     # Add defines
     cg.add_define("USE_LEDBRICK_WEB_SERVER")
     
-    # Run the web content generator script
+    # Check if web_content.cpp exists, if not build React
     component_dir = os.path.dirname(__file__)
-    generator_script = os.path.join(component_dir, "generate_web_content.py")
+    web_content_cpp = os.path.join(component_dir, "web_content.cpp")
+    react_dir = os.path.join(component_dir, "web-react")
     
-    if os.path.exists(generator_script):
+    if not os.path.exists(web_content_cpp) and os.path.exists(react_dir):
+        print("Info: Building React web UI...")
         try:
-            result = subprocess.run(["python3", generator_script], 
-                                  capture_output=True, text=True, cwd=component_dir)
-            if result.returncode != 0:
-                print(f"Warning: Failed to generate web content: {result.stderr}")
-            else:
-                print("Info: Successfully regenerated web content")
+            # Install dependencies if needed
+            if not os.path.exists(os.path.join(react_dir, "node_modules")):
+                subprocess.run(["npm", "install"], cwd=react_dir, check=True)
+            
+            # Build React app
+            subprocess.run(["npm", "run", "build"], cwd=react_dir, check=True)
+            
+            # Generate C++ file
+            subprocess.run(["npm", "run", "generate-cpp"], cwd=react_dir, check=True)
+            
+            print("Info: Successfully built React web UI")
+        except subprocess.CalledProcessError as e:
+            print(f"Warning: Failed to build React web UI: {e}")
         except Exception as e:
-            print(f"Warning: Could not run web content generator: {e}")
+            print(f"Warning: Could not build React web UI: {e}")
     

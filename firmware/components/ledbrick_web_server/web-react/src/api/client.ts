@@ -1,0 +1,147 @@
+import type { Schedule, Status } from '../types';
+
+class LEDBrickAPI {
+  private baseUrl: string;
+  private authHeader: string | null = null;
+
+  constructor(baseUrl = '') {
+    this.baseUrl = baseUrl || window.location.origin;
+  }
+
+  setAuth(username: string, password: string) {
+    if (username && password) {
+      this.authHeader = 'Basic ' + btoa(username + ':' + password);
+    } else {
+      this.authHeader = null;
+    }
+  }
+
+  private async request<T>(method: string, path: string, body?: any): Promise<T> {
+    const options: RequestInit = {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    };
+
+    if (this.authHeader) {
+      (options.headers as any)['Authorization'] = this.authHeader;
+    }
+
+    if (body) {
+      options.body = JSON.stringify(body);
+    }
+
+    const response = await fetch(this.baseUrl + path, options);
+    const text = await response.text();
+
+    if (!response.ok) {
+      let error;
+      try {
+        error = JSON.parse(text);
+      } catch (e) {
+        error = { error: text, code: response.status };
+      }
+      throw error;
+    }
+
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      return text as any;
+    }
+  }
+
+  async getSchedule(): Promise<Schedule> {
+    return this.request('GET', '/api/schedule');
+  }
+
+  async importSchedule(scheduleJson: string | object): Promise<any> {
+    const jsonStr = typeof scheduleJson === 'object' 
+      ? JSON.stringify(scheduleJson) 
+      : scheduleJson;
+
+    const response = await fetch(this.baseUrl + '/api/schedule', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(this.authHeader ? { 'Authorization': this.authHeader } : {}),
+      },
+      body: jsonStr,
+    });
+    return response.json();
+  }
+
+  async getStatus(): Promise<Status> {
+    return this.request('GET', '/api/status');
+  }
+
+  async clearSchedule() {
+    return this.request('POST', '/api/schedule/clear');
+  }
+
+  async loadPreset(presetName: string) {
+    return this.request('POST', `/api/presets/${presetName}`);
+  }
+
+  async getPresets() {
+    return this.request('GET', '/api/presets');
+  }
+
+  async setSchedulerEnabled(enabled: boolean) {
+    const action = enabled ? 'turn_on' : 'turn_off';
+    return this.request('POST', `/switch/web_scheduler_enable/${action}`);
+  }
+
+  async getSchedulerEnabled(): Promise<boolean> {
+    const response = await this.request<any>('GET', '/switch/web_scheduler_enable');
+    return response.state === 'ON';
+  }
+
+  async setPWMScale(value: number) {
+    const params = new URLSearchParams();
+    params.append('value', value.toString());
+
+    const response = await fetch(this.baseUrl + '/number/pwm_scale/set', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        ...(this.authHeader ? { 'Authorization': this.authHeader } : {}),
+      },
+      body: params,
+    });
+    return response.text();
+  }
+
+  async getPWMScale(): Promise<number> {
+    const response = await this.request<any>('GET', '/number/pwm_scale');
+    return response.value;
+  }
+
+  // Alias for consistency with component usage
+  async setSchedule(schedule: Schedule): Promise<any> {
+    return this.importSchedule(schedule);
+  }
+
+  async setLocation(latitude: number, longitude: number): Promise<any> {
+    return this.request('POST', '/api/location', { latitude, longitude });
+  }
+
+  async setTimeShift(
+    astronomical_projection: boolean, 
+    time_shift_hours: number, 
+    time_shift_minutes: number
+  ): Promise<any> {
+    return this.request('POST', '/api/time_shift', {
+      astronomical_projection,
+      time_shift_hours,
+      time_shift_minutes
+    });
+  }
+
+  async setMoonSimulation(moonData: any): Promise<any> {
+    return this.request('POST', '/api/moon_simulation', moonData);
+  }
+}
+
+export const api = new LEDBrickAPI();
