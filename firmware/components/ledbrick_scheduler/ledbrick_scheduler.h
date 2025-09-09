@@ -62,6 +62,9 @@ class LEDBrickScheduler : public PollingComponent {
   int get_time_shift_hours() const { return time_shift_hours_; }
   int get_time_shift_minutes() const { return time_shift_minutes_; }
   void set_timezone_offset_hours(double hours) { timezone_offset_hours_ = hours; }
+  double get_timezone_offset_hours() const { return timezone_offset_hours_; }
+  const std::string& get_timezone() const { return timezone_; }
+  time::RealTimeClock* get_time_source() const { return time_source_; }
 
   // Schedule management (delegates to standalone scheduler)
   void add_schedule_point(const SchedulePoint &point);
@@ -116,6 +119,9 @@ class LEDBrickScheduler : public PollingComponent {
   // Current state
   uint16_t get_current_time_minutes() const;
   InterpolationResult get_current_values() const;
+  
+  // Update timezone offset from time source
+  void update_timezone_from_time_source();
   
   // Astronomical functions (delegated to standalone calculator)
   float get_moon_phase() const;  // Returns 0.0-1.0 (0=new moon, 0.5=full moon)
@@ -201,9 +207,6 @@ class LEDBrickScheduler : public PollingComponent {
   // Update the astronomical calculator settings when location/projection changes
   void update_astro_calculator_settings() const;
   void update_astronomical_times_for_scheduler();
-  
-  // Update timezone offset from time source
-  void update_timezone_from_time_source();
   
   // Built-in presets (use astronomical data for sunrise/sunset)
   void create_sunrise_sunset_preset_with_astro_data() const;

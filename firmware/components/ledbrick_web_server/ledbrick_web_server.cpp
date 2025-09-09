@@ -194,6 +194,22 @@ void LEDBrickWebServer::setup() {
   };
   httpd_register_uri_handler(this->server_, &api_schedule_debug);
   
+  httpd_uri_t api_timezone_get = {
+    .uri = "/api/timezone",
+    .method = HTTP_GET,
+    .handler = handle_api_timezone_get,
+    .user_ctx = this
+  };
+  httpd_register_uri_handler(this->server_, &api_timezone_get);
+  
+  httpd_uri_t api_timezone_post = {
+    .uri = "/api/timezone",
+    .method = HTTP_POST,
+    .handler = handle_api_timezone_post,
+    .user_ctx = this
+  };
+  httpd_register_uri_handler(this->server_, &api_timezone_post);
+  
   ESP_LOGI(TAG, "LEDBrick Web Server started successfully");
 }
 
@@ -883,6 +899,80 @@ esp_err_t LEDBrickWebServer::handle_api_schedule_debug(httpd_req_t *req) {
   doc["astronomical_projection_enabled"] = self->scheduler_->is_astronomical_projection_enabled();
   
   self->send_json_response(req, 200, doc);
+  return ESP_OK;
+}
+
+esp_err_t LEDBrickWebServer::handle_api_timezone_get(httpd_req_t *req) {
+  auto *self = get_instance(req);
+  if (!self || !self->check_auth(req)) {
+    return ESP_OK;
+  }
+  
+  DynamicJsonDocument doc(256);
+  doc["timezone"] = self->scheduler_->get_timezone();
+  doc["timezone_offset_hours"] = self->scheduler_->get_timezone_offset_hours();
+  
+  // Get current time info
+  auto time_source = self->scheduler_->get_time_source();
+  if (time_source) {
+    auto time = time_source->now();
+    if (time.is_valid()) {
+      doc["current_offset_seconds"] = time.timezone_offset();
+      doc["is_dst"] = time.is_dst;
+    }
+  }
+  
+  self->send_json_response(req, 200, doc);
+  return ESP_OK;
+}
+
+esp_err_t LEDBrickWebServer::handle_api_timezone_post(httpd_req_t *req) {
+  auto *self = get_instance(req);
+  if (!self || !self->check_auth(req)) {
+    return ESP_OK;
+  }
+  
+  char content[256];
+  int ret = httpd_req_recv(req, content, sizeof(content) - 1);
+  if (ret <= 0) {
+    self->send_error(req, 400, "No data received");
+    return ESP_OK;
+  }
+  content[ret] = '\0';
+  
+  DynamicJsonDocument doc(256);
+  auto error = deserializeJson(doc, content);
+  if (error) {
+    self->send_error(req, 400, "Invalid JSON");
+    return ESP_OK;
+  }
+  
+  // Accept either timezone name or offset
+  if (doc.containsKey("timezone")) {
+    const char* tz = doc["timezone"];
+    self->scheduler_->set_timezone(tz);
+    ESP_LOGI(TAG, "Timezone set to: %s", tz);
+  } else if (doc.containsKey("timezone_offset_hours")) {
+    float offset = doc["timezone_offset_hours"];
+    self->scheduler_->set_timezone_offset_hours(offset);
+    ESP_LOGI(TAG, "Timezone offset set to: %.1f hours", offset);
+  } else {
+    self->send_error(req, 400, "Missing timezone or timezone_offset_hours");
+    return ESP_OK;
+  }
+  
+  // Force immediate update
+  self->scheduler_->update_timezone_from_time_source();
+  
+  // Save to flash
+  self->scheduler_->save_schedule_to_flash();
+  
+  DynamicJsonDocument response(128);
+  response["success"] = true;
+  response["timezone"] = self->scheduler_->get_timezone();
+  response["timezone_offset_hours"] = self->scheduler_->get_timezone_offset_hours();
+  
+  self->send_json_response(req, 200, response);
   return ESP_OK;
 }
 

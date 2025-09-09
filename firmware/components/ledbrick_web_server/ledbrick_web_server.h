@@ -53,6 +53,8 @@ class LEDBrickWebServer : public Component {
   static esp_err_t handle_pwm_scale_set(httpd_req_t *req);
   static esp_err_t handle_pwm_scale_get(httpd_req_t *req);
   static esp_err_t handle_api_schedule_debug(httpd_req_t *req);
+  static esp_err_t handle_api_timezone_get(httpd_req_t *req);
+  static esp_err_t handle_api_timezone_post(httpd_req_t *req);
   static esp_err_t handle_not_found(httpd_req_t *req);
   
   // Helper methods

@@ -1,3 +1,7 @@
+# Configure timezone here (change this to your timezone)
+substitutions:
+  sntp_timezone: "America/Los_Angeles"  # Examples: "Europe/London", "America/New_York", "Asia/Tokyo"
+
 esphome:
   name: ledbrickplus
   friendly_name: ledbrickplus
@@ -126,8 +130,8 @@ time:
     servers:
       - pool.ntp.org
       - time.nist.gov
-    # Use Home Assistant's timezone when available, fallback to America/Los_Angeles
-    timezone: America/Los_Angeles
+    # Use the configured timezone from substitutions
+    timezone: ${sntp_timezone}
     on_time_sync:
       - logger.log: "Time synchronized via SNTP with timezone"
 

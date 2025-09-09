@@ -55,6 +55,17 @@ api:
         - lambda: |-
             id(main_scheduler).load_schedule_from_flash();
         - logger.log: "Schedule loaded from flash memory"
+    
+    # Set timezone offset (for when not using Home Assistant time)
+    - service: set_timezone_offset
+      variables:
+        offset_hours: float
+      then:
+        - lambda: |-
+            id(main_scheduler).set_timezone_offset_hours(offset_hours);
+            id(main_scheduler).update_timezone_from_time_source();
+            id(main_scheduler).save_schedule_to_flash();
+            ESP_LOGI("main", "Timezone offset set to UTC%+.1f hours", offset_hours);
 
     # === Schedule Status ===
     
@@ -263,5 +274,17 @@ switch:
 # === Text Sensors ===
 
 text_sensor:
+  # Current timezone information
+  - platform: template
+    name: "Scheduler Timezone"
+    id: scheduler_timezone
+    lambda: |-
+      char buffer[64];
+      snprintf(buffer, sizeof(buffer), "%s (UTC%+.1fh)", 
+               id(main_scheduler).get_timezone().c_str(),
+               id(main_scheduler).get_timezone_offset_hours());
+      return std::string(buffer);
+    update_interval: 60s
+  
   # Color sensors for each channel (registered by channels package)
   # These are populated by the channel package and updated by the scheduler
