@@ -1,0 +1,19 @@
+{
+  "name": "ledbrick-web-ui-dev",
+  "version": "1.0.0",
+  "description": "Development server for LEDBrick Web UI",
+  "type": "module",
+  "scripts": {
+    "start": "node test-server.mjs",
+    "dev": "node test-server.mjs",
+    "test-server": "node test-server.mjs"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "http-proxy-middleware": "^2.0.6"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

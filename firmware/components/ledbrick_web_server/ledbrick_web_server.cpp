@@ -410,6 +410,10 @@ esp_err_t LEDBrickWebServer::handle_api_status_get(httpd_req_t *req) {
   for (float intensity : moon_config.base_intensity) {
     moon_intensity.add(intensity);
   }
+  JsonArray moon_current = moon_obj["base_current"].to<JsonArray>();
+  for (float current : moon_config.base_current) {
+    moon_current.add(current);
+  }
   
   // Add current channel values
   JsonArray channels = doc["channels"].to<JsonArray>();
@@ -770,10 +774,26 @@ esp_err_t LEDBrickWebServer::handle_api_moon_simulation_post(httpd_req_t *req) {
     for (JsonVariant v : intensity_array) {
       if (i < 8) {
         float intensity = v.as<float>();
-        // Validate intensity range (0-20%)
+        // Validate intensity range (0-100%)
         if (intensity < 0.0f) intensity = 0.0f;
-        if (intensity > 20.0f) intensity = 20.0f;
+        if (intensity > 100.0f) intensity = 100.0f;
         base_intensity[i++] = intensity;
+      }
+    }
+  }
+  
+  // Extract base_current array
+  std::vector<float> base_current(8, 0.0f);
+  if (doc["base_current"].is<JsonArray>()) {
+    JsonArray current_array = doc["base_current"];
+    size_t i = 0;
+    for (JsonVariant v : current_array) {
+      if (i < 8) {
+        float current = v.as<float>();
+        // Validate current range (0-2.0A)
+        if (current < 0.0f) current = 0.0f;
+        if (current > 2.0f) current = 2.0f;
+        base_current[i++] = current;
       }
     }
   }
@@ -783,6 +803,7 @@ esp_err_t LEDBrickWebServer::handle_api_moon_simulation_post(httpd_req_t *req) {
   moon_config.enabled = enabled;
   moon_config.phase_scaling = phase_scaling;
   moon_config.base_intensity = base_intensity;
+  moon_config.base_current = base_current;
   
   // Update the scheduler settings (auto-saves)
   self->scheduler_->set_moon_simulation(moon_config);
@@ -800,6 +821,12 @@ esp_err_t LEDBrickWebServer::handle_api_moon_simulation_post(httpd_req_t *req) {
   JsonArray intensity_array = response_doc["base_intensity"].to<JsonArray>();
   for (float intensity : base_intensity) {
     intensity_array.add(intensity);
+  }
+  
+  // Add base_current to response
+  JsonArray current_array = response_doc["base_current"].to<JsonArray>();
+  for (float current : base_current) {
+    current_array.add(current);
   }
   
   response_doc["message"] = "Moon simulation settings updated";

@@ -826,7 +826,8 @@ async function updateStatus() {
             moon_simulation: status.moon_simulation ? {
                 enabled: status.moon_simulation.enabled,
                 phase_scaling: status.moon_simulation.phase_scaling,
-                base_intensity: status.moon_simulation.base_intensity ? [...status.moon_simulation.base_intensity] : []
+                base_intensity: status.moon_simulation.base_intensity ? [...status.moon_simulation.base_intensity] : [],
+                base_current: status.moon_simulation.base_current ? [...status.moon_simulation.base_current] : []
             } : null
         };
         
