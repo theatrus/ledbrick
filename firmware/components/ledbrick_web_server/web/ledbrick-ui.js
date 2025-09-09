@@ -431,8 +431,8 @@ function updatePointTypeFields() {
     const pointType = document.getElementById('pointType').value;
     document.getElementById('fixedTimeFields').style.display = 
         pointType === 'fixed' ? 'block' : 'none';
-    document.getElementById('astronomicalFields').style.display = 
-        ['sunrise', 'sunset', 'astronomical'].includes(pointType) ? 'block' : 'none';
+    document.getElementById('offsetFields').style.display = 
+        pointType !== 'fixed' ? 'block' : 'none';
 }
 
 function setAllChannels(value) {
@@ -455,42 +455,30 @@ async function saveSchedulePoint() {
         // For astronomical points, set time_type and offset
         const offset = parseInt(document.getElementById('astroOffset').value || '0');
         
-        if (pointType === 'sunrise') {
-            pointData.time_type = 'sunrise_relative';
-            pointData.offset_minutes = offset;
-            // Backend will calculate actual time
-            pointData.time_minutes = 360; // placeholder
-        } else if (pointType === 'sunset') {
-            pointData.time_type = 'sunset_relative';
-            pointData.offset_minutes = offset;
-            pointData.time_minutes = 1080; // placeholder
-        } else {
-            // Custom astronomical event
-            const baseEvent = document.getElementById('astroEvent').value;
-            const eventTypeMap = {
-                'sunrise': 'sunrise_relative',
-                'solar_noon': 'solar_noon',
-                'sunset': 'sunset_relative',
-                'civil_dawn': 'civil_dawn_relative',
-                'civil_dusk': 'civil_dusk_relative',
-                'nautical_dawn': 'nautical_dawn_relative',
-                'nautical_dusk': 'nautical_dusk_relative'
-            };
-            pointData.time_type = eventTypeMap[baseEvent] || 'sunrise_relative';
-            pointData.offset_minutes = offset;
-            
-            // Placeholder times
-            const baseTimes = {
-                'sunrise': 360,
-                'solar_noon': 720,
-                'sunset': 1080,
-                'civil_dawn': 330,
-                'civil_dusk': 1110,
-                'nautical_dawn': 300,
-                'nautical_dusk': 1140
-            };
-            pointData.time_minutes = baseTimes[baseEvent] || 360;
-        }
+        const eventTypeMap = {
+            'sunrise': 'sunrise_relative',
+            'solar_noon': 'solar_noon',
+            'sunset': 'sunset_relative',
+            'civil_dawn': 'civil_dawn_relative',
+            'civil_dusk': 'civil_dusk_relative',
+            'nautical_dawn': 'nautical_dawn_relative',
+            'nautical_dusk': 'nautical_dusk_relative'
+        };
+        
+        pointData.time_type = eventTypeMap[pointType] || 'sunrise_relative';
+        pointData.offset_minutes = offset;
+        
+        // Placeholder times - backend will calculate actual astronomical times
+        const baseTimes = {
+            'sunrise': 360,
+            'solar_noon': 720,
+            'sunset': 1080,
+            'civil_dawn': 330,
+            'civil_dusk': 1110,
+            'nautical_dawn': 300,
+            'nautical_dusk': 1140
+        };
+        pointData.time_minutes = baseTimes[pointType] || 360;
     }
     
     // Get channel values

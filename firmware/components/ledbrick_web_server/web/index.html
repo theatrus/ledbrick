@@ -286,23 +286,9 @@
             <h3 id="dialogTitle">Add Schedule Point</h3>
             <div class="dialog-content">
                 <div class="form-group">
-                    <label>Point Type:</label>
+                    <label>Event Type:</label>
                     <select id="pointType" onchange="updatePointTypeFields()">
                         <option value="fixed">Fixed Time</option>
-                        <option value="sunrise">Sunrise</option>
-                        <option value="sunset">Sunset</option>
-                        <option value="astronomical">Astronomical</option>
-                    </select>
-                </div>
-                
-                <div id="fixedTimeFields" class="form-group">
-                    <label>Time:</label>
-                    <input type="time" id="pointTime" value="12:00">
-                </div>
-                
-                <div id="astronomicalFields" class="form-group" style="display: none;">
-                    <label>Base Event:</label>
-                    <select id="astroEvent">
                         <option value="sunrise">Sunrise</option>
                         <option value="solar_noon">Solar Noon</option>
                         <option value="sunset">Sunset</option>
@@ -311,6 +297,14 @@
                         <option value="nautical_dawn">Nautical Dawn</option>
                         <option value="nautical_dusk">Nautical Dusk</option>
                     </select>
+                </div>
+                
+                <div id="fixedTimeFields" class="form-group">
+                    <label>Time:</label>
+                    <input type="time" id="pointTime" value="12:00">
+                </div>
+                
+                <div id="offsetFields" class="form-group" style="display: none;">
                     <label>Offset (minutes):</label>
                     <input type="number" id="astroOffset" value="0" min="-180" max="180">
                 </div>
@@ -320,50 +314,42 @@
                     <div class="channel-input" data-channel="1">
                         <label>Ch1:</label>
                         <input type="number" id="ch1Value" min="0" max="100" value="0">
-                        <input type="range" min="0" max="100" value="0" 
-                               oninput="document.getElementById('ch1Value').value=this.value">
+                        <input type="range" min="0" max="100" value="0">
                     </div>
                     <div class="channel-input" data-channel="2">
                         <label>Ch2:</label>
                         <input type="number" id="ch2Value" min="0" max="100" value="0">
-                        <input type="range" min="0" max="100" value="0" 
-                               oninput="document.getElementById('ch2Value').value=this.value">
+                        <input type="range" min="0" max="100" value="0">
                     </div>
                     <div class="channel-input" data-channel="3">
                         <label>Ch3:</label>
                         <input type="number" id="ch3Value" min="0" max="100" value="0">
-                        <input type="range" min="0" max="100" value="0" 
-                               oninput="document.getElementById('ch3Value').value=this.value">
+                        <input type="range" min="0" max="100" value="0">
                     </div>
                     <div class="channel-input" data-channel="4">
                         <label>Ch4:</label>
                         <input type="number" id="ch4Value" min="0" max="100" value="0">
-                        <input type="range" min="0" max="100" value="0" 
-                               oninput="document.getElementById('ch4Value').value=this.value">
+                        <input type="range" min="0" max="100" value="0">
                     </div>
                     <div class="channel-input" data-channel="5">
                         <label>Ch5:</label>
                         <input type="number" id="ch5Value" min="0" max="100" value="0">
-                        <input type="range" min="0" max="100" value="0" 
-                               oninput="document.getElementById('ch5Value').value=this.value">
+                        <input type="range" min="0" max="100" value="0">
                     </div>
                     <div class="channel-input" data-channel="6">
                         <label>Ch6:</label>
                         <input type="number" id="ch6Value" min="0" max="100" value="0">
-                        <input type="range" min="0" max="100" value="0" 
-                               oninput="document.getElementById('ch6Value').value=this.value">
+                        <input type="range" min="0" max="100" value="0">
                     </div>
                     <div class="channel-input" data-channel="7">
                         <label>Ch7:</label>
                         <input type="number" id="ch7Value" min="0" max="100" value="0">
-                        <input type="range" min="0" max="100" value="0" 
-                               oninput="document.getElementById('ch7Value').value=this.value">
+                        <input type="range" min="0" max="100" value="0">
                     </div>
                     <div class="channel-input" data-channel="8">
                         <label>Ch8:</label>
                         <input type="number" id="ch8Value" min="0" max="100" value="0">
-                        <input type="range" min="0" max="100" value="0" 
-                               oninput="document.getElementById('ch8Value').value=this.value">
+                        <input type="range" min="0" max="100" value="0">
                     </div>
                 </div>
                 
