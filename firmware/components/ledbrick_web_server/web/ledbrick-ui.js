@@ -285,6 +285,7 @@ function updateScheduleTable(schedule) {
             const typeMap = {
                 'fixed': 'Fixed',
                 'sunrise_relative': 'Sunrise',
+                'solar_noon': 'Solar Noon',
                 'sunset_relative': 'Sunset',
                 'civil_dawn_relative': 'Civil Dawn',
                 'civil_dusk_relative': 'Civil Dusk',
@@ -388,6 +389,7 @@ function editPoint(index) {
         // Extract base event from time_type
         const eventMap = {
             'sunrise_relative': 'sunrise',
+            'solar_noon': 'solar_noon',
             'sunset_relative': 'sunset',
             'civil_dawn_relative': 'civil_dawn',
             'civil_dusk_relative': 'civil_dusk',
@@ -467,6 +469,7 @@ async function saveSchedulePoint() {
             const baseEvent = document.getElementById('astroEvent').value;
             const eventTypeMap = {
                 'sunrise': 'sunrise_relative',
+                'solar_noon': 'solar_noon',
                 'sunset': 'sunset_relative',
                 'civil_dawn': 'civil_dawn_relative',
                 'civil_dusk': 'civil_dusk_relative',
@@ -479,6 +482,7 @@ async function saveSchedulePoint() {
             // Placeholder times
             const baseTimes = {
                 'sunrise': 360,
+                'solar_noon': 720,
                 'sunset': 1080,
                 'civil_dawn': 330,
                 'civil_dusk': 1110,
