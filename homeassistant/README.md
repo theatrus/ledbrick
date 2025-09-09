@@ -7,21 +7,12 @@ This directory contains a comprehensive Home Assistant configuration demonstrati
 ```
 homeassistant/
 ├── README.md                      # This file
-├── ledbrick_package.yaml          # Complete package for single or multiple units
+├── ledbrick_package.yaml          # Complete package for tank groups
 ├── dashboards/
 │   ├── tank_group_dashboard.yaml  # Main dashboard for tank groups
-│   ├── main_dashboard.yaml        # Detailed control dashboard
-│   ├── schedule_editor.yaml       # Schedule point editor
-│   ├── monitoring.yaml            # Real-time monitoring
 │   └── simple_card.yaml           # Simple card for quick setup
-├── automations/
-│   ├── feeding_modes.yaml         # Feeding and maintenance automations
-│   ├── seasonal.yaml              # Seasonal adjustments
-│   ├── alerts.yaml                # Temperature and system alerts
-│   └── multi_unit_examples.yaml   # Examples for coordinating multiple units
-└── scripts/
-    ├── quick_actions.yaml         # Common quick actions
-    └── schedule_presets.yaml      # Schedule preset management
+└── automations/
+    └── multi_unit_examples.yaml   # Examples for coordinating multiple units
 ```
 
 ## Tank Groups

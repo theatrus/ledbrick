@@ -446,6 +446,29 @@ script:
                 value: 100
               continue_on_error: true
   
+  # Set brightness for tank group
+  tank_set_brightness:
+    alias: "Set Brightness - Tank Group"
+    fields:
+      brightness:
+        description: "Brightness percentage (0-100)"
+        example: 85
+    sequence:
+      - variables:
+          groups: "{{ states('input_text.tank_groups') | from_json }}"
+          tank: "{{ states('input_select.active_tank') }}"
+          units: "{{ groups.get(tank, []) }}"
+      
+      # Set all units to same brightness
+      - repeat:
+          for_each: "{{ units }}"
+          sequence:
+            - service: number.set_value
+              data:
+                entity_id: "number.{{ repeat.item }}_pwm_scale"
+                value: "{{ brightness }}"
+              continue_on_error: true
+  
   # Emergency shutdown all tanks
   all_tanks_emergency:
     alias: "Emergency Shutdown - All Tanks"

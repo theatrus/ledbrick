@@ -55,36 +55,35 @@ cards:
         icon: mdi:camera
         tap_action:
           action: call-service
-          service: number.set_value
-          target:
-            entity_id: number.ledbrickplus_pwm_scale
+          service: script.tank_set_brightness
           data:
-            value: 85
+            brightness: 85
         
       - type: button
         name: Night
         icon: mdi:weather-night
         tap_action:
           action: call-service
-          service: switch.turn_off
-          target:
-            entity_id: switch.ledbrickplus_scheduler_enabled
+          service: script.tank_scheduler_control
+          data:
+            enabled: false
   
-  # Channel overview
-  - type: glance
-    title: Channel Status
-    entities:
-      - entity: sensor.ledbrickplus_scheduler_pwm_channel_1
-        name: Blue
-      - entity: sensor.ledbrickplus_scheduler_pwm_channel_4
-        name: White
-      - entity: sensor.ledbrickplus_scheduler_pwm_channel_6
-        name: Red
-      - entity: sensor.ledbrickplus_scheduler_current_channel_1
-        name: Current
-    columns: 4
-    show_icon: false
-    show_state: true
+  # Channel overview - Note: Update entity names to match your first unit
+  - type: markdown
+    content: |
+      ### Channel Status
+      {% set groups = states('input_text.tank_groups') | from_json %}
+      {% set tank = states('input_select.active_tank') %}
+      {% set units = groups.get(tank, []) %}
+      {% if units | length > 0 %}
+        {% set unit = units[0] %}
+        **Blue:** {{ states('sensor.' + unit + '_scheduler_pwm_channel_1') | default('--') }}% | 
+        **White:** {{ states('sensor.' + unit + '_scheduler_pwm_channel_4') | default('--') }}% | 
+        **Red:** {{ states('sensor.' + unit + '_scheduler_pwm_channel_6') | default('--') }}% | 
+        **Current:** {{ states('sensor.' + unit + '_scheduler_current_channel_1') | default('--') }}A
+      {% else %}
+        No units configured for this tank
+      {% endif %}
   
   # Preset loader
   - type: entities
