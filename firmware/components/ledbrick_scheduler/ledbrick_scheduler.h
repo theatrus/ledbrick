@@ -35,15 +35,14 @@ class LEDBrickScheduler : public PollingComponent {
   void set_update_interval(uint32_t interval_ms) { update_interval_ = interval_ms; }
   void set_time_source(time::RealTimeClock *time_source) { time_source_ = time_source; }
   void set_timezone(const std::string &timezone) { timezone_ = timezone; }
-  void set_location(double latitude, double longitude) { 
-    latitude_ = latitude; 
-    longitude_ = longitude; 
-  }
-  void set_astronomical_projection(bool enabled) { astronomical_projection_ = enabled; }
-  void set_time_shift(int hours, int minutes) { 
-    time_shift_hours_ = hours; 
-    time_shift_minutes_ = minutes; 
-  }
+  void set_location(double latitude, double longitude);
+  double get_latitude() const { return latitude_; }
+  double get_longitude() const { return longitude_; }
+  void set_astronomical_projection(bool enabled);
+  bool is_astronomical_projection_enabled() const { return astronomical_projection_; }
+  void set_time_shift(int hours, int minutes);
+  int get_time_shift_hours() const { return time_shift_hours_; }
+  int get_time_shift_minutes() const { return time_shift_minutes_; }
   void set_timezone_offset_hours(double hours) { timezone_offset_hours_ = hours; }
 
   // Schedule management (delegates to standalone scheduler)

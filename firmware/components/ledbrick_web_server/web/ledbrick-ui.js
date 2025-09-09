@@ -206,21 +206,50 @@ function updateScheduleTable(schedule) {
         const timeStr = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
         row.insertCell(0).textContent = timeStr;
         
-        // Type
+        // Type - handle time_type for dynamic points
         const typeCell = row.insertCell(1);
-        typeCell.textContent = point.type || 'Fixed';
-        if (point.type && point.type !== 'Fixed') {
+        let typeText = 'Fixed';
+        if (point.time_type) {
+            // Convert time_type to display text
+            const typeMap = {
+                'fixed': 'Fixed',
+                'sunrise_relative': 'Sunrise',
+                'sunset_relative': 'Sunset',
+                'civil_dawn_relative': 'Civil Dawn',
+                'civil_dusk_relative': 'Civil Dusk',
+                'nautical_dawn_relative': 'Nautical Dawn',
+                'nautical_dusk_relative': 'Nautical Dusk'
+            };
+            typeText = typeMap[point.time_type] || point.time_type;
+            
+            // Add offset if present
+            if (point.offset_minutes !== undefined && point.offset_minutes !== 0) {
+                const sign = point.offset_minutes > 0 ? '+' : '';
+                typeText += ` ${sign}${point.offset_minutes}m`;
+            }
+        }
+        typeCell.textContent = typeText;
+        if (point.time_type && point.time_type !== 'fixed') {
             typeCell.classList.add('astronomical-type');
         }
         
-        // Channel values
+        // Channel values - show both PWM and current
         for (let i = 0; i < 8; i++) {
             const cell = row.insertCell(i + 2);
-            const value = point.pwm_values[i];
-            cell.textContent = value + '%';
+            const pwmValue = point.pwm_values[i];
+            const currentValue = point.current_values ? point.current_values[i] : null;
+            
+            // Show PWM% and current if available
+            let cellText = pwmValue + '%';
+            if (currentValue !== null && currentValue !== undefined) {
+                cellText += `\n${currentValue.toFixed(1)}A`;
+            }
+            cell.textContent = cellText;
+            cell.style.whiteSpace = 'pre-line';
+            cell.style.fontSize = '11px';
             
             // Color code the cell based on intensity
-            const intensity = value / 100;
+            const intensity = pwmValue / 100;
             const color = channelColors[i];
             const rgb = hexToRgb(color);
             cell.style.backgroundColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${intensity * 0.3})`;
@@ -260,8 +289,14 @@ function editPoint(index) {
     
     document.getElementById('dialogTitle').textContent = 'Edit Schedule Point';
     
-    // Set type
-    document.getElementById('pointType').value = point.type || 'fixed';
+    // Set type based on time_type
+    let pointType = 'fixed';
+    if (point.time_type) {
+        if (point.time_type === 'sunrise_relative') pointType = 'sunrise';
+        else if (point.time_type === 'sunset_relative') pointType = 'sunset';
+        else if (point.time_type !== 'fixed') pointType = 'astronomical';
+    }
+    document.getElementById('pointType').value = pointType;
     updatePointTypeFields();
     
     // Set time
@@ -277,10 +312,20 @@ function editPoint(index) {
         document.querySelector(`.channel-input[data-channel="${i+1}"] input[type="range"]`).value = value;
     }
     
-    // Set astronomical fields if needed
-    if (point.astro_event) {
-        document.getElementById('astroEvent').value = point.astro_event;
-        document.getElementById('astroOffset').value = point.astro_offset || 0;
+    // Set astronomical fields based on time_type
+    if (point.time_type && point.time_type !== 'fixed') {
+        // Extract base event from time_type
+        const eventMap = {
+            'sunrise_relative': 'sunrise',
+            'sunset_relative': 'sunset',
+            'civil_dawn_relative': 'civil_dawn',
+            'civil_dusk_relative': 'civil_dusk',
+            'nautical_dawn_relative': 'nautical_dawn',
+            'nautical_dusk_relative': 'nautical_dusk'
+        };
+        const baseEvent = eventMap[point.time_type] || 'sunrise';
+        document.getElementById('astroEvent').value = baseEvent;
+        document.getElementById('astroOffset').value = point.offset_minutes || 0;
     }
     
     document.getElementById('pointDialog').style.display = 'flex';
@@ -326,27 +371,41 @@ function setAllChannels(value) {
 
 async function saveSchedulePoint() {
     const pointType = document.getElementById('pointType').value;
-    let timeMinutes;
     let pointData = {};
     
     if (pointType === 'fixed') {
         const timeStr = document.getElementById('pointTime').value;
         const [hours, minutes] = timeStr.split(':').map(Number);
-        timeMinutes = hours * 60 + minutes;
-        pointData.type = 'fixed';
+        pointData.time_minutes = hours * 60 + minutes;
+        pointData.time_type = 'fixed';
     } else {
-        // For astronomical points, use a placeholder time for now
-        // The backend will calculate the actual time based on location
+        // For astronomical points, set time_type and offset
+        const offset = parseInt(document.getElementById('astroOffset').value || '0');
+        
         if (pointType === 'sunrise') {
-            timeMinutes = 360; // 6:00 AM placeholder
+            pointData.time_type = 'sunrise_relative';
+            pointData.offset_minutes = offset;
+            // Backend will calculate actual time
+            pointData.time_minutes = 360; // placeholder
         } else if (pointType === 'sunset') {
-            timeMinutes = 1080; // 6:00 PM placeholder
+            pointData.time_type = 'sunset_relative';
+            pointData.offset_minutes = offset;
+            pointData.time_minutes = 1080; // placeholder
         } else {
             // Custom astronomical event
             const baseEvent = document.getElementById('astroEvent').value;
-            const offset = parseInt(document.getElementById('astroOffset').value);
+            const eventTypeMap = {
+                'sunrise': 'sunrise_relative',
+                'sunset': 'sunset_relative',
+                'civil_dawn': 'civil_dawn_relative',
+                'civil_dusk': 'civil_dusk_relative',
+                'nautical_dawn': 'nautical_dawn_relative',
+                'nautical_dusk': 'nautical_dusk_relative'
+            };
+            pointData.time_type = eventTypeMap[baseEvent] || 'sunrise_relative';
+            pointData.offset_minutes = offset;
             
-            // Use placeholder times
+            // Placeholder times
             const baseTimes = {
                 'sunrise': 360,
                 'sunset': 1080,
@@ -355,23 +414,28 @@ async function saveSchedulePoint() {
                 'nautical_dawn': 300,
                 'nautical_dusk': 1140
             };
-            
-            timeMinutes = (baseTimes[baseEvent] || 360) + offset;
-            pointData.type = 'astronomical';
-            pointData.astro_event = baseEvent;
-            pointData.astro_offset = offset;
+            pointData.time_minutes = baseTimes[baseEvent] || 360;
         }
     }
     
     // Get channel values
     const pwmValues = [];
+    const currentValues = [];
     for (let i = 1; i <= 8; i++) {
-        pwmValues.push(parseFloat(document.getElementById(`ch${i}Value`).value));
+        const pwmValue = parseFloat(document.getElementById(`ch${i}Value`).value);
+        pwmValues.push(pwmValue);
+        
+        // Calculate current based on PWM and max current from channel config
+        if (currentSchedule && currentSchedule.channel_configs && currentSchedule.channel_configs[i-1]) {
+            const maxCurrent = currentSchedule.channel_configs[i-1].max_current || 2.0;
+            currentValues.push((pwmValue / 100) * maxCurrent);
+        } else {
+            currentValues.push(pwmValue / 100 * 2.0); // Default 2A max
+        }
     }
     
-    pointData.time_minutes = timeMinutes;
     pointData.pwm_values = pwmValues;
-    pointData.current_values = new Array(8).fill(2.0);
+    pointData.current_values = currentValues;
     
     try {
         if (editingPointIndex >= 0) {
@@ -540,6 +604,24 @@ async function updateStatus() {
         document.getElementById('pwmScale').value = pwmScale;
         document.getElementById('pwmScaleValue').textContent = pwmScale + '%';
         
+        // Update location if provided
+        if (status.latitude !== undefined && status.longitude !== undefined) {
+            document.getElementById('latitude').value = status.latitude;
+            document.getElementById('longitude').value = status.longitude;
+        }
+        
+        // Update time shift settings if provided
+        if (status.astronomical_projection !== undefined) {
+            document.getElementById('astronomicalProjection').checked = status.astronomical_projection;
+            updateTimeShiftUI();
+        }
+        if (status.time_shift_hours !== undefined) {
+            document.getElementById('timeShiftHours').value = status.time_shift_hours;
+        }
+        if (status.time_shift_minutes !== undefined) {
+            document.getElementById('timeShiftMinutes').value = status.time_shift_minutes;
+        }
+        
         // Update toggle button
         const toggleBtn = document.getElementById('toggleScheduler');
         toggleBtn.innerHTML = `
@@ -576,6 +658,61 @@ function showJsonStatus(message, type = 'info') {
     setTimeout(() => { status.textContent = ''; }, 5000);
 }
 
+// Location functions
+function setLocation(lat, lon) {
+    document.getElementById('latitude').value = lat;
+    document.getElementById('longitude').value = lon;
+}
+
+async function saveLocation() {
+    const latitude = parseFloat(document.getElementById('latitude').value);
+    const longitude = parseFloat(document.getElementById('longitude').value);
+    
+    if (isNaN(latitude) || isNaN(longitude)) {
+        showStatus('Invalid latitude or longitude', 'error');
+        return;
+    }
+    
+    try {
+        const response = await ledbrickAPI.request('POST', '/api/location', {
+            latitude: latitude,
+            longitude: longitude
+        });
+        
+        showStatus('Location saved successfully', 'success');
+        
+        // ESPHome entities will automatically update from the scheduler state
+    } catch (error) {
+        showStatus('Failed to save location: ' + error.error, 'error');
+    }
+}
+
+// Time shift functions
+function updateTimeShiftUI() {
+    const enabled = document.getElementById('astronomicalProjection').checked;
+    document.getElementById('timeShiftControls').style.display = enabled ? 'block' : 'none';
+}
+
+async function saveTimeShift() {
+    const projection_enabled = document.getElementById('astronomicalProjection').checked;
+    const time_shift_hours = parseInt(document.getElementById('timeShiftHours').value) || 0;
+    const time_shift_minutes = parseInt(document.getElementById('timeShiftMinutes').value) || 0;
+    
+    try {
+        const response = await ledbrickAPI.request('POST', '/api/time_shift', {
+            astronomical_projection: projection_enabled,
+            time_shift_hours: time_shift_hours,
+            time_shift_minutes: time_shift_minutes
+        });
+        
+        showStatus('Time settings saved successfully', 'success');
+        
+        // ESPHome entities will automatically update from the scheduler state
+    } catch (error) {
+        showStatus('Failed to save time settings: ' + error.error, 'error');
+    }
+}
+
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
     initializeChart();
@@ -601,30 +738,27 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Try to connect and update
+    // Automatically load schedule on page load
     setTimeout(async () => {
-        if (savedUrl) {
-            try {
-                await testConnection();
-                // Load schedule after successful connection
-                await refreshSchedule();
-                console.log('Schedule loaded successfully');
-            } catch (error) {
-                console.error('Failed to connect or load schedule:', error);
-            }
+        try {
+            // No need to test connection - we're on the device itself
+            await refreshSchedule();
+            console.log('Schedule loaded successfully');
+        } catch (error) {
+            console.error('Failed to load schedule:', error);
         }
-    }, 1000);
+    }, 500);
     
     // Update status periodically
     setInterval(updateStatus, 10000); // Every 10 seconds
 });
 
-// Channel color configuration functions
+// Channel configuration functions
 function initializeChannelConfig() {
-    const grid = document.getElementById('channelConfigGrid');
-    if (!grid || !currentSchedule) return;
+    const tbody = document.getElementById('channelConfigTableBody');
+    if (!tbody || !currentSchedule) return;
     
-    grid.innerHTML = '';
+    tbody.innerHTML = '';
     
     const numChannels = currentSchedule.num_channels || 8;
     const configs = currentSchedule.channel_configs || [];
@@ -639,9 +773,15 @@ function initializeChannelConfig() {
         // Update global channel colors array
         channelColors[i] = config.rgb_hex;
         
-        const item = document.createElement('div');
-        item.className = 'channel-config-item';
+        const row = document.createElement('tr');
         
+        // Channel number
+        const chCell = document.createElement('td');
+        chCell.textContent = `${i + 1}`;
+        row.appendChild(chCell);
+        
+        // Color picker
+        const colorCell = document.createElement('td');
         const colorInput = document.createElement('input');
         colorInput.type = 'color';
         colorInput.className = 'channel-color-picker';
@@ -651,19 +791,37 @@ function initializeChannelConfig() {
             channelColors[i] = e.target.value;
             updateScheduleChart(currentSchedule);
         };
+        colorCell.appendChild(colorInput);
+        row.appendChild(colorCell);
         
-        const label = document.createElement('label');
-        label.className = 'channel-config-label';
-        label.htmlFor = `channel-color-${i}`;
-        label.textContent = config.name;
+        // Channel name
+        const nameCell = document.createElement('td');
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.className = 'channel-name-input';
+        nameInput.id = `channel-name-${i}`;
+        nameInput.value = config.name;
+        nameCell.appendChild(nameInput);
+        row.appendChild(nameCell);
         
-        item.appendChild(colorInput);
-        item.appendChild(label);
-        grid.appendChild(item);
+        // Max current
+        const currentCell = document.createElement('td');
+        const currentInput = document.createElement('input');
+        currentInput.type = 'number';
+        currentInput.className = 'channel-current-input';
+        currentInput.id = `channel-current-${i}`;
+        currentInput.value = config.max_current.toFixed(1);
+        currentInput.min = '0.1';
+        currentInput.max = '2.0';
+        currentInput.step = '0.1';
+        currentCell.appendChild(currentInput);
+        row.appendChild(currentCell);
+        
+        tbody.appendChild(row);
     }
 }
 
-async function saveChannelColors() {
+async function saveChannelConfig() {
     if (!currentSchedule) {
         alert('No schedule loaded');
         return;
@@ -676,10 +834,13 @@ async function saveChannelColors() {
         
         for (let i = 0; i < numChannels; i++) {
             const colorInput = document.getElementById(`channel-color-${i}`);
+            const nameInput = document.getElementById(`channel-name-${i}`);
+            const currentInput = document.getElementById(`channel-current-${i}`);
+            
             currentSchedule.channel_configs.push({
                 rgb_hex: colorInput ? colorInput.value : channelColors[i],
-                name: channelNames[i] || `Channel ${i + 1}`,
-                max_current: 2.0 // This will be read from ESPHome component
+                name: nameInput ? nameInput.value : `Channel ${i + 1}`,
+                max_current: currentInput ? parseFloat(currentInput.value) : 2.0
             });
         }
         
@@ -687,11 +848,7 @@ async function saveChannelColors() {
         await ledbrickAPI.importSchedule(currentSchedule);
         
         // Show success message
-        const status = document.getElementById('connectionStatus');
-        const oldClass = status.className;
-        const oldText = status.textContent;
-        status.className = 'status success';
-        status.textContent = 'Channel colors saved successfully!';
+        showStatus('Channel configuration saved successfully!', 'success');
         
         setTimeout(() => {
             status.className = oldClass;

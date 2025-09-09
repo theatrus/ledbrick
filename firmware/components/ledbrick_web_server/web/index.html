@@ -12,28 +12,11 @@
         <header>
             <h1>LEDBrick Control Panel</h1>
             <div class="status-bar">
-                <span id="connectionStatus" class="status-indicator disconnected">Disconnected</span>
                 <span id="schedulerStatus" class="scheduler-status">Scheduler: --</span>
                 <span id="currentTime" class="current-time">Time: --:--</span>
                 <span id="schedulePoints" class="schedule-points">0 points</span>
             </div>
         </header>
-
-        <!-- Connection Settings -->
-        <section class="card" id="connectionSettings">
-            <h2>Connection Settings</h2>
-            <div class="form-row">
-                <label for="deviceUrl">Device URL:</label>
-                <input type="text" id="deviceUrl" placeholder="http://192.168.1.100" value="">
-                <button onclick="testConnection()">Connect</button>
-            </div>
-            <div class="form-row">
-                <label for="username">Username (optional):</label>
-                <input type="text" id="username" placeholder="admin">
-                <label for="password">Password:</label>
-                <input type="password" id="password" placeholder="password">
-            </div>
-        </section>
 
         <!-- Quick Controls -->
         <section class="card">
@@ -50,15 +33,6 @@
                     <span id="pwmScaleValue">100%</span>
                 </div>
             </div>
-        </section>
-
-        <!-- Channel Configuration -->
-        <section class="card">
-            <h2>Channel Configuration</h2>
-            <div class="channel-config-grid" id="channelConfigGrid">
-                <!-- Channel color pickers will be dynamically inserted here -->
-            </div>
-            <button onclick="saveChannelColors()" class="button primary">💾 Save Colors</button>
         </section>
 
         <!-- Schedule Visualization -->
@@ -85,14 +59,14 @@
                         <tr>
                             <th>Time</th>
                             <th>Type</th>
-                            <th>Ch1</th>
-                            <th>Ch2</th>
-                            <th>Ch3</th>
-                            <th>Ch4</th>
-                            <th>Ch5</th>
-                            <th>Ch6</th>
-                            <th>Ch7</th>
-                            <th>Ch8</th>
+                            <th>Ch1<br><small>PWM/A</small></th>
+                            <th>Ch2<br><small>PWM/A</small></th>
+                            <th>Ch3<br><small>PWM/A</small></th>
+                            <th>Ch4<br><small>PWM/A</small></th>
+                            <th>Ch5<br><small>PWM/A</small></th>
+                            <th>Ch6<br><small>PWM/A</small></th>
+                            <th>Ch7<br><small>PWM/A</small></th>
+                            <th>Ch8<br><small>PWM/A</small></th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -144,6 +118,83 @@
             <textarea id="jsonData" placeholder="Paste JSON here or click Export to view current schedule..." 
                       class="json-textarea"></textarea>
             <div id="jsonStatus" class="status-message"></div>
+        </section>
+
+        <!-- Location Configuration -->
+        <section class="card">
+            <h2>Location Settings</h2>
+            <div class="location-config">
+                <div class="form-row">
+                    <label for="latitude">Latitude:</label>
+                    <input type="number" id="latitude" min="-90" max="90" step="0.0001" value="37.7749">
+                    <span class="unit">°</span>
+                </div>
+                <div class="form-row">
+                    <label for="longitude">Longitude:</label>
+                    <input type="number" id="longitude" min="-180" max="180" step="0.0001" value="-122.4194">
+                    <span class="unit">°</span>
+                </div>
+                <div class="location-presets">
+                    <h4>City Presets:</h4>
+                    <button onclick="setLocation(37.7749, -122.4194)" class="small-button">🌉 San Francisco</button>
+                    <button onclick="setLocation(40.7128, -74.0060)" class="small-button">🗽 New York</button>
+                    <button onclick="setLocation(51.5074, -0.1278)" class="small-button">🏰 London</button>
+                    <button onclick="setLocation(1.3521, 103.8198)" class="small-button">🌴 Singapore</button>
+                    <h4>Reef Locations:</h4>
+                    <button onclick="setLocation(-18.2871, 147.6992)" class="small-button">🐠 Great Barrier Reef</button>
+                    <button onclick="setLocation(18.3358, -64.8963)" class="small-button">🏝️ Caribbean (USVI)</button>
+                    <button onclick="setLocation(27.9654, 34.3618)" class="small-button">🐟 Red Sea (Sharm)</button>
+                    <button onclick="setLocation(-8.3405, 115.0920)" class="small-button">🌺 Bali</button>
+                    <button onclick="setLocation(7.1301, 134.4445)" class="small-button">🪸 Palau</button>
+                    <button onclick="setLocation(-17.4679, -149.9097)" class="small-button">🏖️ Tahiti</button>
+                    <button onclick="setLocation(16.5165, -88.3669)" class="small-button">🤿 Belize Reef</button>
+                    <button onclick="setLocation(5.3167, 73.5000)" class="small-button">🏄 Maldives</button>
+                </div>
+                <button onclick="saveLocation()" class="button primary">📍 Save Location</button>
+            </div>
+            
+            <h3>Time Projection Settings</h3>
+            <p class="help-text">Time projection allows you to shift astronomical events (sunrise/sunset) to different times. For example, project Singapore sunrise to 10 AM Pacific time.</p>
+            <div class="form-row">
+                <label>
+                    <input type="checkbox" id="astronomicalProjection" onchange="updateTimeShiftUI()">
+                    Enable Astronomical Projection
+                </label>
+            </div>
+            <div id="timeShiftControls" style="display: none;">
+                <div class="form-row">
+                    <label for="timeShiftHours">Time Shift Hours:</label>
+                    <input type="number" id="timeShiftHours" min="-12" max="12" step="1" value="0">
+                    <span class="unit">hours</span>
+                </div>
+                <div class="form-row">
+                    <label for="timeShiftMinutes">Time Shift Minutes:</label>
+                    <input type="number" id="timeShiftMinutes" min="-59" max="59" step="1" value="0">
+                    <span class="unit">minutes</span>
+                </div>
+                <button onclick="saveTimeShift()" class="button primary">🕰️ Save Time Settings</button>
+            </div>
+        </section>
+
+        <!-- Channel Configuration -->
+        <section class="card">
+            <h2>Channel Configuration</h2>
+            <div class="channel-config-table-container">
+                <table id="channelConfigTable" class="channel-config-table">
+                    <thead>
+                        <tr>
+                            <th>Channel</th>
+                            <th>Color</th>
+                            <th>Name</th>
+                            <th>Max Current (A)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="channelConfigTableBody">
+                        <!-- Channel configurations will be populated here -->
+                    </tbody>
+                </table>
+            </div>
+            <button onclick="saveChannelConfig()" class="button primary">💾 Save Configuration</button>
         </section>
     </div>
 

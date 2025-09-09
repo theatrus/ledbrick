@@ -107,34 +107,89 @@ header h1 {
     margin-left: 15px;
 }
 
+/* Location Configuration */
+.location-config {
+    max-width: 600px;
+}
+
+.location-config .form-row {
+    margin-bottom: 15px;
+}
+
+.location-config .unit {
+    margin-left: 5px;
+    color: #666;
+}
+
+.location-presets {
+    margin: 20px 0;
+}
+
+.location-presets h4 {
+    margin: 15px 0 10px 0;
+    color: #666;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.location-presets h4:first-child {
+    margin-top: 0;
+}
+
+.location-presets button {
+    margin: 0 5px 5px 0;
+}
+
+.help-text {
+    font-size: 13px;
+    color: #666;
+    line-height: 1.5;
+    margin: 10px 0;
+}
+
 /* Channel Configuration */
-.channel-config-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 15px;
+.channel-config-table-container {
+    overflow-x: auto;
     margin-bottom: 20px;
 }
 
-.channel-config-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
+.channel-config-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.channel-config-table th,
+.channel-config-table td {
     padding: 10px;
-    background: #f9f9f9;
-    border-radius: 4px;
+    text-align: left;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.channel-config-table th {
+    background-color: #f5f5f5;
+    font-weight: 600;
 }
 
 .channel-color-picker {
     width: 40px;
-    height: 40px;
-    border: 2px solid #ddd;
+    height: 30px;
+    border: 1px solid #ccc;
     border-radius: 4px;
     cursor: pointer;
 }
 
-.channel-config-label {
-    flex: 1;
-    font-weight: 500;
+.channel-name-input {
+    width: 150px;
+    padding: 4px 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.channel-current-input {
+    width: 80px;
+    padding: 4px 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
 }
 
 /* Cards */
@@ -323,6 +378,13 @@ button {
     font-weight: 600;
     position: sticky;
     top: 0;
+}
+
+.schedule-table th small {
+    display: block;
+    font-weight: normal;
+    font-size: 10px;
+    color: #666;
 }
 
 .schedule-table tbody tr:hover {

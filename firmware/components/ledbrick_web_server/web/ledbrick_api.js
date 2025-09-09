@@ -311,14 +311,8 @@ async function updateStatus() {
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
-    // Load saved settings
-    const savedUrl = localStorage.getItem('deviceUrl');
-    if (savedUrl) {
-        document.getElementById('deviceUrl').value = savedUrl;
-        ledbrickAPI.baseUrl = savedUrl;
-    }
-    
-    // Channel sliders removed - using schedule-based control only
+    // Use current device - no connection settings needed
+    ledbrickAPI.baseUrl = window.location.origin;
     
     // Update status after a delay
     setTimeout(updateStatus, 1000);

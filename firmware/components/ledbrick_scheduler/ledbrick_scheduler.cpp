@@ -373,7 +373,12 @@ void LEDBrickScheduler::export_schedule_json(std::string &json_output) const {
     json_output.insert(closing_brace, 
       ",\"timezone\":\"" + timezone_ + 
       "\",\"current_time_minutes\":" + std::to_string(current_time) +
-      ",\"enabled\":" + std::string(enabled_ ? "true" : "false"));
+      ",\"enabled\":" + std::string(enabled_ ? "true" : "false") +
+      ",\"latitude\":" + std::to_string(latitude_) +
+      ",\"longitude\":" + std::to_string(longitude_) +
+      ",\"astronomical_projection\":" + std::string(astronomical_projection_ ? "true" : "false") +
+      ",\"time_shift_hours\":" + std::to_string(time_shift_hours_) +
+      ",\"time_shift_minutes\":" + std::to_string(time_shift_minutes_));
   }
 }
 
@@ -389,13 +394,89 @@ bool LEDBrickScheduler::import_schedule_json(const std::string &json_input) {
     }
   }
   
+  // Extract location if present
+  size_t lat_pos = json_input.find("\"latitude\":");
+  if (lat_pos != std::string::npos) {
+    size_t lat_start = json_input.find_first_of("-0123456789.", lat_pos + 11);
+    size_t lat_end = json_input.find_first_not_of("-0123456789.", lat_start);
+    if (lat_start != std::string::npos && lat_end != std::string::npos) {
+      double lat = std::stod(json_input.substr(lat_start, lat_end - lat_start));
+      if (lat >= -90.0 && lat <= 90.0) {
+        latitude_ = lat;
+      }
+    }
+  }
+  
+  size_t lon_pos = json_input.find("\"longitude\":");
+  if (lon_pos != std::string::npos) {
+    size_t lon_start = json_input.find_first_of("-0123456789.", lon_pos + 12);
+    size_t lon_end = json_input.find_first_not_of("-0123456789.", lon_start);
+    if (lon_start != std::string::npos && lon_end != std::string::npos) {
+      double lon = std::stod(json_input.substr(lon_start, lon_end - lon_start));
+      if (lon >= -180.0 && lon <= 180.0) {
+        longitude_ = lon;
+      }
+    }
+  }
+  
+  // Extract time shift settings
+  size_t proj_pos = json_input.find("\"astronomical_projection\":");
+  if (proj_pos != std::string::npos) {
+    size_t value_start = json_input.find_first_not_of(" \t", proj_pos + 26);
+    if (value_start != std::string::npos) {
+      astronomical_projection_ = json_input.substr(value_start, 4) == "true";
+    }
+  }
+  
+  size_t hours_pos = json_input.find("\"time_shift_hours\":");
+  if (hours_pos != std::string::npos) {
+    size_t hours_start = json_input.find_first_of("-0123456789", hours_pos + 19);
+    size_t hours_end = json_input.find_first_not_of("-0123456789", hours_start);
+    if (hours_start != std::string::npos && hours_end != std::string::npos) {
+      time_shift_hours_ = std::stoi(json_input.substr(hours_start, hours_end - hours_start));
+    }
+  }
+  
+  size_t mins_pos = json_input.find("\"time_shift_minutes\":");
+  if (mins_pos != std::string::npos) {
+    size_t mins_start = json_input.find_first_of("-0123456789", mins_pos + 21);
+    size_t mins_end = json_input.find_first_not_of("-0123456789", mins_start);
+    if (mins_start != std::string::npos && mins_end != std::string::npos) {
+      time_shift_minutes_ = std::stoi(json_input.substr(mins_start, mins_end - mins_start));
+    }
+  }
+  
   // Use standalone scheduler's JSON import
   bool success = scheduler_.import_json(json_input);
   
   if (success) {
+    // Update astronomical calculator with loaded settings (without saving during import)
+    astro_calc_.set_location(latitude_, longitude_);
+    astro_calc_.set_projection_settings(astronomical_projection_, time_shift_hours_, time_shift_minutes_);
+    
     save_schedule_to_flash();
     ESP_LOGI(TAG, "Successfully imported %zu schedule points, enabled=%s", 
              scheduler_.get_schedule_size(), enabled_ ? "true" : "false");
+    ESP_LOGI(TAG, "Location: %.4f, %.4f; Time shift: %s %+d:%02d",
+             latitude_, longitude_, 
+             astronomical_projection_ ? "enabled" : "disabled",
+             time_shift_hours_, abs(time_shift_minutes_));
+    
+    // Update max current controls from imported channel configs
+    for (uint8_t ch = 0; ch < num_channels_; ch++) {
+      auto config = scheduler_.get_channel_config(ch);
+      auto max_current_it = max_current_controls_.find(ch);
+      if (max_current_it != max_current_controls_.end() && max_current_it->second) {
+        max_current_it->second->publish_state(config.max_current);
+        ESP_LOGD(TAG, "Updated channel %u max current to %.2fA", ch, config.max_current);
+      }
+    }
+    
+    // Force update to refresh text sensors
+    update();
+    
+    ESP_LOGI(TAG, "Channel configurations updated: Ch0 color=%s", 
+             scheduler_.get_channel_color(0).c_str());
   } else {
     ESP_LOGW(TAG, "Failed to import JSON schedule");
   }
@@ -478,6 +559,52 @@ void LEDBrickScheduler::update_astro_calculator_settings() const {
   astro_calc_.set_location(latitude_, longitude_);
   astro_calc_.set_timezone_offset(timezone_offset_hours_);
   astro_calc_.set_projection_settings(astronomical_projection_, time_shift_hours_, time_shift_minutes_);
+}
+
+void LEDBrickScheduler::set_location(double latitude, double longitude) {
+  // Check if location actually changed
+  if (abs(latitude_ - latitude) < 0.0001 && abs(longitude_ - longitude) < 0.0001) {
+    return;  // No change, skip save
+  }
+  
+  latitude_ = latitude;
+  longitude_ = longitude;
+  
+  // Update astronomical calculator
+  astro_calc_.set_location(latitude_, longitude_);
+  
+  // Save to persistent storage (scheduler JSON)
+  save_schedule_to_flash();
+  ESP_LOGI(TAG, "Location updated to %.4f, %.4f and saved", latitude, longitude);
+}
+
+void LEDBrickScheduler::set_astronomical_projection(bool enabled) {
+  // Check if value actually changed
+  if (astronomical_projection_ == enabled) {
+    return;  // No change, skip save
+  }
+  
+  astronomical_projection_ = enabled;
+  astro_calc_.set_projection_settings(astronomical_projection_, time_shift_hours_, time_shift_minutes_);
+  
+  // Save to persistent storage (scheduler JSON)
+  save_schedule_to_flash();
+  ESP_LOGI(TAG, "Astronomical projection %s and saved", enabled ? "enabled" : "disabled");
+}
+
+void LEDBrickScheduler::set_time_shift(int hours, int minutes) {
+  // Check if values actually changed
+  if (time_shift_hours_ == hours && time_shift_minutes_ == minutes) {
+    return;  // No change, skip save
+  }
+  
+  time_shift_hours_ = hours;
+  time_shift_minutes_ = minutes;
+  astro_calc_.set_projection_settings(astronomical_projection_, time_shift_hours_, time_shift_minutes_);
+  
+  // Save to persistent storage (scheduler JSON)
+  save_schedule_to_flash();
+  ESP_LOGI(TAG, "Time shift updated to %+d:%02d and saved", hours, abs(minutes));
 }
 
 void LEDBrickScheduler::update_astronomical_times_for_scheduler() {

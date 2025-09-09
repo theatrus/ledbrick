@@ -128,6 +128,22 @@ void LEDBrickWebServer::setup() {
   };
   httpd_register_uri_handler(this->server_, &api_point);
   
+  httpd_uri_t api_location = {
+    .uri = "/api/location",
+    .method = HTTP_POST,
+    .handler = handle_api_location_post,
+    .user_ctx = this
+  };
+  httpd_register_uri_handler(this->server_, &api_location);
+  
+  httpd_uri_t api_time_shift = {
+    .uri = "/api/time_shift",
+    .method = HTTP_POST,
+    .handler = handle_api_time_shift_post,
+    .user_ctx = this
+  };
+  httpd_register_uri_handler(this->server_, &api_time_shift);
+  
   // ESPHome-compatible endpoints for scheduler control
   httpd_uri_t scheduler_enable_on = {
     .uri = "/switch/web_scheduler_enable/turn_on",
@@ -372,6 +388,11 @@ esp_err_t LEDBrickWebServer::handle_api_status_get(httpd_req_t *req) {
   doc["schedule_points"] = self->scheduler_->get_schedule_size();
   doc["pwm_scale"] = self->scheduler_->get_pwm_scale();
   doc["moon_simulation"] = self->scheduler_->is_moon_simulation_enabled();
+  doc["latitude"] = self->scheduler_->get_latitude();
+  doc["longitude"] = self->scheduler_->get_longitude();
+  doc["astronomical_projection"] = self->scheduler_->is_astronomical_projection_enabled();
+  doc["time_shift_hours"] = self->scheduler_->get_time_shift_hours();
+  doc["time_shift_minutes"] = self->scheduler_->get_time_shift_minutes();
   
   // Add current channel values
   JsonArray channels = doc["channels"].to<JsonArray>();
@@ -560,6 +581,134 @@ esp_err_t LEDBrickWebServer::handle_pwm_scale_get(httpd_req_t *req) {
   doc["max"] = 100;
   doc["step"] = 1;
   self->send_json_response(req, 200, doc);
+  return ESP_OK;
+}
+
+esp_err_t LEDBrickWebServer::handle_api_location_post(httpd_req_t *req) {
+  auto *self = get_instance(req);
+  if (!self->check_auth(req)) return ESP_OK;
+  
+  // Read the request body
+  char *buf = (char *)malloc(req->content_len + 1);
+  if (!buf) {
+    self->send_error(req, 500, "Out of memory");
+    return ESP_OK;
+  }
+  
+  int ret = httpd_req_recv(req, buf, req->content_len);
+  if (ret <= 0) {
+    free(buf);
+    self->send_error(req, 400, "Failed to read request body");
+    return ESP_OK;
+  }
+  buf[ret] = '\0';
+  
+  // Parse JSON
+  JsonDocument doc;
+  DeserializationError error = deserializeJson(doc, buf);
+  free(buf);
+  
+  if (error) {
+    self->send_error(req, 400, "Invalid JSON");
+    return ESP_OK;
+  }
+  
+  // Extract latitude and longitude
+  if (!doc.containsKey("latitude") || !doc.containsKey("longitude")) {
+    self->send_error(req, 400, "Missing latitude or longitude");
+    return ESP_OK;
+  }
+  
+  double latitude = doc["latitude"];
+  double longitude = doc["longitude"];
+  
+  // Validate ranges
+  if (latitude < -90.0 || latitude > 90.0) {
+    self->send_error(req, 400, "Latitude must be between -90 and 90");
+    return ESP_OK;
+  }
+  
+  if (longitude < -180.0 || longitude > 180.0) {
+    self->send_error(req, 400, "Longitude must be between -180 and 180");
+    return ESP_OK;
+  }
+  
+  // Update the scheduler location (auto-saves)
+  self->scheduler_->set_location(latitude, longitude);
+  
+  ESP_LOGI(TAG, "Updated location to %.4f, %.4f", latitude, longitude);
+  
+  JsonDocument response_doc;
+  response_doc["success"] = true;
+  response_doc["latitude"] = latitude;
+  response_doc["longitude"] = longitude;
+  response_doc["message"] = "Location updated";
+  
+  self->send_json_response(req, 200, response_doc);
+  return ESP_OK;
+}
+
+esp_err_t LEDBrickWebServer::handle_api_time_shift_post(httpd_req_t *req) {
+  auto *self = get_instance(req);
+  if (!self->check_auth(req)) return ESP_OK;
+  
+  // Read the request body
+  char *buf = (char *)malloc(req->content_len + 1);
+  if (!buf) {
+    self->send_error(req, 500, "Out of memory");
+    return ESP_OK;
+  }
+  
+  int ret = httpd_req_recv(req, buf, req->content_len);
+  if (ret <= 0) {
+    free(buf);
+    self->send_error(req, 400, "Failed to read request body");
+    return ESP_OK;
+  }
+  buf[ret] = '\0';
+  
+  // Parse JSON
+  JsonDocument doc;
+  DeserializationError error = deserializeJson(doc, buf);
+  free(buf);
+  
+  if (error) {
+    self->send_error(req, 400, "Invalid JSON");
+    return ESP_OK;
+  }
+  
+  // Extract time shift settings
+  bool projection_enabled = doc["astronomical_projection"] | false;
+  int time_shift_hours = doc["time_shift_hours"] | 0;
+  int time_shift_minutes = doc["time_shift_minutes"] | 0;
+  
+  // Validate ranges
+  if (time_shift_hours < -12 || time_shift_hours > 12) {
+    self->send_error(req, 400, "Time shift hours must be between -12 and 12");
+    return ESP_OK;
+  }
+  
+  if (time_shift_minutes < -59 || time_shift_minutes > 59) {
+    self->send_error(req, 400, "Time shift minutes must be between -59 and 59");
+    return ESP_OK;
+  }
+  
+  // Update the scheduler settings (auto-saves)
+  self->scheduler_->set_astronomical_projection(projection_enabled);
+  self->scheduler_->set_time_shift(time_shift_hours, time_shift_minutes);
+  
+  ESP_LOGI(TAG, "Updated time shift: projection=%s, shift=%+d:%02d", 
+           projection_enabled ? "enabled" : "disabled",
+           time_shift_hours, abs(time_shift_minutes));
+  
+  JsonDocument response_doc;
+  response_doc["success"] = true;
+  response_doc["astronomical_projection"] = projection_enabled;
+  response_doc["time_shift_hours"] = time_shift_hours;
+  response_doc["time_shift_minutes"] = time_shift_minutes;
+  response_doc["message"] = "Time shift settings updated";
+  
+  self->send_json_response(req, 200, response_doc);
   return ESP_OK;
 }
 

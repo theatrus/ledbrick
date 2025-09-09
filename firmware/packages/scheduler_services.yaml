@@ -385,6 +385,88 @@ number:
           format: "PWM scale changed to %.0f%%"
           args: [ 'x' ]
 
+  # Location configuration - reflects scheduler state, triggers save on change
+  - platform: template
+    id: latitude
+    name: "Latitude"
+    optimistic: false
+    min_value: -90.0
+    max_value: 90.0
+    step: 0.0001
+    unit_of_measurement: "°"
+    mode: box
+    icon: "mdi:latitude"
+    entity_category: config
+    lambda: |-
+      return id(main_scheduler)->get_latitude();
+    set_action:
+      then:
+        - lambda: |-
+            if (id(main_scheduler) != nullptr) {
+              id(main_scheduler)->set_location(x, id(main_scheduler)->get_longitude());
+            }
+    
+  - platform: template
+    id: longitude
+    name: "Longitude"  
+    optimistic: false
+    min_value: -180.0
+    max_value: 180.0
+    step: 0.0001
+    unit_of_measurement: "°"
+    mode: box
+    icon: "mdi:longitude"
+    entity_category: config
+    lambda: |-
+      return id(main_scheduler)->get_longitude();
+    set_action:
+      then:
+        - lambda: |-
+            if (id(main_scheduler) != nullptr) {
+              id(main_scheduler)->set_location(id(main_scheduler)->get_latitude(), x);
+            }
+
+  # Time shift configuration - reflects scheduler state, triggers save on change
+  - platform: template
+    id: time_shift_hours
+    name: "Time Shift Hours"
+    optimistic: false
+    min_value: -12
+    max_value: 12
+    step: 1
+    unit_of_measurement: "h"
+    mode: slider
+    icon: "mdi:clock-time-four-outline"
+    entity_category: config
+    lambda: |-
+      return id(main_scheduler)->get_time_shift_hours();
+    set_action:
+      then:
+        - lambda: |-
+            if (id(main_scheduler) != nullptr) {
+              id(main_scheduler)->set_time_shift(x, id(main_scheduler)->get_time_shift_minutes());
+            }
+    
+  - platform: template
+    id: time_shift_minutes
+    name: "Time Shift Minutes"
+    optimistic: false
+    min_value: -59
+    max_value: 59
+    step: 1
+    unit_of_measurement: "min"
+    mode: slider
+    icon: "mdi:clock-time-four-outline"
+    entity_category: config
+    lambda: |-
+      return id(main_scheduler)->get_time_shift_minutes();
+    set_action:
+      then:
+        - lambda: |-
+            if (id(main_scheduler) != nullptr) {
+              id(main_scheduler)->set_time_shift(id(main_scheduler)->get_time_shift_hours(), x);
+            }
+
 # === Entity Setup ===
 # Connect scheduler to actual lights and number entities
 
@@ -496,6 +578,162 @@ switch:
     turn_off_action:
       - lambda: |-
           id(main_scheduler).enable_moon_simulation(false);
+
+  # Astronomical projection enable/disable - reflects scheduler state, triggers save on change
+  - platform: template
+    name: "Astronomical Projection"
+    id: astronomical_projection_switch
+    icon: "mdi:telescope"
+    entity_category: config
+    lambda: |-
+      return id(main_scheduler)->is_astronomical_projection_enabled();
+    turn_on_action:
+      - lambda: |-
+          if (id(main_scheduler) != nullptr) {
+            id(main_scheduler)->set_astronomical_projection(true);
+          }
+    turn_off_action:
+      - lambda: |-
+          if (id(main_scheduler) != nullptr) {
+            id(main_scheduler)->set_astronomical_projection(false);
+          }
+
+# === Location Preset Buttons ===
+
+button:
+  # City presets
+  - platform: template
+    name: "Location: Vancouver, BC"
+    id: preset_vancouver
+    icon: "mdi:city"
+    entity_category: config
+    on_press:
+      - lambda: |-
+          if (id(main_scheduler) != nullptr) {
+            id(main_scheduler)->set_location(49.2827, -123.1207);
+          }
+  
+  - platform: template
+    name: "Location: Seattle, WA"
+    id: preset_seattle
+    icon: "mdi:city"
+    entity_category: config
+    on_press:
+      - lambda: |-
+          if (id(main_scheduler) != nullptr) {
+            id(main_scheduler)->set_location(47.6062, -122.3321);
+          }
+  
+  - platform: template
+    name: "Location: Los Angeles, CA"
+    id: preset_los_angeles
+    icon: "mdi:city"
+    entity_category: config
+    on_press:
+      - lambda: |-
+          if (id(main_scheduler) != nullptr) {
+            id(main_scheduler)->set_location(34.0522, -118.2437);
+          }
+  
+  - platform: template
+    name: "Location: Singapore"
+    id: preset_singapore
+    icon: "mdi:city"
+    entity_category: config
+    on_press:
+      - lambda: |-
+          if (id(main_scheduler) != nullptr) {
+            id(main_scheduler)->set_location(1.3521, 103.8198);
+          }
+
+  # Reef location presets
+  - platform: template
+    name: "Reef: Great Barrier Reef"
+    id: preset_great_barrier_reef
+    icon: "mdi:coral"
+    entity_category: config
+    on_press:
+      - lambda: |-
+          if (id(main_scheduler) != nullptr) {
+            id(main_scheduler)->set_location(-18.2871, 147.6992);
+          }
+  
+  - platform: template
+    name: "Reef: Caribbean (USVI)"
+    id: preset_caribbean
+    icon: "mdi:palm-tree"
+    entity_category: config
+    on_press:
+      - lambda: |-
+          if (id(main_scheduler) != nullptr) {
+            id(main_scheduler)->set_location(18.3358, -64.8963);
+          }
+  
+  - platform: template
+    name: "Reef: Red Sea"
+    id: preset_red_sea
+    icon: "mdi:fish"
+    entity_category: config
+    on_press:
+      - lambda: |-
+          if (id(main_scheduler) != nullptr) {
+            id(main_scheduler)->set_location(25.0000, 35.0000);
+          }
+  
+  - platform: template
+    name: "Reef: Bali, Indonesia"
+    id: preset_bali
+    icon: "mdi:diving"
+    entity_category: config
+    on_press:
+      - lambda: |-
+          if (id(main_scheduler) != nullptr) {
+            id(main_scheduler)->set_location(-8.3405, 115.0920);
+          }
+  
+  - platform: template
+    name: "Reef: Palau"
+    id: preset_palau
+    icon: "mdi:jellyfish-outline"
+    entity_category: config
+    on_press:
+      - lambda: |-
+          if (id(main_scheduler) != nullptr) {
+            id(main_scheduler)->set_location(7.5000, 134.5000);
+          }
+  
+  - platform: template
+    name: "Reef: Tahiti"
+    id: preset_tahiti
+    icon: "mdi:island"
+    entity_category: config
+    on_press:
+      - lambda: |-
+          if (id(main_scheduler) != nullptr) {
+            id(main_scheduler)->set_location(-17.6797, -149.4068);
+          }
+  
+  - platform: template
+    name: "Reef: Belize Barrier Reef"
+    id: preset_belize_reef
+    icon: "mdi:swim"
+    entity_category: config
+    on_press:
+      - lambda: |-
+          if (id(main_scheduler) != nullptr) {
+            id(main_scheduler)->set_location(17.1899, -88.1982);
+          }
+  
+  - platform: template
+    name: "Reef: Maldives"
+    id: preset_maldives
+    icon: "mdi:turtle"
+    entity_category: config
+    on_press:
+      - lambda: |-
+          if (id(main_scheduler) != nullptr) {
+            id(main_scheduler)->set_location(3.2028, 73.2207);
+          }
 
 text_sensor:
   # Current time as human-readable string

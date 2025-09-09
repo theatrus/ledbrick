@@ -914,6 +914,19 @@ std::string LEDScheduler::export_json() const {
     // Add num_channels
     cJSON_AddNumberToObject(root, "num_channels", num_channels_);
     
+    // Add astronomical times if available
+    cJSON* astro_obj = cJSON_CreateObject();
+    if (astro_obj) {
+        cJSON_AddNumberToObject(astro_obj, "sunrise_minutes", astronomical_times_.sunrise_minutes);
+        cJSON_AddNumberToObject(astro_obj, "sunset_minutes", astronomical_times_.sunset_minutes);
+        cJSON_AddNumberToObject(astro_obj, "civil_dawn_minutes", astronomical_times_.civil_dawn_minutes);
+        cJSON_AddNumberToObject(astro_obj, "civil_dusk_minutes", astronomical_times_.civil_dusk_minutes);
+        cJSON_AddNumberToObject(astro_obj, "nautical_dawn_minutes", astronomical_times_.nautical_dawn_minutes);
+        cJSON_AddNumberToObject(astro_obj, "nautical_dusk_minutes", astronomical_times_.nautical_dusk_minutes);
+        cJSON_AddNumberToObject(astro_obj, "solar_noon_minutes", astronomical_times_.solar_noon_minutes);
+        cJSON_AddItemToObject(root, "astronomical_times", astro_obj);
+    }
+    
     // Add channel_configs array
     cJSON* channels_array = cJSON_CreateArray();
     if (channels_array) {
@@ -948,13 +961,19 @@ std::string LEDScheduler::export_json() const {
             cJSON_AddNumberToObject(point_obj, "offset_minutes", point.offset_minutes);
         }
         
-        // Add time_minutes
-        cJSON_AddNumberToObject(point_obj, "time_minutes", point.time_minutes);
+        // Calculate actual time for dynamic points
+        uint16_t actual_time = point.time_minutes;
+        if (point.time_type != DynamicTimeType::FIXED) {
+            actual_time = calculate_dynamic_time(point, astronomical_times_);
+        }
+        
+        // Add time_minutes (calculated for dynamic points)
+        cJSON_AddNumberToObject(point_obj, "time_minutes", actual_time);
         
         // Add time_formatted
         char time_str[6];
         snprintf(time_str, sizeof(time_str), "%02d:%02d", 
-                 point.time_minutes / 60, point.time_minutes % 60);
+                 actual_time / 60, actual_time % 60);
         cJSON_AddStringToObject(point_obj, "time_formatted", time_str);
         
         // Add pwm_values array
@@ -1039,13 +1058,19 @@ std::string LEDScheduler::export_json_minified() const {
             cJSON_AddNumberToObject(point_obj, "offset_minutes", point.offset_minutes);
         }
         
-        // Add time_minutes
-        cJSON_AddNumberToObject(point_obj, "time_minutes", point.time_minutes);
+        // Calculate actual time for dynamic points
+        uint16_t actual_time = point.time_minutes;
+        if (point.time_type != DynamicTimeType::FIXED) {
+            actual_time = calculate_dynamic_time(point, astronomical_times_);
+        }
+        
+        // Add time_minutes (calculated for dynamic points)
+        cJSON_AddNumberToObject(point_obj, "time_minutes", actual_time);
         
         // Add time_formatted
         char time_str[6];
         snprintf(time_str, sizeof(time_str), "%02d:%02d", 
-                 point.time_minutes / 60, point.time_minutes % 60);
+                 actual_time / 60, actual_time % 60);
         cJSON_AddStringToObject(point_obj, "time_formatted", time_str);
         
         // Add pwm_values array
