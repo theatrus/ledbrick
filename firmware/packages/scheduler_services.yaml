@@ -505,6 +505,16 @@ esphome:
           if (id(max_current_7)) id(main_scheduler).add_max_current_control(6, id(max_current_7));
           if (id(max_current_8)) id(main_scheduler).add_max_current_control(7, id(max_current_8));
           
+          // Connect color text sensors to scheduler  
+          if (id(ch1_color)) id(main_scheduler).add_color_text_sensor(0, id(ch1_color));
+          if (id(ch2_color)) id(main_scheduler).add_color_text_sensor(1, id(ch2_color));
+          if (id(ch3_color)) id(main_scheduler).add_color_text_sensor(2, id(ch3_color));
+          if (id(ch4_color)) id(main_scheduler).add_color_text_sensor(3, id(ch4_color));
+          if (id(ch5_color)) id(main_scheduler).add_color_text_sensor(4, id(ch5_color));
+          if (id(ch6_color)) id(main_scheduler).add_color_text_sensor(5, id(ch6_color));
+          if (id(ch7_color)) id(main_scheduler).add_color_text_sensor(6, id(ch7_color));
+          if (id(ch8_color)) id(main_scheduler).add_color_text_sensor(7, id(ch8_color));
+          
           // Set current channels to their maximum configured values at boot
           if (id(current_1) && id(max_current_1)) {
             float max_val = id(max_current_1)->state;

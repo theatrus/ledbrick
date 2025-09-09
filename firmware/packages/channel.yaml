@@ -83,7 +83,7 @@ text_sensor:
     id: ch${channel_number}_color
     lambda: |-
       return id(main_scheduler)->get_channel_color(${channel_number} - 1);
-    update_interval: 60s
+    update_interval: 300s  # Longer interval since we update via events
     entity_category: config
 
 # Scheduler functionality is handled globally in the main config

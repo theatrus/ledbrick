@@ -472,8 +472,9 @@ bool LEDBrickScheduler::import_schedule_json(const std::string &json_input) {
       }
     }
     
-    // Force update to refresh text sensors
+    // Force update to refresh text sensors and color sensors
     update();
+    update_color_sensors();
     
     ESP_LOGI(TAG, "Channel configurations updated: Ch0 color=%s", 
              scheduler_.get_channel_color(0).c_str());
@@ -607,6 +608,26 @@ void LEDBrickScheduler::set_time_shift(int hours, int minutes) {
   ESP_LOGI(TAG, "Time shift updated to %+d:%02d and saved", hours, abs(minutes));
 }
 
+void LEDBrickScheduler::set_channel_color(uint8_t channel, const std::string& rgb_hex) {
+  // Check if value actually changed
+  std::string current_color = scheduler_.get_channel_color(channel);
+  if (current_color == rgb_hex) {
+    return;  // No change, skip save
+  }
+  
+  scheduler_.set_channel_color(channel, rgb_hex);
+  
+  // Update the color text sensor for this channel
+  auto color_sensor_it = color_text_sensors_.find(channel);
+  if (color_sensor_it != color_text_sensors_.end() && color_sensor_it->second) {
+    color_sensor_it->second->publish_state(rgb_hex);
+  }
+  
+  // Save to persistent storage (scheduler JSON)
+  save_schedule_to_flash();
+  ESP_LOGI(TAG, "Channel %u color updated to %s and saved", channel, rgb_hex.c_str());
+}
+
 void LEDBrickScheduler::set_channel_max_current(uint8_t channel, float max_current) {
   // Check if value actually changed
   float current_max = scheduler_.get_channel_max_current(channel);
@@ -619,6 +640,23 @@ void LEDBrickScheduler::set_channel_max_current(uint8_t channel, float max_curre
   // Save to persistent storage (scheduler JSON)
   save_schedule_to_flash();
   ESP_LOGI(TAG, "Channel %u max current updated to %.2fA and saved", channel, max_current);
+}
+
+void LEDBrickScheduler::add_color_text_sensor(uint8_t channel, text_sensor::TextSensor *sensor) {
+  color_text_sensors_[channel] = sensor;
+  ESP_LOGD(TAG, "Added color text sensor for channel %u", channel);
+}
+
+void LEDBrickScheduler::update_color_sensors() {
+  for (auto& pair : color_text_sensors_) {
+    uint8_t channel = pair.first;
+    text_sensor::TextSensor* sensor = pair.second;
+    if (sensor) {
+      std::string color = scheduler_.get_channel_color(channel);
+      sensor->publish_state(color);
+      ESP_LOGD(TAG, "Updated color sensor for channel %u: %s", channel, color.c_str());
+    }
+  }
 }
 
 void LEDBrickScheduler::enable_moon_simulation(bool enabled) {

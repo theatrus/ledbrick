@@ -7,6 +7,7 @@
 #include "esphome/components/time/real_time_clock.h"
 #include "esphome/components/light/light_state.h"
 #include "esphome/components/number/number.h"
+#include "esphome/components/text_sensor/text_sensor.h"
 #include "astronomical_calculator.h"  // Include our standalone calculator
 #include "scheduler.h"  // Include standalone scheduler
 #include <vector>
@@ -85,9 +86,13 @@ class LEDBrickScheduler : public PollingComponent {
   // Channel configuration
   void set_channel_config(uint8_t channel, const LEDScheduler::ChannelConfig& config) { scheduler_.set_channel_config(channel, config); }
   LEDScheduler::ChannelConfig get_channel_config(uint8_t channel) const { return scheduler_.get_channel_config(channel); }
-  void set_channel_color(uint8_t channel, const std::string& rgb_hex) { scheduler_.set_channel_color(channel, rgb_hex); }
+  void set_channel_color(uint8_t channel, const std::string& rgb_hex);
   void set_channel_max_current(uint8_t channel, float max_current);
   std::string get_channel_color(uint8_t channel) const { return scheduler_.get_channel_color(channel); }
+  
+  // Color sensor management
+  void add_color_text_sensor(uint8_t channel, text_sensor::TextSensor *sensor);
+  void update_color_sensors();
   float get_channel_max_current(uint8_t channel) const { return scheduler_.get_channel_max_current(channel); }
   
   // Current state
@@ -151,6 +156,7 @@ class LEDBrickScheduler : public PollingComponent {
   std::map<uint8_t, light::LightState*> lights_;
   std::map<uint8_t, number::Number*> current_controls_;
   std::map<uint8_t, number::Number*> max_current_controls_;
+  std::map<uint8_t, text_sensor::TextSensor*> color_text_sensors_;
   
   // Internal methods
   void apply_values(const InterpolationResult &values);
