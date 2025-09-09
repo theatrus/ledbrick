@@ -37,7 +37,13 @@ To build and test the LEDBrick firmware:
    uv run esphome compile
    ```
 
-6. Clean build artifacts:
+6. Upload firmware to device:
+   ```bash
+   uv run esphome run ledbrick-plus.yaml --device=COM3
+   # Replace COM3 with your actual device port
+   ```
+
+7. Clean build artifacts:
    ```bash
    make clean           # Clean unit test builds
    make clean-all       # Clean everything including ESPHome builds

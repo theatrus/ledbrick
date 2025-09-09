@@ -231,6 +231,11 @@ LEDScheduler::InterpolationResult LEDScheduler::interpolate_values(uint16_t curr
     
     // Handle single point case
     if (schedule_points_.size() == 1) {
+        // Safety check - ensure vectors have correct size
+        if (schedule_points_[0].pwm_values.size() != num_channels_ || 
+            schedule_points_[0].current_values.size() != num_channels_) {
+            return result;  // Return zeros if data is invalid
+        }
         result.pwm_values = schedule_points_[0].pwm_values;
         result.current_values = schedule_points_[0].current_values;
         result.valid = true;
@@ -365,6 +370,11 @@ LEDScheduler::InterpolationResult LEDScheduler::interpolate_values_with_astro(ui
     
     // Handle single point case
     if (resolved_points.size() == 1) {
+        // Safety check - ensure vectors have correct size
+        if (resolved_points[0].pwm_values.size() != num_channels_ || 
+            resolved_points[0].current_values.size() != num_channels_) {
+            return result;  // Return zeros if data is invalid
+        }
         result.pwm_values = resolved_points[0].pwm_values;
         result.current_values = resolved_points[0].current_values;
         result.valid = true;
@@ -398,6 +408,11 @@ LEDScheduler::InterpolationResult LEDScheduler::interpolate_values_with_astro(ui
     
     // Handle exact match
     if (before && after && before->time_minutes == current_time) {
+        // Safety check - ensure vectors have correct size
+        if (before->pwm_values.size() != num_channels_ || 
+            before->current_values.size() != num_channels_) {
+            return result;  // Return zeros if data is invalid
+        }
         result.pwm_values = before->pwm_values;
         result.current_values = before->current_values;
         result.valid = true;
@@ -406,6 +421,14 @@ LEDScheduler::InterpolationResult LEDScheduler::interpolate_values_with_astro(ui
     
     // Interpolate
     if (before && after) {
+        // Safety check - ensure vectors have correct size
+        if (before->pwm_values.size() != num_channels_ || 
+            before->current_values.size() != num_channels_ ||
+            after->pwm_values.size() != num_channels_ || 
+            after->current_values.size() != num_channels_) {
+            return result;  // Return zeros if data is invalid
+        }
+        
         uint16_t time_span = after->time_minutes > before->time_minutes ? 
             after->time_minutes - before->time_minutes :
             (1440 - before->time_minutes) + after->time_minutes; // Handle wrap-around
