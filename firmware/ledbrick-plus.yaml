@@ -18,6 +18,60 @@ esphome:
             id(main_scheduler).add_color_text_sensor(6, id(ch7_color));
             id(main_scheduler).add_color_text_sensor(7, id(ch8_color));
             ESP_LOGI("main", "Color text sensors registered with scheduler");
+            
+            // Register all light entities with the scheduler
+            id(main_scheduler).add_light(0, id(lpwm1));
+            id(main_scheduler).add_light(1, id(lpwm2));
+            id(main_scheduler).add_light(2, id(lpwm3));
+            id(main_scheduler).add_light(3, id(lpwm4));
+            id(main_scheduler).add_light(4, id(lpwm5));
+            id(main_scheduler).add_light(5, id(lpwm6));
+            id(main_scheduler).add_light(6, id(lpwm7));
+            id(main_scheduler).add_light(7, id(lpwm8));
+            ESP_LOGI("main", "Light entities registered with scheduler");
+            
+            // Register all current controls with the scheduler
+            id(main_scheduler).add_current_control(0, id(current_1));
+            id(main_scheduler).add_current_control(1, id(current_2));
+            id(main_scheduler).add_current_control(2, id(current_3));
+            id(main_scheduler).add_current_control(3, id(current_4));
+            id(main_scheduler).add_current_control(4, id(current_5));
+            id(main_scheduler).add_current_control(5, id(current_6));
+            id(main_scheduler).add_current_control(6, id(current_7));
+            id(main_scheduler).add_current_control(7, id(current_8));
+            ESP_LOGI("main", "Current controls registered with scheduler");
+            
+            // Register max current controls with the scheduler
+            id(main_scheduler).add_max_current_control(0, id(max_current_1));
+            id(main_scheduler).add_max_current_control(1, id(max_current_2));
+            id(main_scheduler).add_max_current_control(2, id(max_current_3));
+            id(main_scheduler).add_max_current_control(3, id(max_current_4));
+            id(main_scheduler).add_max_current_control(4, id(max_current_5));
+            id(main_scheduler).add_max_current_control(5, id(max_current_6));
+            id(main_scheduler).add_max_current_control(6, id(max_current_7));
+            id(main_scheduler).add_max_current_control(7, id(max_current_8));
+            ESP_LOGI("main", "Max current controls registered with scheduler");
+    
+    - priority: -100  # Run after all components are initialized
+      then:
+        - lambda: |-
+            // Sync scheduler state with restored switch state
+            bool switch_state = id(scheduler_enabled).state;
+            bool scheduler_state = id(main_scheduler).is_enabled();
+            if (switch_state != scheduler_state) {
+              ESP_LOGI("main", "Syncing scheduler state: switch=%d, scheduler=%d", 
+                       switch_state, scheduler_state);
+              id(main_scheduler).set_enabled(switch_state);
+            }
+            
+            // Sync astronomical projection state
+            bool astro_switch_state = id(astronomical_projection).state;
+            bool astro_scheduler_state = id(main_scheduler).is_astronomical_projection_enabled();
+            if (astro_switch_state != astro_scheduler_state) {
+              ESP_LOGI("main", "Syncing astronomical projection: switch=%d, scheduler=%d", 
+                       astro_switch_state, astro_scheduler_state);
+              id(main_scheduler).set_astronomical_projection(astro_switch_state);
+            }
 
 dashboard_import:
   package_import_url: github://theatrus/ledbrick/firmware/ledbrick-plus.yaml@master

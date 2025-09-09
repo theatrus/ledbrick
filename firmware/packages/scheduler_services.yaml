@@ -143,7 +143,7 @@ number:
   # PWM scale control (0-100%)
   - platform: template
     name: "PWM Scale"
-    id: pwm_scale_number
+    id: pwm_scale
     optimistic: false
     min_value: 0
     max_value: 100
