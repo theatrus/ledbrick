@@ -4,6 +4,7 @@
 let scheduleChart = null;
 let currentSchedule = null;
 let editingPointIndex = -1;
+let lastServerState = {};
 
 // Channel colors for the chart - will be loaded from schedule
 let channelColors = [
@@ -158,34 +159,104 @@ function updateScheduleChart(schedule) {
 }
 
 function interpolateFullDay(points) {
-    if (points.length === 0) return [];
+    // Always generate full 24-hour range regardless of schedule points
+    const result = [];
     
-    // Add points at 00:00 and 23:59 if not present
-    const fullPoints = [...points];
-    
-    // Check if we have a point at midnight
-    if (fullPoints[0].time_minutes > 0) {
-        // Add point at midnight with same values as last point of day
-        const lastPoint = fullPoints[fullPoints.length - 1];
-        fullPoints.unshift({
-            time_minutes: 0,
-            pwm_values: [...lastPoint.pwm_values],
-            current_values: [...lastPoint.current_values]
+    // Generate time points every 15 minutes for smooth chart (96 points total)
+    for (let minutes = 0; minutes <= 1440; minutes += 15) {
+        // Handle end-of-day: 1440 minutes = 24:00 = next day 00:00
+        const timeMinutes = minutes >= 1440 ? 1439 : minutes;
+        
+        // Interpolate values at this time
+        let pwmValues = [];
+        let currentValues = [];
+        
+        if (points.length === 0) {
+            // No schedule points - default to all off
+            pwmValues = new Array(8).fill(0);
+            currentValues = new Array(8).fill(0);
+        } else {
+            // Find surrounding points for interpolation
+            const interpolated = interpolateAtTime(points, timeMinutes);
+            pwmValues = interpolated.pwm_values;
+            currentValues = interpolated.current_values;
+        }
+        
+        result.push({
+            time_minutes: timeMinutes,
+            pwm_values: pwmValues,
+            current_values: currentValues
         });
     }
     
-    // Check if we have a point at end of day
-    if (fullPoints[fullPoints.length - 1].time_minutes < 1439) {
-        // Add point at 23:59 with same values as first point
-        const firstPoint = fullPoints[0];
-        fullPoints.push({
-            time_minutes: 1439,
-            pwm_values: [...firstPoint.pwm_values],
-            current_values: [...firstPoint.current_values]
-        });
+    return result;
+}
+
+// Helper function to interpolate values at a specific time
+function interpolateAtTime(points, targetTime) {
+    if (points.length === 0) {
+        return {
+            pwm_values: new Array(8).fill(0),
+            current_values: new Array(8).fill(0)
+        };
     }
     
-    return fullPoints;
+    if (points.length === 1) {
+        return {
+            pwm_values: [...points[0].pwm_values],
+            current_values: [...points[0].current_values]
+        };
+    }
+    
+    // Sort points by time
+    const sortedPoints = [...points].sort((a, b) => a.time_minutes - b.time_minutes);
+    
+    // Handle wrap-around for 24-hour schedule
+    // Find the right interpolation segment
+    for (let i = 0; i < sortedPoints.length; i++) {
+        const currentPoint = sortedPoints[i];
+        const nextPoint = sortedPoints[(i + 1) % sortedPoints.length];
+        
+        let segmentStart = currentPoint.time_minutes;
+        let segmentEnd = nextPoint.time_minutes;
+        
+        // Handle day wrap-around (e.g., 23:00 to 01:00)
+        if (segmentEnd < segmentStart) {
+            segmentEnd += 1440;
+        }
+        
+        // Check if target time is in this segment
+        let adjustedTargetTime = targetTime;
+        if (targetTime < segmentStart && segmentEnd > 1440) {
+            adjustedTargetTime += 1440;
+        }
+        
+        if (adjustedTargetTime >= segmentStart && adjustedTargetTime <= segmentEnd) {
+            // Interpolate between currentPoint and nextPoint
+            const t = segmentEnd === segmentStart ? 0 : (adjustedTargetTime - segmentStart) / (segmentEnd - segmentStart);
+            
+            const pwmValues = [];
+            const currentValues = [];
+            
+            for (let ch = 0; ch < 8; ch++) {
+                const startPwm = currentPoint.pwm_values[ch] || 0;
+                const endPwm = nextPoint.pwm_values[ch] || 0;
+                const startCurrent = currentPoint.current_values[ch] || 0;
+                const endCurrent = nextPoint.current_values[ch] || 0;
+                
+                pwmValues.push(startPwm + (endPwm - startPwm) * t);
+                currentValues.push(startCurrent + (endCurrent - startCurrent) * t);
+            }
+            
+            return { pwm_values: pwmValues, current_values: currentValues };
+        }
+    }
+    
+    // If we get here, just return the first point's values
+    return {
+        pwm_values: [...sortedPoints[0].pwm_values],
+        current_values: [...sortedPoints[0].current_values]
+    };
 }
 
 function updateScheduleTable(schedule) {
@@ -584,7 +655,6 @@ async function updatePWMScale(value) {
 }
 
 // Track last status to avoid unnecessary updates
-let lastStatus = {};
 
 async function updateStatus() {
     try {
@@ -623,44 +693,38 @@ async function updateStatus() {
             pwmValue.textContent = pwmScale + '%';
         }
         
-        // Location - only update if not currently being edited
+        // Location - only update if server state changed
         const latInput = document.getElementById('latitude');
         const lonInput = document.getElementById('longitude');
-        if (status.latitude !== undefined && latInput && !latInput.matches(':focus')) {
-            if (Math.abs(parseFloat(latInput.value) - status.latitude) > 0.0001) {
-                latInput.value = status.latitude.toFixed(4);
-            }
+        if (status.latitude !== undefined && latInput && (!lastServerState || Math.abs(lastServerState.latitude - status.latitude) > 0.0001)) {
+            latInput.value = status.latitude.toFixed(4);
         }
-        if (status.longitude !== undefined && lonInput && !lonInput.matches(':focus')) {
-            if (Math.abs(parseFloat(lonInput.value) - status.longitude) > 0.0001) {
-                lonInput.value = status.longitude.toFixed(4);
-            }
+        if (status.longitude !== undefined && lonInput && (!lastServerState || Math.abs(lastServerState.longitude - status.longitude) > 0.0001)) {
+            lonInput.value = status.longitude.toFixed(4);
         }
         
-        // Time shift settings - only update if not being edited
+        // Time shift settings - only update if server state changed
         const astroProjection = document.getElementById('astronomicalProjection');
         if (status.astronomical_projection !== undefined && astroProjection && 
-            astroProjection.checked !== status.astronomical_projection) {
+            (!lastServerState || lastServerState.astronomical_projection !== status.astronomical_projection)) {
             astroProjection.checked = status.astronomical_projection;
             updateTimeShiftUI();
         }
         
         const hoursInput = document.getElementById('timeShiftHours');
-        if (status.time_shift_hours !== undefined && hoursInput && !hoursInput.matches(':focus')) {
-            if (parseInt(hoursInput.value) !== status.time_shift_hours) {
-                hoursInput.value = status.time_shift_hours;
-            }
+        if (status.time_shift_hours !== undefined && hoursInput && 
+            (!lastServerState || lastServerState.time_shift_hours !== status.time_shift_hours)) {
+            hoursInput.value = status.time_shift_hours;
         }
         
         const minutesInput = document.getElementById('timeShiftMinutes');
-        if (status.time_shift_minutes !== undefined && minutesInput && !minutesInput.matches(':focus')) {
-            if (parseInt(minutesInput.value) !== status.time_shift_minutes) {
-                minutesInput.value = status.time_shift_minutes;
-            }
+        if (status.time_shift_minutes !== undefined && minutesInput && 
+            (!lastServerState || lastServerState.time_shift_minutes !== status.time_shift_minutes)) {
+            minutesInput.value = status.time_shift_minutes;
         }
         
         // Update toggle button only if enabled state changed
-        if (lastStatus.enabled !== status.enabled) {
+        if (!lastServerState || lastServerState.enabled !== status.enabled) {
             const toggleBtn = document.getElementById('toggleScheduler');
             if (toggleBtn) {
                 toggleBtn.innerHTML = `
@@ -676,11 +740,26 @@ async function updateStatus() {
         // Update chart with current time line
         updateChartCurrentTimeLine(status.time_minutes);
         
+        // Schedule refresh is handled explicitly when we know changes occurred
+        // (after imports, preset loads, point edits, etc.)
+        
         // Update moon simulation settings if provided
         updateMoonSimulationFromStatus(status);
         
-        // Store current status for next comparison
-        lastStatus = { ...status };
+        // Store current status for next comparison - only configuration values, not dynamic data
+        lastServerState = {
+            enabled: status.enabled,
+            latitude: status.latitude,
+            longitude: status.longitude,
+            astronomical_projection: status.astronomical_projection,
+            time_shift_hours: status.time_shift_hours,
+            time_shift_minutes: status.time_shift_minutes,
+            moon_simulation: status.moon_simulation ? {
+                enabled: status.moon_simulation.enabled,
+                phase_scaling: status.moon_simulation.phase_scaling,
+                base_intensity: status.moon_simulation.base_intensity ? [...status.moon_simulation.base_intensity] : []
+            } : null
+        };
         
     } catch (error) {
         console.error('Failed to update status:', error);
@@ -861,33 +940,38 @@ function updateMoonSimulationFromStatus(status) {
     if (!status.moon_simulation) return;
     
     const moonSim = status.moon_simulation;
-    const enabledCheckbox = document.getElementById('moonSimulationEnabled');
-    const phaseScalingCheckbox = document.getElementById('moonPhaseScaling');
+    const lastMoonSim = lastServerState.moon_simulation;
     
-    // Update enabled state - only if not being edited
-    if (enabledCheckbox && !enabledCheckbox.matches(':focus')) {
-        if (enabledCheckbox.checked !== moonSim.enabled) {
+    // Only update if server state actually changed
+    if (!lastMoonSim || lastMoonSim.enabled !== moonSim.enabled) {
+        const enabledCheckbox = document.getElementById('moonSimulationEnabled');
+        if (enabledCheckbox && enabledCheckbox.checked !== moonSim.enabled) {
             enabledCheckbox.checked = moonSim.enabled;
             updateMoonSimulationUI();
         }
     }
     
-    // Update phase scaling - only if not being edited  
-    if (phaseScalingCheckbox && !phaseScalingCheckbox.matches(':focus')) {
-        if (phaseScalingCheckbox.checked !== moonSim.phase_scaling) {
+    // Only update phase scaling if server state changed
+    if (!lastMoonSim || lastMoonSim.phase_scaling !== moonSim.phase_scaling) {
+        const phaseScalingCheckbox = document.getElementById('moonPhaseScaling');
+        if (phaseScalingCheckbox && phaseScalingCheckbox.checked !== moonSim.phase_scaling) {
             phaseScalingCheckbox.checked = moonSim.phase_scaling;
         }
     }
     
-    // Update base intensity values - only if not being edited
+    // Only update base intensity values if server state changed
     if (moonSim.base_intensity && Array.isArray(moonSim.base_intensity)) {
         for (let i = 0; i < Math.min(moonSim.base_intensity.length, 8); i++) {
-            const slider = document.getElementById(`moonCh${i+1}`);
-            const input = document.getElementById(`moonCh${i+1}Value`);
+            const serverValue = moonSim.base_intensity[i];
+            const lastValue = lastMoonSim && lastMoonSim.base_intensity ? lastMoonSim.base_intensity[i] : undefined;
             
-            if (slider && input && !slider.matches(':focus') && !input.matches(':focus')) {
-                const value = moonSim.base_intensity[i].toFixed(1);
-                if (Math.abs(parseFloat(slider.value) - parseFloat(value)) > 0.05) {
+            // Only update if server value changed
+            if (lastValue === undefined || Math.abs(lastValue - serverValue) > 0.05) {
+                const slider = document.getElementById(`moonCh${i+1}`);
+                const input = document.getElementById(`moonCh${i+1}Value`);
+                
+                if (slider && input) {
+                    const value = serverValue.toFixed(1);
                     slider.value = value;
                     input.value = value;
                 }
@@ -972,6 +1056,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     }
+    
     
     // Automatically load schedule on page load
     setTimeout(async () => {

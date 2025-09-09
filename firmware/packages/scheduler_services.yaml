@@ -567,6 +567,7 @@ switch:
   - platform: template
     name: "Scheduler Enabled"
     id: scheduler_enable_switch
+    restore_mode: RESTORE_DEFAULT_ON
     lambda: |-
       return id(main_scheduler).is_enabled();
     turn_on_action:
@@ -580,6 +581,7 @@ switch:
   - platform: template
     name: "Moon Simulation Enabled"
     id: moon_sim_enable_switch
+    restore_mode: RESTORE_DEFAULT_ON
     lambda: |-
       return id(main_scheduler).is_moon_simulation_enabled();
     turn_on_action:
