@@ -89,13 +89,6 @@ ${jsData.hex.join(', ')}
 const size_t LEDBRICK_JS_SIZE = ${jsData.size};
 const char LEDBRICK_JS_TYPE[] = "application/javascript";
 
-// For compatibility - UI JS is same as main JS in React build
-const uint8_t LEDBRICK_UI_JS_COMPRESSED[] PROGMEM_ATTR = {
-${jsData.hex.join(', ')}
-};
-const size_t LEDBRICK_UI_JS_SIZE = ${jsData.size};
-const char LEDBRICK_UI_JS_TYPE[] = "application/javascript";
-
 // app.css (${cssData.size} bytes compressed)
 const uint8_t STYLE_CSS_COMPRESSED[] PROGMEM_ATTR = {
 ${cssData.hex.join(', ')}

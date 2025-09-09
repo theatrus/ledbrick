@@ -36,7 +36,6 @@ class LEDBrickWebServer : public Component {
   // Request handlers
   static esp_err_t handle_index(httpd_req_t *req);
   static esp_err_t handle_js(httpd_req_t *req);
-  static esp_err_t handle_ui_js(httpd_req_t *req);
   static esp_err_t handle_css(httpd_req_t *req);
   static esp_err_t handle_api_schedule_get(httpd_req_t *req);
   static esp_err_t handle_api_schedule_post(httpd_req_t *req);
