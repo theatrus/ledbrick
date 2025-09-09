@@ -5,16 +5,16 @@ let scheduleChart = null;
 let currentSchedule = null;
 let editingPointIndex = -1;
 
-// Channel colors for the chart
-const channelColors = [
-    '#FF6384', // Red
-    '#36A2EB', // Blue
-    '#FFCE56', // Yellow
-    '#4BC0C0', // Teal
-    '#9966FF', // Purple
-    '#FF9F40', // Orange
-    '#FF6384', // Pink
-    '#C9CBCF'  // Gray
+// Channel colors for the chart - will be loaded from schedule
+let channelColors = [
+    '#FFFFFF', // Default white
+    '#0000FF', // Blue
+    '#00FFFF', // Cyan
+    '#00FF00', // Green
+    '#FF0000', // Red
+    '#FF00FF', // Magenta
+    '#FFFF00', // Yellow
+    '#FF8000'  // Orange
 ];
 
 // Channel names (can be customized)
@@ -398,6 +398,7 @@ async function saveSchedulePoint() {
 async function refreshSchedule() {
     try {
         currentSchedule = await ledbrickAPI.getSchedule();
+        initializeChannelConfig(); // Initialize channel color configuration
         updateScheduleChart(currentSchedule);
         updateScheduleTable(currentSchedule);
         document.getElementById('schedulePoints').textContent = 
@@ -601,12 +602,104 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Try to connect and update
-    setTimeout(() => {
+    setTimeout(async () => {
         if (savedUrl) {
-            testConnection();
+            try {
+                await testConnection();
+                // Load schedule after successful connection
+                await refreshSchedule();
+                console.log('Schedule loaded successfully');
+            } catch (error) {
+                console.error('Failed to connect or load schedule:', error);
+            }
         }
     }, 1000);
     
     // Update status periodically
     setInterval(updateStatus, 10000); // Every 10 seconds
 });
+
+// Channel color configuration functions
+function initializeChannelConfig() {
+    const grid = document.getElementById('channelConfigGrid');
+    if (!grid || !currentSchedule) return;
+    
+    grid.innerHTML = '';
+    
+    const numChannels = currentSchedule.num_channels || 8;
+    const configs = currentSchedule.channel_configs || [];
+    
+    for (let i = 0; i < numChannels; i++) {
+        const config = configs[i] || {
+            rgb_hex: channelColors[i],
+            name: `Channel ${i + 1}`,
+            max_current: 2.0
+        };
+        
+        // Update global channel colors array
+        channelColors[i] = config.rgb_hex;
+        
+        const item = document.createElement('div');
+        item.className = 'channel-config-item';
+        
+        const colorInput = document.createElement('input');
+        colorInput.type = 'color';
+        colorInput.className = 'channel-color-picker';
+        colorInput.id = `channel-color-${i}`;
+        colorInput.value = config.rgb_hex;
+        colorInput.onchange = (e) => {
+            channelColors[i] = e.target.value;
+            updateScheduleChart(currentSchedule);
+        };
+        
+        const label = document.createElement('label');
+        label.className = 'channel-config-label';
+        label.htmlFor = `channel-color-${i}`;
+        label.textContent = config.name;
+        
+        item.appendChild(colorInput);
+        item.appendChild(label);
+        grid.appendChild(item);
+    }
+}
+
+async function saveChannelColors() {
+    if (!currentSchedule) {
+        alert('No schedule loaded');
+        return;
+    }
+    
+    try {
+        // Update the current schedule with new channel configs
+        const numChannels = currentSchedule.num_channels || 8;
+        currentSchedule.channel_configs = [];
+        
+        for (let i = 0; i < numChannels; i++) {
+            const colorInput = document.getElementById(`channel-color-${i}`);
+            currentSchedule.channel_configs.push({
+                rgb_hex: colorInput ? colorInput.value : channelColors[i],
+                name: channelNames[i] || `Channel ${i + 1}`,
+                max_current: 2.0 // This will be read from ESPHome component
+            });
+        }
+        
+        // Save the entire schedule with updated channel configs
+        await ledbrickAPI.importSchedule(currentSchedule);
+        
+        // Show success message
+        const status = document.getElementById('connectionStatus');
+        const oldClass = status.className;
+        const oldText = status.textContent;
+        status.className = 'status success';
+        status.textContent = 'Channel colors saved successfully!';
+        
+        setTimeout(() => {
+            status.className = oldClass;
+            status.textContent = oldText;
+        }, 3000);
+        
+    } catch (error) {
+        console.error('Failed to save channel colors:', error);
+        alert('Failed to save channel colors: ' + error.message);
+    }
+}

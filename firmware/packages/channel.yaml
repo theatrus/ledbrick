@@ -70,4 +70,14 @@ number:
     initial_value: 1.0
     entity_category: config
 
+# Channel color configuration
+text_sensor:
+  - platform: template
+    name: "Ch${channel_number} Color"
+    id: ch${channel_number}_color
+    lambda: |-
+      return id(main_scheduler)->get_channel_color(${channel_number} - 1);
+    update_interval: 60s
+    entity_category: config
+
 # Scheduler functionality is handled globally in the main config

@@ -176,9 +176,11 @@ async function testConnection() {
         status.className = 'status success';
         status.textContent = `Connected! Schedule has ${result.schedule_points} points.`;
         updateStatus();
+        return true; // Return success
     } catch (error) {
         status.className = 'status error';
         status.textContent = 'Connection failed: ' + (error.error || error.message || 'Unknown error');
+        throw error; // Re-throw to handle in caller
     }
 }
 
@@ -316,14 +318,7 @@ document.addEventListener('DOMContentLoaded', function() {
         ledbrickAPI.baseUrl = savedUrl;
     }
     
-    // Set up channel sliders
-    for (let i = 1; i <= 4; i++) {
-        const slider = document.getElementById(`ch${i}pwm`);
-        const display = document.getElementById(`ch${i}val`);
-        slider.addEventListener('input', function() {
-            display.textContent = this.value + '%';
-        });
-    }
+    // Channel sliders removed - using schedule-based control only
     
     // Update status after a delay
     setTimeout(updateStatus, 1000);

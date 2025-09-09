@@ -82,6 +82,14 @@ class LEDBrickScheduler : public PollingComponent {
   void set_moon_simulation(const LEDScheduler::MoonSimulation& config) { scheduler_.set_moon_simulation(config); }
   bool is_moon_simulation_enabled() const { return scheduler_.get_moon_simulation().enabled; }
   
+  // Channel configuration
+  void set_channel_config(uint8_t channel, const LEDScheduler::ChannelConfig& config) { scheduler_.set_channel_config(channel, config); }
+  LEDScheduler::ChannelConfig get_channel_config(uint8_t channel) const { return scheduler_.get_channel_config(channel); }
+  void set_channel_color(uint8_t channel, const std::string& rgb_hex) { scheduler_.set_channel_color(channel, rgb_hex); }
+  void set_channel_max_current(uint8_t channel, float max_current) { scheduler_.set_channel_max_current(channel, max_current); }
+  std::string get_channel_color(uint8_t channel) const { return scheduler_.get_channel_color(channel); }
+  float get_channel_max_current(uint8_t channel) const { return scheduler_.get_channel_max_current(channel); }
+  
   // Current state
   uint16_t get_current_time_minutes() const;
   InterpolationResult get_current_values() const;

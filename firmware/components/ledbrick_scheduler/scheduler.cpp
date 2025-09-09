@@ -12,6 +12,25 @@ extern "C" {
 
 LEDScheduler::LEDScheduler(uint8_t num_channels) 
     : num_channels_(num_channels) {
+    // Initialize channel configs with default colors
+    channel_configs_.resize(num_channels_);
+    // Default colors for common LED types
+    const std::vector<std::string> default_colors = {
+        "#FFFFFF", // Channel 1: White
+        "#0000FF", // Channel 2: Blue
+        "#00FFFF", // Channel 3: Cyan
+        "#00FF00", // Channel 4: Green
+        "#FF0000", // Channel 5: Red
+        "#FF00FF", // Channel 6: Magenta
+        "#FFFF00", // Channel 7: Yellow
+        "#FF8000"  // Channel 8: Orange
+    };
+    
+    for (uint8_t i = 0; i < num_channels_; i++) {
+        channel_configs_[i].rgb_hex = i < default_colors.size() ? default_colors[i] : "#FFFFFF";
+        channel_configs_[i].max_current = 2.0f; // Default 2A
+        channel_configs_[i].name = "Channel " + std::to_string(i + 1);
+    }
 }
 
 void LEDScheduler::set_num_channels(uint8_t channels) {
@@ -19,6 +38,22 @@ void LEDScheduler::set_num_channels(uint8_t channels) {
         return; // Invalid channel count
     }
     num_channels_ = channels;
+    
+    // Update channel configs
+    const std::vector<std::string> default_colors = {
+        "#FFFFFF", "#0000FF", "#00FFFF", "#00FF00",
+        "#FF0000", "#FF00FF", "#FFFF00", "#FF8000"
+    };
+    
+    size_t old_size = channel_configs_.size();
+    channel_configs_.resize(num_channels_);
+    
+    // Initialize new channels if expanded
+    for (uint8_t i = old_size; i < num_channels_; i++) {
+        channel_configs_[i].rgb_hex = i < default_colors.size() ? default_colors[i] : "#FFFFFF";
+        channel_configs_[i].max_current = 2.0f;
+        channel_configs_[i].name = "Channel " + std::to_string(i + 1);
+    }
     
     // Update existing schedule points to match new channel count
     for (auto& point : schedule_points_) {
@@ -484,9 +519,22 @@ bool LEDScheduler::validate_point(const SchedulePoint& point) const {
         }
     }
     
-    for (float current : point.current_values) {
-        if (current < 0.0f || current > 5.0f) {
+    // Validate current values against per-channel limits
+    for (size_t i = 0; i < point.current_values.size(); i++) {
+        float current = point.current_values[i];
+        if (current < 0.0f) {
             return false;
+        }
+        // Check against channel's max current if available
+        if (i < channel_configs_.size()) {
+            if (current > channel_configs_[i].max_current) {
+                return false;
+            }
+        } else {
+            // Fallback to default max of 2.0A
+            if (current > 2.0f) {
+                return false;
+            }
         }
     }
     
@@ -866,6 +914,21 @@ std::string LEDScheduler::export_json() const {
     // Add num_channels
     cJSON_AddNumberToObject(root, "num_channels", num_channels_);
     
+    // Add channel_configs array
+    cJSON* channels_array = cJSON_CreateArray();
+    if (channels_array) {
+        for (uint8_t i = 0; i < num_channels_; i++) {
+            cJSON* channel_obj = cJSON_CreateObject();
+            if (channel_obj) {
+                cJSON_AddStringToObject(channel_obj, "rgb_hex", channel_configs_[i].rgb_hex.c_str());
+                cJSON_AddNumberToObject(channel_obj, "max_current", channel_configs_[i].max_current);
+                cJSON_AddStringToObject(channel_obj, "name", channel_configs_[i].name.c_str());
+                cJSON_AddItemToArray(channels_array, channel_obj);
+            }
+        }
+        cJSON_AddItemToObject(root, "channel_configs", channels_array);
+    }
+    
     // Create schedule_points array
     cJSON* points_array = cJSON_CreateArray();
     if (!points_array) return "{}";
@@ -941,6 +1004,21 @@ std::string LEDScheduler::export_json_minified() const {
     
     // Add num_channels
     cJSON_AddNumberToObject(root, "num_channels", num_channels_);
+    
+    // Add channel_configs array
+    cJSON* channels_array = cJSON_CreateArray();
+    if (channels_array) {
+        for (uint8_t i = 0; i < num_channels_; i++) {
+            cJSON* channel_obj = cJSON_CreateObject();
+            if (channel_obj) {
+                cJSON_AddStringToObject(channel_obj, "rgb_hex", channel_configs_[i].rgb_hex.c_str());
+                cJSON_AddNumberToObject(channel_obj, "max_current", channel_configs_[i].max_current);
+                cJSON_AddStringToObject(channel_obj, "name", channel_configs_[i].name.c_str());
+                cJSON_AddItemToArray(channels_array, channel_obj);
+            }
+        }
+        cJSON_AddItemToObject(root, "channel_configs", channels_array);
+    }
     
     // Create schedule_points array
     cJSON* points_array = cJSON_CreateArray();
@@ -1024,6 +1102,37 @@ bool LEDScheduler::import_json(const std::string& json_str) {
     cJSON* num_channels_item = cJSON_GetObjectItem(root, "num_channels");
     if (cJSON_IsNumber(num_channels_item)) {
         set_num_channels(static_cast<uint8_t>(num_channels_item->valueint));
+    }
+    
+    // Parse channel_configs array
+    cJSON* channels_array = cJSON_GetObjectItem(root, "channel_configs");
+    if (cJSON_IsArray(channels_array)) {
+        int channel_idx = 0;
+        cJSON* channel_item = NULL;
+        cJSON_ArrayForEach(channel_item, channels_array) {
+            if (channel_idx >= num_channels_) break;
+            if (!cJSON_IsObject(channel_item)) continue;
+            
+            ChannelConfig config;
+            
+            cJSON* rgb_hex_item = cJSON_GetObjectItem(channel_item, "rgb_hex");
+            if (cJSON_IsString(rgb_hex_item)) {
+                config.rgb_hex = rgb_hex_item->valuestring;
+            }
+            
+            cJSON* max_current_item = cJSON_GetObjectItem(channel_item, "max_current");
+            if (cJSON_IsNumber(max_current_item)) {
+                config.max_current = static_cast<float>(max_current_item->valuedouble);
+            }
+            
+            cJSON* name_item = cJSON_GetObjectItem(channel_item, "name");
+            if (cJSON_IsString(name_item)) {
+                config.name = name_item->valuestring;
+            }
+            
+            set_channel_config(channel_idx, config);
+            channel_idx++;
+        }
     }
     
     // Parse schedule_points array
@@ -1119,4 +1228,47 @@ float LEDScheduler::read_float(const std::vector<uint8_t>& data, size_t& pos) co
     uint32_t bits = data[pos] | (data[pos + 1] << 8) | (data[pos + 2] << 16) | (data[pos + 3] << 24);
     pos += 4;
     return *reinterpret_cast<const float*>(&bits);
+}
+
+// Channel configuration methods
+void LEDScheduler::set_channel_config(uint8_t channel, const ChannelConfig& config) {
+    if (channel < num_channels_) {
+        channel_configs_[channel] = config;
+    }
+}
+
+LEDScheduler::ChannelConfig LEDScheduler::get_channel_config(uint8_t channel) const {
+    if (channel < num_channels_) {
+        return channel_configs_[channel];
+    }
+    return ChannelConfig();
+}
+
+void LEDScheduler::set_channel_color(uint8_t channel, const std::string& rgb_hex) {
+    if (channel < num_channels_) {
+        channel_configs_[channel].rgb_hex = rgb_hex;
+    }
+}
+
+void LEDScheduler::set_channel_max_current(uint8_t channel, float max_current) {
+    if (channel < num_channels_) {
+        // Clamp to valid range
+        if (max_current < 0.1f) max_current = 0.1f;
+        if (max_current > 2.0f) max_current = 2.0f;
+        channel_configs_[channel].max_current = max_current;
+    }
+}
+
+std::string LEDScheduler::get_channel_color(uint8_t channel) const {
+    if (channel < num_channels_) {
+        return channel_configs_[channel].rgb_hex;
+    }
+    return "#FFFFFF";
+}
+
+float LEDScheduler::get_channel_max_current(uint8_t channel) const {
+    if (channel < num_channels_) {
+        return channel_configs_[channel].max_current;
+    }
+    return 2.0f;
 }

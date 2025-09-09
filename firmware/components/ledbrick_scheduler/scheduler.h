@@ -78,6 +78,17 @@ public:
         bool valid = false;  // Whether times have been calculated
     };
 
+    // Channel configuration
+    struct ChannelConfig {
+        std::string rgb_hex = "#FFFFFF";  // RGB color in hex format
+        float max_current = 2.0f;          // Maximum current in amps (0.1-2.0)
+        std::string name;                  // Optional channel name
+        
+        ChannelConfig() = default;
+        ChannelConfig(const std::string& color, float current, const std::string& n = "")
+            : rgb_hex(color), max_current(current), name(n) {}
+    };
+
     // Moon simulation configuration
     struct MoonSimulation {
         bool enabled = false;
@@ -154,6 +165,15 @@ public:
     void create_full_spectrum_preset();
     void create_simple_preset();
     void create_dynamic_sunrise_sunset_preset();
+    
+    // Channel configuration
+    void set_channel_config(uint8_t channel, const ChannelConfig& config);
+    ChannelConfig get_channel_config(uint8_t channel) const;
+    std::vector<ChannelConfig> get_all_channel_configs() const { return channel_configs_; }
+    void set_channel_color(uint8_t channel, const std::string& rgb_hex);
+    void set_channel_max_current(uint8_t channel, float max_current);
+    std::string get_channel_color(uint8_t channel) const;
+    float get_channel_max_current(uint8_t channel) const;
 
 private:
     uint8_t num_channels_;
@@ -161,6 +181,7 @@ private:
     std::map<std::string, std::vector<SchedulePoint>> presets_;
     AstronomicalTimes astronomical_times_;
     MoonSimulation moon_simulation_;
+    std::vector<ChannelConfig> channel_configs_;
     
     // Internal methods
     InterpolationResult interpolate_values(uint16_t current_time) const;

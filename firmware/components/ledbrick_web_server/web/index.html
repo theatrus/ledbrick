@@ -15,6 +15,7 @@
                 <span id="connectionStatus" class="status-indicator disconnected">Disconnected</span>
                 <span id="schedulerStatus" class="scheduler-status">Scheduler: --</span>
                 <span id="currentTime" class="current-time">Time: --:--</span>
+                <span id="schedulePoints" class="schedule-points">0 points</span>
             </div>
         </header>
 
@@ -49,6 +50,15 @@
                     <span id="pwmScaleValue">100%</span>
                 </div>
             </div>
+        </section>
+
+        <!-- Channel Configuration -->
+        <section class="card">
+            <h2>Channel Configuration</h2>
+            <div class="channel-config-grid" id="channelConfigGrid">
+                <!-- Channel color pickers will be dynamically inserted here -->
+            </div>
+            <button onclick="saveChannelColors()" class="button primary">💾 Save Colors</button>
         </section>
 
         <!-- Schedule Visualization -->
