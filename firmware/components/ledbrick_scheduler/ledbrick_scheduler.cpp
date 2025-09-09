@@ -695,6 +695,27 @@ void LEDBrickScheduler::set_moon_base_intensity(const std::vector<float>& intens
   ESP_LOGI(TAG, "Moon base intensity updated and saved");
 }
 
+void LEDBrickScheduler::set_moon_base_current(const std::vector<float>& current) {
+  // Check if values actually changed
+  auto current_moon = scheduler_.get_moon_simulation();
+  if (current_moon.base_current.size() == current.size()) {
+    bool changed = false;
+    for (size_t i = 0; i < current.size(); i++) {
+      if (abs(current_moon.base_current[i] - current[i]) > 0.01f) {
+        changed = true;
+        break;
+      }
+    }
+    if (!changed) return;  // No change, skip save
+  }
+  
+  scheduler_.set_moon_base_current(current);
+  
+  // Save to persistent storage (scheduler JSON)
+  save_schedule_to_flash();
+  ESP_LOGI(TAG, "Moon base current updated and saved");
+}
+
 void LEDBrickScheduler::set_moon_simulation(const LEDScheduler::MoonSimulation& config) {
   // Check if values actually changed  
   auto current_moon = scheduler_.get_moon_simulation();

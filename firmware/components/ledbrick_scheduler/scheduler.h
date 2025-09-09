@@ -93,11 +93,14 @@ public:
     struct MoonSimulation {
         bool enabled = false;
         std::vector<float> base_intensity;  // Base moonlight intensity per channel (0-100%)
+        std::vector<float> base_current;    // Base moonlight current per channel (0-max_current)
         bool phase_scaling = true;         // Scale intensity by moon phase
         
         MoonSimulation() = default;
         MoonSimulation(bool enable, std::vector<float> intensity, bool scale = true)
             : enabled(enable), base_intensity(std::move(intensity)), phase_scaling(scale) {}
+        MoonSimulation(bool enable, std::vector<float> intensity, std::vector<float> current, bool scale = true)
+            : enabled(enable), base_intensity(std::move(intensity)), base_current(std::move(current)), phase_scaling(scale) {}
     };
 
     // Constructor
@@ -128,6 +131,7 @@ public:
     MoonSimulation get_moon_simulation() const { return moon_simulation_; }
     void enable_moon_simulation(bool enabled);
     void set_moon_base_intensity(const std::vector<float>& intensity);
+    void set_moon_base_current(const std::vector<float>& current);
     
     // Astronomical time management
     void set_astronomical_times(const AstronomicalTimes& times);

@@ -96,6 +96,7 @@ class LEDBrickScheduler : public PollingComponent {
   // Moon simulation - with auto-save
   void enable_moon_simulation(bool enabled);
   void set_moon_base_intensity(const std::vector<float>& intensity);
+  void set_moon_base_current(const std::vector<float>& current);
   void set_moon_simulation(const LEDScheduler::MoonSimulation& config);
   bool is_moon_simulation_enabled() const { return scheduler_.get_moon_simulation().enabled; }
   LEDScheduler::MoonSimulation get_moon_simulation() const { return scheduler_.get_moon_simulation(); }

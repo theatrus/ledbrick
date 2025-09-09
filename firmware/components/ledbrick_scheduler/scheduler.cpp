@@ -543,8 +543,9 @@ bool LEDScheduler::validate_point(const SchedulePoint& point) const {
 
 void LEDScheduler::set_moon_simulation(const MoonSimulation& config) {
     moon_simulation_ = config;
-    // Resize base_intensity to match channel count
+    // Resize base_intensity and base_current to match channel count
     moon_simulation_.base_intensity.resize(num_channels_, 0.0f);
+    moon_simulation_.base_current.resize(num_channels_, 0.0f);
 }
 
 void LEDScheduler::enable_moon_simulation(bool enabled) {
@@ -554,6 +555,11 @@ void LEDScheduler::enable_moon_simulation(bool enabled) {
 void LEDScheduler::set_moon_base_intensity(const std::vector<float>& intensity) {
     moon_simulation_.base_intensity = intensity;
     moon_simulation_.base_intensity.resize(num_channels_, 0.0f);
+}
+
+void LEDScheduler::set_moon_base_current(const std::vector<float>& current) {
+    moon_simulation_.base_current = current;
+    moon_simulation_.base_current.resize(num_channels_, 0.0f);
 }
 
 bool LEDScheduler::is_moon_visible(uint16_t current_time, const AstronomicalTimes& astro_times) const {
@@ -621,8 +627,17 @@ LEDScheduler::InterpolationResult LEDScheduler::apply_moon_simulation(const Inte
             // Apply moonlight (additive to ensure it shows even if base is 0)
             result.pwm_values[i] = moon_intensity;
             
-            // Scale current proportionally (moonlight uses much less current)
-            result.current_values[i] = moon_intensity * 0.02f; // 2% of PWM value as current
+            // Use base_current if available, otherwise scale from PWM
+            if (i < moon_simulation_.base_current.size()) {
+                float moon_current = moon_simulation_.base_current[i];
+                if (moon_simulation_.phase_scaling) {
+                    moon_current *= moon_brightness;
+                }
+                result.current_values[i] = moon_current;
+            } else {
+                // Fallback: scale current proportionally (moonlight uses much less current)
+                result.current_values[i] = moon_intensity * 0.02f; // 2% of PWM value as current
+            }
         }
     }
     
@@ -1016,6 +1031,16 @@ std::string LEDScheduler::export_json() const {
             cJSON_AddItemToObject(moon_obj, "base_intensity", intensity_array);
         }
         
+        // Add base_current array
+        cJSON* current_array = cJSON_CreateArray();
+        if (current_array) {
+            for (float current : moon_simulation_.base_current) {
+                cJSON* number = cJSON_CreateNumber(current);
+                if (number) cJSON_AddItemToArray(current_array, number);
+            }
+            cJSON_AddItemToObject(moon_obj, "base_current", current_array);
+        }
+        
         cJSON_AddItemToObject(root, "moon_simulation", moon_obj);
     }
     
@@ -1130,6 +1155,16 @@ std::string LEDScheduler::export_json_minified() const {
                 if (number) cJSON_AddItemToArray(intensity_array, number);
             }
             cJSON_AddItemToObject(moon_obj, "base_intensity", intensity_array);
+        }
+        
+        // Add base_current array
+        cJSON* current_array = cJSON_CreateArray();
+        if (current_array) {
+            for (float current : moon_simulation_.base_current) {
+                cJSON* number = cJSON_CreateNumber(current);
+                if (number) cJSON_AddItemToArray(current_array, number);
+            }
+            cJSON_AddItemToObject(moon_obj, "base_current", current_array);
         }
         
         cJSON_AddItemToObject(root, "moon_simulation", moon_obj);
@@ -1288,6 +1323,18 @@ bool LEDScheduler::import_json(const std::string& json_str) {
             cJSON_ArrayForEach(intensity_item, intensity_array) {
                 if (cJSON_IsNumber(intensity_item)) {
                     moon_config.base_intensity.push_back(static_cast<float>(intensity_item->valuedouble));
+                }
+            }
+        }
+        
+        // Parse base_current array
+        cJSON* current_array = cJSON_GetObjectItem(moon_obj, "base_current");
+        if (cJSON_IsArray(current_array)) {
+            moon_config.base_current.clear();
+            cJSON* current_item = NULL;
+            cJSON_ArrayForEach(current_item, current_array) {
+                if (cJSON_IsNumber(current_item)) {
+                    moon_config.base_current.push_back(static_cast<float>(current_item->valuedouble));
                 }
             }
         }

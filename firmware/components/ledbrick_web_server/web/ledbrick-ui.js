@@ -389,9 +389,13 @@ function editPoint(index) {
         document.getElementById('astroOffset').value = point.offset_minutes || 0;
     }
     
-    // Set channel values
+    // Reset to intensity mode by default and set channel values
+    document.getElementById('controlMode').value = 'intensity';
+    updateControlModeFields();
+    
+    // Set channel values (use PWM values by default)
     for (let i = 0; i < 8; i++) {
-        const value = point.pwm_values[i];
+        const value = point.pwm_values[i] || 0;
         document.getElementById(`ch${i+1}Value`).value = value;
         document.querySelector(`.channel-input[data-channel="${i+1}"] input[type="range"]`).value = value;
     }
@@ -413,7 +417,9 @@ function resetPointDialog() {
     document.getElementById('pointType').value = 'fixed';
     document.getElementById('pointTime').value = '12:00';
     document.getElementById('astroOffset').value = '0';
+    document.getElementById('controlMode').value = 'intensity';
     updatePointTypeFields();
+    updateControlModeFields();
     setAllChannels(0);
 }
 
@@ -427,6 +433,41 @@ function updatePointTypeFields() {
         pointType === 'fixed' ? 'block' : 'none';
     document.getElementById('offsetFields').style.display = 
         pointType !== 'fixed' ? 'block' : 'none';
+}
+
+function updateControlModeFields() {
+    const controlMode = document.getElementById('controlMode').value;
+    const title = document.getElementById('channelValuesTitle');
+    
+    if (controlMode === 'current') {
+        title.textContent = 'Channel Current (0-3.0A)';
+        // Update input ranges for current mode
+        for (let i = 1; i <= 8; i++) {
+            const numberInput = document.getElementById(`ch${i}Value`);
+            const rangeInput = document.querySelector(`.channel-input[data-channel="${i}"] input[type="range"]`);
+            
+            // Get max current for this channel from schedule config
+            let maxCurrent = 3.0; // default
+            if (currentSchedule && currentSchedule.channel_configs && currentSchedule.channel_configs[i-1]) {
+                maxCurrent = currentSchedule.channel_configs[i-1].max_current || 3.0;
+            }
+            
+            numberInput.max = maxCurrent;
+            numberInput.value = Math.min(numberInput.value, maxCurrent);
+            rangeInput.max = maxCurrent;
+            rangeInput.value = numberInput.value;
+        }
+    } else {
+        title.textContent = 'Channel Intensity (0-100%)';
+        // Reset to intensity mode
+        for (let i = 1; i <= 8; i++) {
+            const numberInput = document.getElementById(`ch${i}Value`);
+            const rangeInput = document.querySelector(`.channel-input[data-channel="${i}"] input[type="range"]`);
+            
+            numberInput.max = 100;
+            rangeInput.max = 100;
+        }
+    }
 }
 
 function setAllChannels(value) {
@@ -475,19 +516,36 @@ async function saveSchedulePoint() {
         pointData.time_minutes = baseTimes[pointType] || 360;
     }
     
-    // Get channel values
+    // Get channel values based on control mode
+    const controlMode = document.getElementById('controlMode').value;
     const pwmValues = [];
     const currentValues = [];
+    
     for (let i = 1; i <= 8; i++) {
-        const pwmValue = parseFloat(document.getElementById(`ch${i}Value`).value);
-        pwmValues.push(pwmValue);
+        const inputValue = parseFloat(document.getElementById(`ch${i}Value`).value);
         
-        // Calculate current based on PWM and max current from channel config
-        if (currentSchedule && currentSchedule.channel_configs && currentSchedule.channel_configs[i-1]) {
-            const maxCurrent = currentSchedule.channel_configs[i-1].max_current || 2.0;
-            currentValues.push((pwmValue / 100) * maxCurrent);
+        if (controlMode === 'current') {
+            // Current mode: input is in Amperes, calculate PWM from current
+            currentValues.push(inputValue);
+            
+            // Calculate PWM percentage based on max current for this channel
+            if (currentSchedule && currentSchedule.channel_configs && currentSchedule.channel_configs[i-1]) {
+                const maxCurrent = currentSchedule.channel_configs[i-1].max_current || 3.0;
+                pwmValues.push((inputValue / maxCurrent) * 100);
+            } else {
+                pwmValues.push((inputValue / 3.0) * 100); // Default 3A max
+            }
         } else {
-            currentValues.push(pwmValue / 100 * 2.0); // Default 2A max
+            // Intensity mode: input is PWM percentage, calculate current from PWM
+            pwmValues.push(inputValue);
+            
+            // Calculate current based on PWM and max current from channel config
+            if (currentSchedule && currentSchedule.channel_configs && currentSchedule.channel_configs[i-1]) {
+                const maxCurrent = currentSchedule.channel_configs[i-1].max_current || 3.0;
+                currentValues.push((inputValue / 100) * maxCurrent);
+            } else {
+                currentValues.push(inputValue / 100 * 3.0); // Default 3A max
+            }
         }
     }
     
@@ -972,6 +1030,41 @@ function updateMoonSimulationUI() {
     document.getElementById('moonSimulationControls').style.display = enabled ? 'block' : 'none';
 }
 
+function updateMoonControlModeFields() {
+    const controlMode = document.getElementById('moonControlMode').value;
+    const title = document.getElementById('moonControlTitle');
+    
+    if (controlMode === 'current') {
+        title.textContent = 'Moon Base Current (per channel):';
+        // Update input ranges for current mode (max 1.0A for moonlight)
+        for (let i = 1; i <= 8; i++) {
+            const numberInput = document.getElementById(`moonCh${i}Value`);
+            const rangeInput = document.getElementById(`moonCh${i}`);
+            
+            // Get max current for this channel from schedule config
+            let maxCurrent = 1.0; // Default 1.0A for moonlight (much lower than normal)
+            if (currentSchedule && currentSchedule.channel_configs && currentSchedule.channel_configs[i-1]) {
+                maxCurrent = Math.min(currentSchedule.channel_configs[i-1].max_current || 3.0, 1.0);
+            }
+            
+            numberInput.max = maxCurrent;
+            numberInput.value = Math.min(numberInput.value, maxCurrent);
+            rangeInput.max = maxCurrent;
+            rangeInput.value = numberInput.value;
+        }
+    } else {
+        title.textContent = 'Moon Base Intensity (per channel):';
+        // Reset to intensity mode (max 20% for moonlight)
+        for (let i = 1; i <= 8; i++) {
+            const numberInput = document.getElementById(`moonCh${i}Value`);
+            const rangeInput = document.getElementById(`moonCh${i}`);
+            
+            numberInput.max = 20;
+            rangeInput.max = 20;
+        }
+    }
+}
+
 function setAllMoonChannels(value) {
     for (let i = 1; i <= 8; i++) {
         document.getElementById(`moonCh${i}`).value = value;
@@ -982,18 +1075,45 @@ function setAllMoonChannels(value) {
 async function saveMoonSimulation() {
     const enabled = document.getElementById('moonSimulationEnabled').checked;
     const phaseScaling = document.getElementById('moonPhaseScaling').checked;
+    const controlMode = document.getElementById('moonControlMode').value;
     
-    // Collect base intensity values
+    // Collect values based on control mode
     const baseIntensity = [];
+    const baseCurrent = [];
+    
     for (let i = 1; i <= 8; i++) {
-        const value = parseFloat(document.getElementById(`moonCh${i}Value`).value) || 0;
-        baseIntensity.push(value);
+        const inputValue = parseFloat(document.getElementById(`moonCh${i}Value`).value) || 0;
+        
+        if (controlMode === 'current') {
+            // Current mode: input is in Amperes, calculate intensity from current
+            baseCurrent.push(inputValue);
+            
+            // Calculate intensity percentage based on max current for this channel
+            if (currentSchedule && currentSchedule.channel_configs && currentSchedule.channel_configs[i-1]) {
+                const maxCurrent = currentSchedule.channel_configs[i-1].max_current || 3.0;
+                baseIntensity.push((inputValue / maxCurrent) * 100);
+            } else {
+                baseIntensity.push((inputValue / 3.0) * 100); // Default 3A max
+            }
+        } else {
+            // Intensity mode: input is intensity percentage, calculate current from intensity
+            baseIntensity.push(inputValue);
+            
+            // Calculate current based on intensity and max current from channel config
+            if (currentSchedule && currentSchedule.channel_configs && currentSchedule.channel_configs[i-1]) {
+                const maxCurrent = currentSchedule.channel_configs[i-1].max_current || 3.0;
+                baseCurrent.push((inputValue / 100) * maxCurrent);
+            } else {
+                baseCurrent.push(inputValue / 100 * 3.0); // Default 3A max
+            }
+        }
     }
     
     const moonConfig = {
         enabled: enabled,
         phase_scaling: phaseScaling,
-        base_intensity: baseIntensity
+        base_intensity: baseIntensity,
+        base_current: baseCurrent
     };
     
     try {
