@@ -1223,6 +1223,9 @@ esp_err_t LEDBrickWebServer::handle_api_channel_configs(httpd_req_t *req) {
   // Save to flash
   self->scheduler_->save_schedule_to_flash();
   
+  // Update color sensors to reflect the new colors
+  self->scheduler_->update_color_sensors();
+  
   ESP_LOGI(TAG, "Updated channel configurations");
   
   JsonDocument response_doc;
