@@ -144,8 +144,8 @@ export function ScheduleChart({ schedule, currentTime }: ScheduleChartProps) {
     // Interpolate PWM values
     const pwm_values = new Array(schedule.num_channels);
     for (let i = 0; i < schedule.num_channels; i++) {
-      const prevValue = prevPoint.pwm_values[i] || 0;
-      const nextValue = nextPoint.pwm_values[i] || 0;
+      const prevValue = (prevPoint.pwm_values && prevPoint.pwm_values[i] !== undefined) ? prevPoint.pwm_values[i] : 0;
+      const nextValue = (nextPoint.pwm_values && nextPoint.pwm_values[i] !== undefined) ? nextPoint.pwm_values[i] : 0;
       pwm_values[i] = prevValue + (nextValue - prevValue) * timeRatio;
     }
 

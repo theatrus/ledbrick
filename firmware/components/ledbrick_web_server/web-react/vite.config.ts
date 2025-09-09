@@ -20,7 +20,7 @@ export default defineConfig(({ mode }) => ({
   
   build: {
     target: 'es2020',
-    minify: 'terser',
+    minify: mode === 'debug' ? false : 'terser',
     terserOptions: {
       compress: {
         drop_console: true,

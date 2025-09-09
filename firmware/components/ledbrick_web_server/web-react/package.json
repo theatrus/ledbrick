@@ -6,6 +6,7 @@
     "dev": "vite",
     "dev:server": "./scripts/dev-server.sh",
     "build": "vite build",
+    "build:debug": "vite build --mode debug",
     "build:analyze": "vite build --mode analyze",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
