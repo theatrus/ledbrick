@@ -175,12 +175,16 @@ class LEDBrickScheduler : public PollingComponent {
   
   // Persistent storage
   ESPPreferenceObject schedule_pref_;
-  static constexpr uint32_t SCHEDULE_HASH = 0x12345678;  // Storage identifier
+  // Use more unique hash based on component name
+  static constexpr uint32_t SCHEDULE_HASH = 0x4C454453;  // 'LEDS' in hex
   
+  // Use a larger storage for JSON format to include all settings
   struct ScheduleStorage {
-    uint16_t num_points;
-    uint8_t data[3800];  // Flexible storage for points
+    uint32_t version;  // Storage format version
+    uint32_t json_length;  // Length of JSON data
+    char json_data[8192];  // JSON storage (8KB should be enough)
   };
+  
   
   // Entity references
   std::map<uint8_t, light::LightState*> lights_;
@@ -200,6 +204,8 @@ class LEDBrickScheduler : public PollingComponent {
   
   // Built-in presets (use astronomical data for sunrise/sunset)
   void create_sunrise_sunset_preset_with_astro_data() const;
+  
+  // Persistent storage methods
 };
 
 // Automation actions

@@ -28,7 +28,7 @@ void LEDBrickScheduler::setup() {
   // Initialize persistent storage
   schedule_pref_ = global_preferences->make_preference<ScheduleStorage>(SCHEDULE_HASH);
   
-  // Load schedule from flash storage
+  // Load schedule from flash storage (includes all settings in JSON)
   load_schedule_from_flash();
   
   // Load default astronomical schedule if no points exist
@@ -320,20 +320,28 @@ void LEDBrickScheduler::add_max_current_control(uint8_t channel, number::Number 
 
 
 void LEDBrickScheduler::save_schedule_to_flash() {
-  // Use standalone scheduler's serialization
-  auto serialized = scheduler_.serialize();
+  // Export the complete schedule as JSON (includes moon settings, channel configs, etc.)
+  std::string json_output;
+  export_schedule_json(json_output);
   
   ScheduleStorage storage;
   memset(&storage, 0, sizeof(storage));
   
-  storage.num_points = serialized.num_points;
+  storage.version = 2;  // Version 2 uses JSON format
+  storage.json_length = static_cast<uint32_t>(json_output.length());
   
-  // Copy serialized data, limiting to storage size
-  size_t copy_size = std::min(serialized.data.size(), sizeof(storage.data));
-  std::memcpy(storage.data, serialized.data.data(), copy_size);
+  // Ensure it fits in our storage
+  if (storage.json_length >= sizeof(storage.json_data) - 1) {
+    ESP_LOGW(TAG, "Schedule JSON too large (%u bytes), truncating", storage.json_length);
+    storage.json_length = sizeof(storage.json_data) - 1;
+  }
+  
+  // Copy JSON data
+  std::memcpy(storage.json_data, json_output.c_str(), storage.json_length);
+  storage.json_data[storage.json_length] = '\0';  // Null terminate
   
   if (schedule_pref_.save(&storage)) {
-    ESP_LOGD(TAG, "Saved schedule to flash (%u points, %zu bytes)", storage.num_points, copy_size);
+    ESP_LOGD(TAG, "Saved schedule to flash (JSON format, %u bytes)", storage.json_length);
   } else {
     ESP_LOGW(TAG, "Failed to save schedule to flash");
   }
@@ -347,19 +355,30 @@ void LEDBrickScheduler::load_schedule_from_flash() {
     return;
   }
   
-  ESP_LOGD(TAG, "Loading schedule from flash (%u points)", storage.num_points);
-  
-  // Create serialized data structure from storage
-  LEDScheduler::SerializedData serialized;
-  serialized.num_points = storage.num_points;
-  serialized.num_channels = num_channels_;
-  serialized.data.assign(storage.data, storage.data + sizeof(storage.data));
-  
-  // Use standalone scheduler's deserialization
-  if (scheduler_.deserialize(serialized)) {
-    ESP_LOGI(TAG, "Loaded %zu schedule points from flash", scheduler_.get_schedule_size());
+  // Check version
+  if (storage.version == 2) {
+    // Version 2: JSON format
+    if (storage.json_length > 0 && storage.json_length < sizeof(storage.json_data)) {
+      storage.json_data[storage.json_length] = '\0';  // Ensure null terminated
+      std::string json_input(storage.json_data);
+      
+      ESP_LOGD(TAG, "Loading schedule from flash (JSON format, %u bytes)", storage.json_length);
+      
+      if (import_schedule_json(json_input)) {
+        ESP_LOGI(TAG, "Successfully loaded schedule from flash (JSON format)");
+        ESP_LOGI(TAG, "Loaded: %zu points, Moon: %s, Location: %.4f,%.4f", 
+                 scheduler_.get_schedule_size(),
+                 scheduler_.get_moon_simulation().enabled ? "ON" : "OFF",
+                 latitude_, longitude_);
+      } else {
+        ESP_LOGW(TAG, "Failed to import schedule JSON from flash");
+      }
+    }
+  } else if (storage.version == 0 || storage.version == 1) {
+    // Legacy format - try to migrate
+    ESP_LOGW(TAG, "Found legacy schedule format in flash, migration not supported");
   } else {
-    ESP_LOGW(TAG, "Failed to deserialize schedule from flash");
+    ESP_LOGW(TAG, "Unknown schedule storage version %u", storage.version);
   }
 }
 
@@ -636,7 +655,7 @@ void LEDBrickScheduler::set_location(double latitude, double longitude) {
   // Update astronomical calculator
   astro_calc_.set_location(latitude_, longitude_);
   
-  // Save to persistent storage (scheduler JSON)
+  // Save complete schedule (includes all settings)
   save_schedule_to_flash();
   ESP_LOGI(TAG, "Location updated to %.4f, %.4f and saved", latitude, longitude);
 }
@@ -650,7 +669,7 @@ void LEDBrickScheduler::set_astronomical_projection(bool enabled) {
   astronomical_projection_ = enabled;
   astro_calc_.set_projection_settings(astronomical_projection_, time_shift_hours_, time_shift_minutes_);
   
-  // Save to persistent storage (scheduler JSON)
+  // Save complete schedule (includes all settings)
   save_schedule_to_flash();
   ESP_LOGI(TAG, "Astronomical projection %s and saved", enabled ? "enabled" : "disabled");
 }
