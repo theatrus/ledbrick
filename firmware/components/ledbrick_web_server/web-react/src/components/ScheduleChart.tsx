@@ -77,7 +77,8 @@ export function ScheduleChart({ schedule, currentTime }: ScheduleChartProps) {
       const values = interpolateAtTime(sortedPoints, targetTime);
       
       for (let ch = 0; ch < schedule.num_channels; ch++) {
-        interpolatedData[ch].push(values.pwm_values[ch]);
+        const value = values.pwm_values && values.pwm_values[ch] !== undefined ? values.pwm_values[ch] : 0;
+        interpolatedData[ch].push(value);
       }
     }
 

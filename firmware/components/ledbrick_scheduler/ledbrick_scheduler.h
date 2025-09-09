@@ -119,6 +119,7 @@ class LEDBrickScheduler : public PollingComponent {
   // Current state
   uint16_t get_current_time_minutes() const;
   InterpolationResult get_current_values() const;
+  InterpolationResult get_actual_channel_values() const;
   
   // Update timezone offset from time source
   void update_timezone_from_time_source();

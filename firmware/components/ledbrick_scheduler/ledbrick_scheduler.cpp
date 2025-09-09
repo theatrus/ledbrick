@@ -214,6 +214,32 @@ InterpolationResult LEDBrickScheduler::get_current_values() const {
   return scheduler_.get_values_at_time(current_time);
 }
 
+InterpolationResult LEDBrickScheduler::get_actual_channel_values() const {
+  InterpolationResult result;
+  result.pwm_values.resize(num_channels_, 0.0f);
+  result.current_values.resize(num_channels_, 0.0f);
+  result.valid = true;
+  
+  // Get actual values from the ESPHome components
+  for (uint8_t channel = 0; channel < num_channels_; channel++) {
+    // Get PWM value from light entity
+    auto light_it = lights_.find(channel);
+    if (light_it != lights_.end() && light_it->second) {
+      auto call = light_it->second->current_values;
+      // Get brightness as percentage (0-100)
+      result.pwm_values[channel] = call.get_brightness() * 100.0f;
+    }
+    
+    // Get current value from current control
+    auto current_it = current_controls_.find(channel);
+    if (current_it != current_controls_.end() && current_it->second) {
+      result.current_values[channel] = current_it->second->state;
+    }
+  }
+  
+  return result;
+}
+
 void LEDBrickScheduler::set_pwm_scale(float scale) {
   if (scale < 0.0f) {
     scale = 0.0f;

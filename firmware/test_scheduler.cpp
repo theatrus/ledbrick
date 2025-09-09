@@ -93,7 +93,9 @@ void test_serialization(TestRunner& runner) {
     auto result = scheduler2.get_values_at_time(360);
     runner.assert_true(result.valid, "Deserialized values valid");
     runner.assert_equals(10.0f, result.pwm_values[0], 0.01f, "Deserialized PWM value (expected: 10.0, actual: " + std::to_string(result.pwm_values[0]) + ")");
-    runner.assert_equals(0.6f, result.current_values[2], 0.01f, "Deserialized current value (expected: 0.6, actual: " + std::to_string(result.current_values[2]) + ")");
+    runner.assert_equals(0.2f, result.current_values[0], 0.01f, "Deserialized current ch0 (expected: 0.2, actual: " + std::to_string(result.current_values[0]) + ")");
+    runner.assert_equals(0.4f, result.current_values[1], 0.01f, "Deserialized current ch1 (expected: 0.4, actual: " + std::to_string(result.current_values[1]) + ")");
+    runner.assert_equals(0.6f, result.current_values[2], 0.01f, "Deserialized current ch2 (expected: 0.6, actual: " + std::to_string(result.current_values[2]) + ")");
 }
 
 void test_json_export(TestRunner& runner) {

@@ -129,7 +129,7 @@ export function ScheduleTable({ schedule, onUpdate }: ScheduleTableProps) {
               <td className={point.time_type && point.time_type !== 'fixed' ? 'astronomical-type' : ''}>
                 {formatType(point)}
               </td>
-              {point.pwm_values.map((pwm, i) => (
+              {(point.pwm_values || []).map((pwm, i) => (
                 <td 
                   key={i}
                   style={{

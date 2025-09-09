@@ -279,6 +279,12 @@ LEDScheduler::InterpolationResult LEDScheduler::interpolate_values(uint16_t curr
         }
         result.pwm_values = schedule_points_[0].pwm_values;
         result.current_values = schedule_points_[0].current_values;
+        // Clamp current values to max current
+        for (size_t i = 0; i < num_channels_; i++) {
+            if (result.current_values[i] > channel_configs_[i].max_current) {
+                result.current_values[i] = channel_configs_[i].max_current;
+            }
+        }
         result.valid = true;
         return result;
     }
@@ -303,6 +309,10 @@ LEDScheduler::InterpolationResult LEDScheduler::interpolate_values(uint16_t curr
         for (size_t i = 0; i < num_channels_; i++) {
             result.pwm_values[i] = ratio * after->pwm_values[i];
             result.current_values[i] = ratio * after->current_values[i];
+            // Clamp to max current
+            if (result.current_values[i] > channel_configs_[i].max_current) {
+                result.current_values[i] = channel_configs_[i].max_current;
+            }
         }
         result.valid = true;
         return result;
@@ -325,6 +335,10 @@ LEDScheduler::InterpolationResult LEDScheduler::interpolate_values(uint16_t curr
         for (size_t i = 0; i < num_channels_; i++) {
             result.pwm_values[i] = before->pwm_values[i] * (1.0f - ratio);
             result.current_values[i] = before->current_values[i] * (1.0f - ratio);
+            // Clamp to max current
+            if (result.current_values[i] > channel_configs_[i].max_current) {
+                result.current_values[i] = channel_configs_[i].max_current;
+            }
         }
         result.valid = true;
         return result;
@@ -355,6 +369,10 @@ LEDScheduler::InterpolationResult LEDScheduler::interpolate_values(uint16_t curr
         for (size_t i = 0; i < num_channels_; i++) {
             result.pwm_values[i] = before->pwm_values[i] + ratio * (after->pwm_values[i] - before->pwm_values[i]);
             result.current_values[i] = before->current_values[i] + ratio * (after->current_values[i] - before->current_values[i]);
+            // Clamp to max current
+            if (result.current_values[i] > channel_configs_[i].max_current) {
+                result.current_values[i] = channel_configs_[i].max_current;
+            }
         }
         result.valid = true;
     }
@@ -418,6 +436,12 @@ LEDScheduler::InterpolationResult LEDScheduler::interpolate_values_with_astro(ui
         }
         result.pwm_values = resolved_points[0].pwm_values;
         result.current_values = resolved_points[0].current_values;
+        // Clamp current values to max current
+        for (size_t i = 0; i < num_channels_; i++) {
+            if (result.current_values[i] > channel_configs_[i].max_current) {
+                result.current_values[i] = channel_configs_[i].max_current;
+            }
+        }
         result.valid = true;
         return result;
     }
@@ -483,6 +507,10 @@ LEDScheduler::InterpolationResult LEDScheduler::interpolate_values_with_astro(ui
         for (size_t i = 0; i < num_channels_; i++) {
             result.pwm_values[i] = before->pwm_values[i] + ratio * (after->pwm_values[i] - before->pwm_values[i]);
             result.current_values[i] = before->current_values[i] + ratio * (after->current_values[i] - before->current_values[i]);
+            // Clamp to max current
+            if (result.current_values[i] > channel_configs_[i].max_current) {
+                result.current_values[i] = channel_configs_[i].max_current;
+            }
         }
         result.valid = true;
     }
@@ -807,6 +835,22 @@ bool LEDScheduler::deserialize(const SerializedData& data) {
     num_channels_ = data.num_channels;
     schedule_points_ = std::move(new_points);
     sort_schedule_points();
+    
+    // Resize and initialize channel configs for the new channel count
+    channel_configs_.resize(num_channels_);
+    const std::vector<std::string> default_colors = {
+        "#FFFFFF", "#0000FF", "#00FFFF", "#00FF00",
+        "#FF0000", "#FF00FF", "#FFFF00", "#FF8000"
+    };
+    
+    for (uint8_t i = 0; i < num_channels_; i++) {
+        if (channel_configs_[i].rgb_hex.empty()) {
+            channel_configs_[i].rgb_hex = i < default_colors.size() ? default_colors[i] : "#FFFFFF";
+            channel_configs_[i].max_current = 2.0f;
+            channel_configs_[i].name = "Channel " + std::to_string(i + 1);
+        }
+    }
+    
     return true;
 }
 
@@ -1249,7 +1293,8 @@ void LEDScheduler::write_uint16(std::vector<uint8_t>& data, size_t& pos, uint16_
 
 void LEDScheduler::write_float(std::vector<uint8_t>& data, size_t& pos, float value) const {
     data.resize(pos + 4);
-    uint32_t bits = *reinterpret_cast<const uint32_t*>(&value);
+    uint32_t bits;
+    memcpy(&bits, &value, sizeof(float));
     data[pos++] = (bits >> 0) & 0xFF;
     data[pos++] = (bits >> 8) & 0xFF;
     data[pos++] = (bits >> 16) & 0xFF;
@@ -1263,9 +1308,14 @@ uint16_t LEDScheduler::read_uint16(const std::vector<uint8_t>& data, size_t& pos
 }
 
 float LEDScheduler::read_float(const std::vector<uint8_t>& data, size_t& pos) const {
-    uint32_t bits = data[pos] | (data[pos + 1] << 8) | (data[pos + 2] << 16) | (data[pos + 3] << 24);
+    uint32_t bits = (data[pos] & 0xFF) | 
+                    ((data[pos + 1] & 0xFF) << 8) | 
+                    ((data[pos + 2] & 0xFF) << 16) | 
+                    ((data[pos + 3] & 0xFF) << 24);
     pos += 4;
-    return *reinterpret_cast<const float*>(&bits);
+    float value;
+    memcpy(&value, &bits, sizeof(float));
+    return value;
 }
 
 // Channel configuration methods

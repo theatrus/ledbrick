@@ -427,7 +427,7 @@ esp_err_t LEDBrickWebServer::handle_api_status_get(httpd_req_t *req) {
   doc["enabled"] = self->scheduler_->is_enabled();
   doc["time_minutes"] = self->scheduler_->get_current_time_minutes();
   doc["schedule_points"] = self->scheduler_->get_schedule_size();
-  doc["pwm_scale"] = self->scheduler_->get_pwm_scale();
+  doc["pwm_scale"] = self->scheduler_->get_pwm_scale() * 100.0f;  // Convert to percentage
   doc["latitude"] = self->scheduler_->get_latitude();
   doc["longitude"] = self->scheduler_->get_longitude();
   doc["astronomical_projection"] = self->scheduler_->is_astronomical_projection_enabled();
@@ -448,9 +448,9 @@ esp_err_t LEDBrickWebServer::handle_api_status_get(httpd_req_t *req) {
     moon_current.add(current);
   }
   
-  // Add current channel values
+  // Add current channel values (actual values from ESPHome components)
   JsonArray channels = doc["channels"].to<JsonArray>();
-  auto values = self->scheduler_->get_current_values();
+  auto values = self->scheduler_->get_actual_channel_values();
   for (size_t i = 0; i < values.pwm_values.size() && i < 8; i++) {
     JsonObject channel = channels.add<JsonObject>();
     channel["id"] = i + 1;
