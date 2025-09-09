@@ -376,8 +376,19 @@ void LEDBrickScheduler::export_schedule_json(std::string &json_output) const {
     // Calculate solar noon from projected times
     uint16_t solar_noon = 720;  // Default to noon
     if (projected_sun_times.rise_valid && projected_sun_times.set_valid) {
-      solar_noon = (projected_sun_times.rise_minutes + projected_sun_times.set_minutes) / 2;
-      if (solar_noon >= 1440) {
+      // Handle case where sunset happens after midnight
+      int rise_mins = static_cast<int>(projected_sun_times.rise_minutes);
+      int set_mins = static_cast<int>(projected_sun_times.set_minutes);
+      
+      // If sunset is before sunrise, it means sunset is on the next day
+      if (set_mins < rise_mins) {
+        set_mins += 1440;  // Add 24 hours
+      }
+      
+      solar_noon = (rise_mins + set_mins) / 2;
+      
+      // Wrap back to 0-1439 range
+      while (solar_noon >= 1440) {
         solar_noon -= 1440;
       }
     }
@@ -822,8 +833,22 @@ void LEDBrickScheduler::update_astronomical_times_for_scheduler() {
   
   // Calculate solar noon (midpoint between sunrise and sunset)
   uint16_t solar_noon = 720; // Default noon
-  if (sun_times.rise_valid && sun_times.set_valid && sun_times.set_minutes > sun_times.rise_minutes) {
-    solar_noon = (sun_times.rise_minutes + sun_times.set_minutes) / 2;
+  if (sun_times.rise_valid && sun_times.set_valid) {
+    // Handle case where sunset happens after midnight
+    int rise_mins = static_cast<int>(sun_times.rise_minutes);
+    int set_mins = static_cast<int>(sun_times.set_minutes);
+    
+    // If sunset is before sunrise, it means sunset is on the next day
+    if (set_mins < rise_mins) {
+      set_mins += 1440;  // Add 24 hours
+    }
+    
+    solar_noon = (rise_mins + set_mins) / 2;
+    
+    // Wrap back to 0-1439 range
+    while (solar_noon >= 1440) {
+      solar_noon -= 1440;
+    }
   }
   
   // Calculate civil twilight times (sun 6° below horizon)

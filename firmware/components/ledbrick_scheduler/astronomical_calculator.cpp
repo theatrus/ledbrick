@@ -342,15 +342,21 @@ AstronomicalCalculator::SunTimes AstronomicalCalculator::get_projected_sun_rise_
     if (actual_times.rise_valid) {
         // Add the time shift (convert to total minutes)
         int shift_minutes = time_shift_hours_ * 60 + time_shift_minutes_;
-        projected_times.rise_minutes = (actual_times.rise_minutes + shift_minutes) % 1440;
-        if (projected_times.rise_minutes < 0) projected_times.rise_minutes += 1440;
+        int new_rise_minutes = static_cast<int>(actual_times.rise_minutes) + shift_minutes;
+        // Ensure the result is in the range [0, 1439]
+        while (new_rise_minutes < 0) new_rise_minutes += 1440;
+        while (new_rise_minutes >= 1440) new_rise_minutes -= 1440;
+        projected_times.rise_minutes = static_cast<uint16_t>(new_rise_minutes);
     }
     
     if (actual_times.set_valid) {
         // Add the time shift (convert to total minutes) 
         int shift_minutes = time_shift_hours_ * 60 + time_shift_minutes_;
-        projected_times.set_minutes = (actual_times.set_minutes + shift_minutes) % 1440;
-        if (projected_times.set_minutes < 0) projected_times.set_minutes += 1440;
+        int new_set_minutes = static_cast<int>(actual_times.set_minutes) + shift_minutes;
+        // Ensure the result is in the range [0, 1439]
+        while (new_set_minutes < 0) new_set_minutes += 1440;
+        while (new_set_minutes >= 1440) new_set_minutes -= 1440;
+        projected_times.set_minutes = static_cast<uint16_t>(new_set_minutes);
     }
     
     return projected_times;

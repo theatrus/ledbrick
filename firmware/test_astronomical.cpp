@@ -238,6 +238,75 @@ void test_singapore_offset(TestRunner& runner) {
     
 }
 
+void test_negative_time_shift(TestRunner& runner) {
+    runner.start_suite("Negative Time Shift Tests");
+    
+    // Test location with known sunrise/sunset times
+    AstronomicalCalculator calc(37.7749, -122.4194); // San Francisco
+    calc.set_timezone_offset(-8.0);  // PST
+    
+    // Test with -4 hour time shift (simulating moving 4 hours west)
+    calc.set_projection_settings(true, -4, 0);
+    
+    AstronomicalCalculator::DateTime test_date(2025, 1, 8, 12, 0, 0);
+    auto actual_times = calc.get_sun_rise_set_times(test_date);
+    auto projected_times = calc.get_projected_sun_rise_set_times(test_date);
+    
+    std::cout << "Actual sunrise: " << actual_times.rise_minutes << " min, ";
+    std::cout << "Projected sunrise: " << projected_times.rise_minutes << " min" << std::endl;
+    std::cout << "Actual sunset: " << actual_times.set_minutes << " min, ";
+    std::cout << "Projected sunset: " << projected_times.set_minutes << " min" << std::endl;
+    
+    runner.assert_true(projected_times.rise_valid && projected_times.set_valid, 
+                      "Projected times are valid with negative shift");
+    
+    // With -4 hour shift, times should be 240 minutes earlier
+    // But must handle wraparound for early morning times
+    if (actual_times.rise_valid && projected_times.rise_valid) {
+        int expected_rise = actual_times.rise_minutes - 240;
+        if (expected_rise < 0) expected_rise += 1440;
+        
+        runner.assert_true(abs(projected_times.rise_minutes - expected_rise) <= 1,
+                          "Projected sunrise is 4 hours earlier (expected: " + 
+                          std::to_string(expected_rise) + ", actual: " + 
+                          std::to_string(projected_times.rise_minutes) + ")");
+    }
+    
+    if (actual_times.set_valid && projected_times.set_valid) {
+        int expected_set = actual_times.set_minutes - 240;
+        if (expected_set < 0) expected_set += 1440;
+        
+        runner.assert_true(abs(projected_times.set_minutes - expected_set) <= 1,
+                          "Projected sunset is 4 hours earlier (expected: " + 
+                          std::to_string(expected_set) + ", actual: " + 
+                          std::to_string(projected_times.set_minutes) + ")");
+    }
+    
+    // Test solar noon calculation with wraparound
+    int rise_mins = static_cast<int>(projected_times.rise_minutes);
+    int set_mins = static_cast<int>(projected_times.set_minutes);
+    
+    // If sunset is before sunrise, it means sunset is on the next day
+    if (set_mins < rise_mins) {
+        set_mins += 1440;  // Add 24 hours
+    }
+    
+    int solar_noon = (rise_mins + set_mins) / 2;
+    while (solar_noon >= 1440) {
+        solar_noon -= 1440;
+    }
+    
+    std::cout << "Calculated solar noon: " << solar_noon << " min (";
+    std::cout << solar_noon / 60 << ":" << std::setfill('0') << std::setw(2) << solar_noon % 60 << ")" << std::endl;
+    
+    // Solar noon should be shifted by approximately 4 hours earlier
+    // Original solar noon is around 12:23 (743 min), so projected should be around 8:23 (503 min)
+    runner.assert_true(solar_noon >= 400 && solar_noon <= 600,
+                      "Solar noon is shifted correctly (expected around 8:23, actual: " +
+                      std::to_string(solar_noon / 60) + ":" + 
+                      std::to_string(solar_noon % 60) + ")");
+}
+
 int main() {
     TestResults results;
     TestRunner runner;
@@ -267,6 +336,9 @@ int main() {
     results.add_suite_results(runner);
     
     test_singapore_offset(runner);
+    results.add_suite_results(runner);
+    
+    test_negative_time_shift(runner);
     results.add_suite_results(runner);
     
     results.print_final_summary("Astronomical Calculator");
