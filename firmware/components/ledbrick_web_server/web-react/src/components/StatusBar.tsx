@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import type { Status, Schedule } from '../types';
 import { StatusBarControls } from './StatusBarControls';
+import { ChannelControl } from './ChannelControl';
 
 interface StatusBarProps {
   status: Status | null;
@@ -13,7 +15,16 @@ const DEFAULT_CHANNEL_COLORS = [
 ];
 
 export function StatusBar({ status, schedule, onUpdate }: StatusBarProps) {
+  const [selectedChannel, setSelectedChannel] = useState<number | null>(null);
+
   if (!status) return null;
+
+  const handleChannelClick = (channelIndex: number) => {
+    // Only allow manual control when scheduler is disabled
+    if (!status.enabled) {
+      setSelectedChannel(channelIndex);
+    }
+  };
 
   return (
     <div className="status-bar">
@@ -47,8 +58,13 @@ export function StatusBar({ status, schedule, onUpdate }: StatusBarProps) {
             return (
               <div 
                 key={channel.id} 
-                className="channel-current"
-                style={{ borderLeft: `3px solid ${color}` }}
+                className={`channel-current ${!status.enabled ? 'clickable' : ''}`}
+                style={{ 
+                  borderLeft: `3px solid ${color}`,
+                  cursor: !status.enabled ? 'pointer' : 'default'
+                }}
+                onClick={() => handleChannelClick(index)}
+                title={!status.enabled ? 'Click to control manually' : ''}
               >
                 <span className="channel-label" style={{ color }}>
                   Ch{channel.id}:
@@ -67,6 +83,33 @@ export function StatusBar({ status, schedule, onUpdate }: StatusBarProps) {
         pwmScale={status.pwm_scale || 100}
         onUpdate={onUpdate}
       />
+      
+      {selectedChannel !== null && !status.enabled && (
+        <>
+          <div 
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0,0,0,0.5)',
+              zIndex: 1000
+            }}
+            onClick={() => setSelectedChannel(null)}
+          />
+          <ChannelControl
+            channel={selectedChannel}
+            currentPwm={status.channels[selectedChannel]?.pwm || 0}
+            currentAmperage={status.channels[selectedChannel]?.current || 0}
+            maxCurrent={schedule?.channel_configs?.[selectedChannel]?.max_current || 2.0}
+            channelName={schedule?.channel_configs?.[selectedChannel]?.name || `Channel ${selectedChannel + 1}`}
+            channelColor={schedule?.channel_configs?.[selectedChannel]?.rgb_hex || DEFAULT_CHANNEL_COLORS[selectedChannel % DEFAULT_CHANNEL_COLORS.length]}
+            onClose={() => setSelectedChannel(null)}
+            onUpdate={onUpdate}
+          />
+        </>
+      )}
     </div>
   );
 }

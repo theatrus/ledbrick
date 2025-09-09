@@ -115,11 +115,15 @@ class LEDBrickScheduler : public PollingComponent {
   void add_color_text_sensor(uint8_t channel, text_sensor::TextSensor *sensor);
   void update_color_sensors();
   float get_channel_max_current(uint8_t channel) const { return scheduler_.get_channel_max_current(channel); }
+  uint8_t get_num_channels() const { return num_channels_; }
   
   // Current state
   uint16_t get_current_time_minutes() const;
   InterpolationResult get_current_values() const;
   InterpolationResult get_actual_channel_values() const;
+  
+  // Manual channel control (only works when scheduler is disabled)
+  void set_channel_manual_control(uint8_t channel, float pwm, float current);
   
   // Update timezone offset from time source
   void update_timezone_from_time_source();

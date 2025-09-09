@@ -142,6 +142,10 @@ class LEDBrickAPI {
   async setMoonSimulation(moonData: any): Promise<any> {
     return this.request('POST', '/api/moon_simulation', moonData);
   }
+
+  async setChannelManualControl(channel: number, pwm: number, current: number): Promise<any> {
+    return this.request('POST', '/api/channel/control', { channel, pwm, current });
+  }
 }
 
 export const api = new LEDBrickAPI();

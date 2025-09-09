@@ -608,3 +608,61 @@ body {
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
   font-size: 13px;
 }
+
+/* Clickable channel status */
+.channel-current.clickable {
+  transition: all 0.2s ease;
+}
+
+.channel-current.clickable:hover {
+  background: rgba(74, 158, 255, 0.1);
+  transform: translateY(-1px);
+}
+
+/* Control slider styles */
+.control-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: #444;
+  outline: none;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+}
+
+.control-slider:hover {
+  opacity: 1;
+}
+
+.control-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #4a9eff;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.control-slider::-webkit-slider-thumb:hover {
+  background: #6bb4ff;
+  transform: scale(1.1);
+}
+
+.control-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #4a9eff;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+}
+
+.control-slider::-moz-range-thumb:hover {
+  background: #6bb4ff;
+  transform: scale(1.1);
+}

@@ -1085,5 +1085,41 @@ LEDBrickScheduler::SchedulePointInfo LEDBrickScheduler::get_schedule_point_info(
   return info;
 }
 
+void LEDBrickScheduler::set_channel_manual_control(uint8_t channel, float pwm, float current) {
+  // Only allow manual control when scheduler is disabled
+  if (enabled_) {
+    ESP_LOGW(TAG, "Manual control rejected - scheduler is enabled");
+    return;
+  }
+  
+  if (channel >= num_channels_) {
+    ESP_LOGW(TAG, "Invalid channel %u for manual control", channel);
+    return;
+  }
+  
+  ESP_LOGI(TAG, "Setting manual control for channel %u: PWM=%.1f%%, Current=%.2fA", 
+           channel, pwm, current);
+  
+  // Set light brightness (PWM)
+  auto light_it = lights_.find(channel);
+  if (light_it != lights_.end() && light_it->second) {
+    auto call = light_it->second->turn_on();
+    call.set_brightness(pwm / 100.0f);  // Convert percentage to 0-1
+    call.perform();
+  }
+  
+  // Set current control
+  auto current_it = current_controls_.find(channel);
+  if (current_it != current_controls_.end() && current_it->second) {
+    // Apply max current limiting
+    auto max_current_it = max_current_controls_.find(channel);
+    if (max_current_it != max_current_controls_.end() && max_current_it->second) {
+      float max_current = max_current_it->second->state;
+      current = std::min(current, max_current);
+    }
+    current_it->second->publish_state(current);
+  }
+}
+
 } // namespace ledbrick_scheduler
 } // namespace esphome

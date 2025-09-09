@@ -29,7 +29,7 @@ void LEDBrickWebServer::setup() {
   config.server_port = this->port_;
   config.ctrl_port = this->port_;
   config.stack_size = 8192;
-  config.max_uri_handlers = 16;
+  config.max_uri_handlers = 24;  // We register 22 handlers
   config.recv_wait_timeout = 10;
   config.send_wait_timeout = 10;
   
@@ -213,6 +213,15 @@ void LEDBrickWebServer::setup() {
     .user_ctx = this
   };
   httpd_register_uri_handler(this->server_, &api_timezone_post);
+  
+  // Manual channel control endpoint
+  httpd_uri_t api_channel_control = {
+    .uri = "/api/channel/control",
+    .method = HTTP_POST,
+    .handler = handle_api_channel_control,
+    .user_ctx = this
+  };
+  httpd_register_uri_handler(this->server_, &api_channel_control);
   
   ESP_LOGI(TAG, "LEDBrick Web Server started successfully");
 }
@@ -1054,6 +1063,74 @@ esp_err_t LEDBrickWebServer::handle_api_timezone_post(httpd_req_t *req) {
   response["timezone_offset_hours"] = self->scheduler_->get_timezone_offset_hours();
   
   self->send_json_response(req, 200, response);
+  return ESP_OK;
+}
+
+esp_err_t LEDBrickWebServer::handle_api_channel_control(httpd_req_t *req) {
+  auto *self = get_instance(req);
+  if (!self->check_auth(req)) return ESP_OK;
+  
+  // Read request body safely
+  auto buf = read_request_body(req);
+  if (!buf) return ESP_OK;  // Error already sent
+  
+  // Parse JSON
+  JsonDocument doc;
+  DeserializationError error = deserializeJson(doc, buf.get());
+  
+  if (error) {
+    self->send_error(req, 400, "Invalid JSON");
+    return ESP_OK;
+  }
+  
+  // Check if scheduler is disabled (manual control only works when scheduler is off)
+  if (self->scheduler_->is_enabled()) {
+    self->send_error(req, 400, "Manual control only available when scheduler is disabled");
+    return ESP_OK;
+  }
+  
+  // Extract channel and values
+  if (!doc["channel"].is<JsonVariant>() || 
+      !doc["pwm"].is<JsonVariant>() || 
+      !doc["current"].is<JsonVariant>()) {
+    self->send_error(req, 400, "Missing channel, pwm, or current");
+    return ESP_OK;
+  }
+  
+  uint8_t channel = doc["channel"];
+  float pwm = doc["pwm"];
+  float current = doc["current"];
+  
+  // Validate channel
+  if (channel >= self->scheduler_->get_num_channels()) {
+    self->send_error(req, 400, "Invalid channel number");
+    return ESP_OK;
+  }
+  
+  // Validate PWM (0-100%)
+  if (pwm < 0.0f || pwm > 100.0f) {
+    self->send_error(req, 400, "PWM must be between 0 and 100");
+    return ESP_OK;
+  }
+  
+  // Validate current (0 to max current for channel)
+  float max_current = self->scheduler_->get_channel_max_current(channel);
+  if (current < 0.0f || current > max_current) {
+    self->send_error(req, 400, "Current must be between 0 and " + std::to_string(max_current));
+    return ESP_OK;
+  }
+  
+  // Set the channel values directly
+  self->scheduler_->set_channel_manual_control(channel, pwm, current);
+  
+  JsonDocument response_doc;
+  response_doc["success"] = true;
+  response_doc["channel"] = channel;
+  response_doc["pwm"] = pwm;
+  response_doc["current"] = current;
+  response_doc["message"] = "Channel control updated";
+  
+  self->send_json_response(req, 200, response_doc);
   return ESP_OK;
 }
 
