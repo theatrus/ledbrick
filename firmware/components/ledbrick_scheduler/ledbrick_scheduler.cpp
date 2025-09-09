@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <memory>
 
 // The standalone implementations are compiled separately by ESPHome
 // No need to include the .cpp files here
@@ -341,45 +342,59 @@ void LEDBrickScheduler::save_schedule_to_flash() {
   std::string json_output;
   export_schedule_json(json_output);
   
-  ScheduleStorage storage;
-  memset(&storage, 0, sizeof(storage));
+  // Allocate storage on heap to avoid stack overflow
+  std::unique_ptr<ScheduleStorage> storage(new (std::nothrow) ScheduleStorage);
+  if (!storage) {
+    ESP_LOGE(TAG, "Failed to allocate memory for schedule storage");
+    return;
+  }
   
-  storage.version = 2;  // Version 2 uses JSON format
-  storage.json_length = static_cast<uint32_t>(json_output.length());
+  memset(storage.get(), 0, sizeof(ScheduleStorage));
+  
+  storage->version = 2;  // Version 2 uses JSON format
+  storage->json_length = static_cast<uint32_t>(json_output.length());
   
   // Ensure it fits in our storage
-  if (storage.json_length >= sizeof(storage.json_data) - 1) {
-    ESP_LOGW(TAG, "Schedule JSON too large (%u bytes), truncating", storage.json_length);
-    storage.json_length = sizeof(storage.json_data) - 1;
+  if (storage->json_length >= sizeof(storage->json_data) - 1) {
+    ESP_LOGW(TAG, "Schedule JSON too large (%u bytes), truncating", storage->json_length);
+    storage->json_length = sizeof(storage->json_data) - 1;
   }
   
   // Copy JSON data
-  std::memcpy(storage.json_data, json_output.c_str(), storage.json_length);
-  storage.json_data[storage.json_length] = '\0';  // Null terminate
+  std::memcpy(storage->json_data, json_output.c_str(), storage->json_length);
+  storage->json_data[storage->json_length] = '\0';  // Null terminate
   
-  if (schedule_pref_.save(&storage)) {
-    ESP_LOGD(TAG, "Saved schedule to flash (JSON format, %u bytes)", storage.json_length);
+  bool success = schedule_pref_.save(storage.get());
+  if (success) {
+    ESP_LOGD(TAG, "Saved schedule to flash (JSON format, %u bytes)", storage->json_length);
   } else {
     ESP_LOGW(TAG, "Failed to save schedule to flash");
   }
+  // unique_ptr automatically deletes
 }
 
 void LEDBrickScheduler::load_schedule_from_flash() {
-  ScheduleStorage storage;
+  // Allocate storage on heap to avoid stack overflow
+  std::unique_ptr<ScheduleStorage> storage(new (std::nothrow) ScheduleStorage);
+  if (!storage) {
+    ESP_LOGE(TAG, "Failed to allocate memory for schedule storage");
+    return;
+  }
   
-  if (!schedule_pref_.load(&storage)) {
+  bool loaded = schedule_pref_.load(storage.get());
+  if (!loaded) {
     ESP_LOGD(TAG, "No saved schedule found in flash");
     return;
   }
   
   // Check version
-  if (storage.version == 2) {
+  if (storage->version == 2) {
     // Version 2: JSON format
-    if (storage.json_length > 0 && storage.json_length < sizeof(storage.json_data)) {
-      storage.json_data[storage.json_length] = '\0';  // Ensure null terminated
-      std::string json_input(storage.json_data);
+    if (storage->json_length > 0 && storage->json_length < sizeof(storage->json_data)) {
+      storage->json_data[storage->json_length] = '\0';  // Ensure null terminated
+      std::string json_input(storage->json_data);
       
-      ESP_LOGD(TAG, "Loading schedule from flash (JSON format, %u bytes)", storage.json_length);
+      ESP_LOGD(TAG, "Loading schedule from flash (JSON format, %u bytes)", storage->json_length);
       
       if (import_schedule_json(json_input)) {
         ESP_LOGI(TAG, "Successfully loaded schedule from flash (JSON format)");
@@ -391,12 +406,13 @@ void LEDBrickScheduler::load_schedule_from_flash() {
         ESP_LOGW(TAG, "Failed to import schedule JSON from flash");
       }
     }
-  } else if (storage.version == 0 || storage.version == 1) {
+  } else if (storage->version == 0 || storage->version == 1) {
     // Legacy format - try to migrate
     ESP_LOGW(TAG, "Found legacy schedule format in flash, migration not supported");
   } else {
-    ESP_LOGW(TAG, "Unknown schedule storage version %u", storage.version);
+    ESP_LOGW(TAG, "Unknown schedule storage version %u", storage->version);
   }
+  // unique_ptr automatically deletes
 }
 
 void LEDBrickScheduler::export_schedule_json(std::string &json_output) const {

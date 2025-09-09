@@ -8,6 +8,7 @@
 #include <cstring>
 #include <ctime>
 #include <cstdlib>
+#include <cctype>
 
 namespace esphome {
 namespace ledbrick_web_server {
@@ -966,33 +967,96 @@ esp_err_t LEDBrickWebServer::handle_api_timezone_post(httpd_req_t *req) {
   // Update SNTP timezone if it's the active time source
   if (doc.containsKey("timezone")) {
     const char* tz_str = doc["timezone"];
-    
-    // Convert timezone name to POSIX TZ string
     std::string posix_tz;
-    if (strcmp(tz_str, "America/Los_Angeles") == 0) {
-      posix_tz = "PST8PDT,M3.2.0,M11.1.0";
-    } else if (strcmp(tz_str, "America/New_York") == 0) {
-      posix_tz = "EST5EDT,M3.2.0,M11.1.0";
-    } else if (strcmp(tz_str, "America/Chicago") == 0) {
-      posix_tz = "CST6CDT,M3.2.0,M11.1.0";
-    } else if (strcmp(tz_str, "America/Denver") == 0) {
-      posix_tz = "MST7MDT,M3.2.0,M11.1.0";
-    } else if (strcmp(tz_str, "Europe/London") == 0) {
-      posix_tz = "GMT0BST,M3.5.0,M10.5.0";
-    } else if (strcmp(tz_str, "Europe/Berlin") == 0) {
-      posix_tz = "CET-1CEST,M3.5.0,M10.5.0";
-    } else if (strcmp(tz_str, "Asia/Tokyo") == 0) {
-      posix_tz = "JST-9";
-    } else if (strcmp(tz_str, "Australia/Sydney") == 0) {
-      posix_tz = "AEST-10AEDT,M10.1.0,M4.1.0";
+    
+    // Check if it looks like a POSIX TZ string (contains numbers or special chars)
+    bool is_posix = false;
+    for (const char* p = tz_str; *p; p++) {
+      if (isdigit(*p) || *p == ',' || *p == '-' || *p == '+') {
+        is_posix = true;
+        break;
+      }
+    }
+    
+    if (is_posix) {
+      // Use the string directly as POSIX TZ
+      posix_tz = tz_str;
+      ESP_LOGI(TAG, "Using POSIX TZ string directly: %s", tz_str);
     } else {
-      // Default to UTC if unknown
-      posix_tz = "UTC0";
+      // Try to convert IANA timezone name to POSIX TZ string
+      // This is a subset of common timezones - for full support, 
+      // consider using a complete mapping table or external service
+      struct TZMapping {
+        const char* iana;
+        const char* posix;
+      };
+      
+      static const TZMapping tz_mappings[] = {
+        // US & Canada
+        {"America/Los_Angeles", "PST8PDT,M3.2.0,M11.1.0"},
+        {"America/Denver", "MST7MDT,M3.2.0,M11.1.0"},
+        {"America/Phoenix", "MST7"},  // No DST
+        {"America/Chicago", "CST6CDT,M3.2.0,M11.1.0"},
+        {"America/New_York", "EST5EDT,M3.2.0,M11.1.0"},
+        {"America/Toronto", "EST5EDT,M3.2.0,M11.1.0"},
+        {"America/Vancouver", "PST8PDT,M3.2.0,M11.1.0"},
+        
+        // Europe
+        {"Europe/London", "GMT0BST,M3.5.0,M10.5.0"},
+        {"Europe/Berlin", "CET-1CEST,M3.5.0,M10.5.0"},
+        {"Europe/Paris", "CET-1CEST,M3.5.0,M10.5.0"},
+        {"Europe/Amsterdam", "CET-1CEST,M3.5.0,M10.5.0"},
+        {"Europe/Rome", "CET-1CEST,M3.5.0,M10.5.0"},
+        {"Europe/Madrid", "CET-1CEST,M3.5.0,M10.5.0"},
+        {"Europe/Stockholm", "CET-1CEST,M3.5.0,M10.5.0"},
+        {"Europe/Moscow", "MSK-3"},  // No DST since 2014
+        
+        // Asia
+        {"Asia/Tokyo", "JST-9"},
+        {"Asia/Shanghai", "CST-8"},
+        {"Asia/Singapore", "SGT-8"},
+        {"Asia/Hong_Kong", "HKT-8"},
+        {"Asia/Seoul", "KST-9"},
+        {"Asia/Kolkata", "IST-5:30"},
+        {"Asia/Dubai", "GST-4"},
+        
+        // Australia & NZ
+        {"Australia/Sydney", "AEST-10AEDT,M10.1.0,M4.1.0"},
+        {"Australia/Melbourne", "AEST-10AEDT,M10.1.0,M4.1.0"},
+        {"Australia/Brisbane", "AEST-10"},  // No DST
+        {"Australia/Perth", "AWST-8"},
+        {"Pacific/Auckland", "NZST-12NZDT,M9.5.0,M4.1.0"},
+        
+        // Others
+        {"UTC", "UTC0"},
+        {"Etc/UTC", "UTC0"},
+        {nullptr, nullptr}
+      };
+      
+      // Search for matching timezone
+      bool found = false;
+      for (const TZMapping* map = tz_mappings; map->iana != nullptr; map++) {
+        if (strcmp(tz_str, map->iana) == 0) {
+          posix_tz = map->posix;
+          found = true;
+          break;
+        }
+      }
+      
+      if (!found) {
+        // Try to use it anyway, might be a valid timezone we don't know
+        posix_tz = tz_str;
+        ESP_LOGW(TAG, "Unknown timezone '%s', using as-is", tz_str);
+      }
     }
     
     // Update system timezone
     setenv("TZ", posix_tz.c_str(), 1);
     tzset();
+    
+    // Update the scheduler's timezone string
+    self->scheduler_->set_timezone(tz_str);
+    
     ESP_LOGI(TAG, "Updated system timezone to: %s (%s)", tz_str, posix_tz.c_str());
   }
   
