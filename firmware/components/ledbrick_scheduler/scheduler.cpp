@@ -245,6 +245,13 @@ LEDScheduler::InterpolationResult LEDScheduler::interpolate_values(uint16_t curr
     if (current_time <= schedule_points_[0].time_minutes) {
         // Interpolate from midnight (0,0) to first point
         after = &schedule_points_[0];
+        
+        // Safety check - ensure vectors have correct size
+        if (after->pwm_values.size() != num_channels_ || 
+            after->current_values.size() != num_channels_) {
+            return result;  // Return zeros if data is invalid
+        }
+        
         float ratio = after->time_minutes > 0 ? static_cast<float>(current_time) / after->time_minutes : 0.0f;
         
         for (size_t i = 0; i < num_channels_; i++) {
@@ -259,6 +266,13 @@ LEDScheduler::InterpolationResult LEDScheduler::interpolate_values(uint16_t curr
     if (current_time >= schedule_points_.back().time_minutes) {
         // Interpolate from last point to midnight (0,0)
         before = &schedule_points_.back();
+        
+        // Safety check - ensure vectors have correct size
+        if (before->pwm_values.size() != num_channels_ || 
+            before->current_values.size() != num_channels_) {
+            return result;  // Return zeros if data is invalid
+        }
+        
         float total_span = 1440 - before->time_minutes;
         float ratio = total_span > 0 ? static_cast<float>(current_time - before->time_minutes) / total_span : 0.0f;
         
@@ -281,6 +295,14 @@ LEDScheduler::InterpolationResult LEDScheduler::interpolate_values(uint16_t curr
     }
     
     if (before && after) {
+        // Safety check - ensure vectors have correct size
+        if (before->pwm_values.size() != num_channels_ || 
+            before->current_values.size() != num_channels_ ||
+            after->pwm_values.size() != num_channels_ || 
+            after->current_values.size() != num_channels_) {
+            return result;  // Return zeros if data is invalid
+        }
+        
         uint16_t time_span = after->time_minutes - before->time_minutes;
         float ratio = time_span > 0 ? static_cast<float>(current_time - before->time_minutes) / time_span : 0.0f;
         
@@ -783,6 +805,12 @@ bool LEDScheduler::deserialize(const SerializedData& data) {
         for (uint8_t j = 0; j < current_count; j++) {
             if (pos + 4 > data.data.size()) return false;
             point.current_values.push_back(read_float(data.data, pos));
+        }
+        
+        // Validate that the point has the correct number of channels
+        if (point.pwm_values.size() != data.num_channels || 
+            point.current_values.size() != data.num_channels) {
+            return false;  // Invalid data - channel count mismatch
         }
         
         new_points.push_back(point);
