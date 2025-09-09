@@ -47,7 +47,7 @@ void LEDBrickWebServer::setup() {
   httpd_register_uri_handler(this->server_, &index_uri);
   
   httpd_uri_t js_uri = {
-    .uri = "/ledbrick-api.js",
+    .uri = "/ledbrick_api.js",
     .method = HTTP_GET,
     .handler = handle_js,
     .user_ctx = this
