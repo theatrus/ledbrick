@@ -487,7 +487,7 @@ void LEDBrickScheduler::export_schedule_json(std::string &json_output) const {
     json_output.insert(closing_brace, 
       ",\"timezone\":\"" + timezone_ + 
       "\",\"timezone_offset_hours\":" + std::to_string(timezone_offset_hours_) +
-      "\",\"current_time_minutes\":" + std::to_string(current_time) +
+      ",\"current_time_minutes\":" + std::to_string(current_time) +
       ",\"enabled\":" + std::string(enabled_ ? "true" : "false") +
       ",\"latitude\":" + std::to_string(latitude_) +
       ",\"longitude\":" + std::to_string(longitude_) +

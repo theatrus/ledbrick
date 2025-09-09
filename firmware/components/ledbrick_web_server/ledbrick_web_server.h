@@ -59,6 +59,7 @@ class LEDBrickWebServer : public Component {
   
   // Helper methods
   static LEDBrickWebServer *get_instance(httpd_req_t *req);
+  static std::unique_ptr<char[]> read_request_body(httpd_req_t *req);
   bool check_auth(httpd_req_t *req);
   void send_json_response(httpd_req_t *req, int status, const JsonDocument &doc);
   void send_error(httpd_req_t *req, int status, const std::string &message);

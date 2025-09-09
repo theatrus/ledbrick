@@ -42,6 +42,24 @@ function updateHtmlForProduction() {
   return html;
 }
 
+function getNewestSourceTimestamp() {
+  // Get modification times of all source files
+  const sourceFiles = [htmlFile, jsFile, cssFile];
+  let newestTime = 0;
+  let newestFile = '';
+  
+  for (const file of sourceFiles) {
+    const stats = fs.statSync(file);
+    if (stats.mtimeMs > newestTime) {
+      newestTime = stats.mtimeMs;
+      newestFile = path.basename(file);
+    }
+  }
+  
+  console.log(`Using timestamp from newest source file: ${newestFile}`);
+  return new Date(newestTime).toISOString();
+}
+
 function generateCppFile() {
   console.log('Generating C++ web content...\n');
   
@@ -56,7 +74,7 @@ function generateCppFile() {
   console.log(`\nTotal compressed size: ${totalSize} bytes (${(totalSize / 1024).toFixed(1)}KB)`);
   
   const cppContent = `// Auto-generated web content - DO NOT EDIT
-// Generated on ${new Date().toISOString()}
+// Generated from source files with timestamp: ${getNewestSourceTimestamp()}
 // Total size: ${totalSize} bytes compressed
 
 #include "web_content.h"

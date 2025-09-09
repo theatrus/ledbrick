@@ -14,6 +14,7 @@ namespace esphome {
 namespace ledbrick_web_server {
 
 static const char *const TAG = "ledbrick_web_server";
+static const size_t MAX_REQUEST_SIZE = 32768;  // 32KB max request body
 
 LEDBrickWebServer *LEDBrickWebServer::instance_ = nullptr;
 
@@ -230,6 +231,41 @@ LEDBrickWebServer *LEDBrickWebServer::get_instance(httpd_req_t *req) {
   return static_cast<LEDBrickWebServer *>(req->user_ctx);
 }
 
+// Helper to safely read request body with size limits
+std::unique_ptr<char[]> LEDBrickWebServer::read_request_body(httpd_req_t *req) {
+  // Check content length
+  if (req->content_len > MAX_REQUEST_SIZE) {
+    auto *self = get_instance(req);
+    self->send_error(req, 413, "Request too large");
+    return nullptr;
+  }
+  
+  if (req->content_len == 0) {
+    auto *self = get_instance(req);
+    self->send_error(req, 400, "Empty request body");
+    return nullptr;
+  }
+  
+  // Allocate buffer on heap
+  std::unique_ptr<char[]> buf(new (std::nothrow) char[req->content_len + 1]);
+  if (!buf) {
+    auto *self = get_instance(req);
+    self->send_error(req, 500, "Out of memory");
+    return nullptr;
+  }
+  
+  // Read request data
+  int ret = httpd_req_recv(req, buf.get(), req->content_len);
+  if (ret <= 0) {
+    auto *self = get_instance(req);
+    self->send_error(req, 400, "Failed to read request body");
+    return nullptr;
+  }
+  buf[ret] = '\0';
+  
+  return buf;
+}
+
 bool LEDBrickWebServer::check_auth(httpd_req_t *req) {
   if (this->username_.empty() || this->password_.empty()) {
     return true;  // No auth required
@@ -321,24 +357,12 @@ esp_err_t LEDBrickWebServer::handle_api_schedule_post(httpd_req_t *req) {
   auto *self = get_instance(req);
   if (!self->check_auth(req)) return ESP_OK;
   
-  // Read the request body
-  char *buf = (char *)malloc(req->content_len + 1);
-  if (!buf) {
-    self->send_error(req, 500, "Out of memory");
-    return ESP_OK;
-  }
-  
-  int ret = httpd_req_recv(req, buf, req->content_len);
-  if (ret <= 0) {
-    free(buf);
-    self->send_error(req, 400, "Failed to read request body");
-    return ESP_OK;
-  }
-  buf[ret] = '\0';
+  // Read request body safely
+  auto buf = read_request_body(req);
+  if (!buf) return ESP_OK;  // Error already sent
   
   // Import the schedule
-  bool success = self->scheduler_->import_schedule_json(buf);
-  free(buf);
+  bool success = self->scheduler_->import_schedule_json(buf.get());
   
   if (success) {
     self->scheduler_->save_schedule_to_flash();
@@ -463,25 +487,13 @@ esp_err_t LEDBrickWebServer::handle_api_point_post(httpd_req_t *req) {
   auto *self = get_instance(req);
   if (!self->check_auth(req)) return ESP_OK;
   
-  // Read the request body
-  char *buf = (char *)malloc(req->content_len + 1);
-  if (!buf) {
-    self->send_error(req, 500, "Out of memory");
-    return ESP_OK;
-  }
-  
-  int ret = httpd_req_recv(req, buf, req->content_len);
-  if (ret <= 0) {
-    free(buf);
-    self->send_error(req, 400, "Failed to read request body");
-    return ESP_OK;
-  }
-  buf[ret] = '\0';
+  // Read request body safely
+  auto buf = read_request_body(req);
+  if (!buf) return ESP_OK;  // Error already sent
   
   // Parse JSON
   JsonDocument doc;
-  DeserializationError error = deserializeJson(doc, buf);
-  free(buf);
+  DeserializationError error = deserializeJson(doc, buf.get());
   
   if (error) {
     self->send_error(req, 400, "Invalid JSON");
@@ -618,25 +630,13 @@ esp_err_t LEDBrickWebServer::handle_api_location_post(httpd_req_t *req) {
   auto *self = get_instance(req);
   if (!self->check_auth(req)) return ESP_OK;
   
-  // Read the request body
-  char *buf = (char *)malloc(req->content_len + 1);
-  if (!buf) {
-    self->send_error(req, 500, "Out of memory");
-    return ESP_OK;
-  }
-  
-  int ret = httpd_req_recv(req, buf, req->content_len);
-  if (ret <= 0) {
-    free(buf);
-    self->send_error(req, 400, "Failed to read request body");
-    return ESP_OK;
-  }
-  buf[ret] = '\0';
+  // Read request body safely
+  auto buf = read_request_body(req);
+  if (!buf) return ESP_OK;  // Error already sent
   
   // Parse JSON
   JsonDocument doc;
-  DeserializationError error = deserializeJson(doc, buf);
-  free(buf);
+  DeserializationError error = deserializeJson(doc, buf.get());
   
   if (error) {
     self->send_error(req, 400, "Invalid JSON");
@@ -682,25 +682,13 @@ esp_err_t LEDBrickWebServer::handle_api_time_shift_post(httpd_req_t *req) {
   auto *self = get_instance(req);
   if (!self->check_auth(req)) return ESP_OK;
   
-  // Read the request body
-  char *buf = (char *)malloc(req->content_len + 1);
-  if (!buf) {
-    self->send_error(req, 500, "Out of memory");
-    return ESP_OK;
-  }
-  
-  int ret = httpd_req_recv(req, buf, req->content_len);
-  if (ret <= 0) {
-    free(buf);
-    self->send_error(req, 400, "Failed to read request body");
-    return ESP_OK;
-  }
-  buf[ret] = '\0';
+  // Read request body safely
+  auto buf = read_request_body(req);
+  if (!buf) return ESP_OK;  // Error already sent
   
   // Parse JSON
   JsonDocument doc;
-  DeserializationError error = deserializeJson(doc, buf);
-  free(buf);
+  DeserializationError error = deserializeJson(doc, buf.get());
   
   if (error) {
     self->send_error(req, 400, "Invalid JSON");
@@ -746,25 +734,13 @@ esp_err_t LEDBrickWebServer::handle_api_moon_simulation_post(httpd_req_t *req) {
   auto *self = get_instance(req);
   if (!self->check_auth(req)) return ESP_OK;
   
-  // Read the request body
-  char *buf = (char *)malloc(req->content_len + 1);
-  if (!buf) {
-    self->send_error(req, 500, "Out of memory");
-    return ESP_OK;
-  }
-  
-  int ret = httpd_req_recv(req, buf, req->content_len);
-  if (ret <= 0) {
-    free(buf);
-    self->send_error(req, 400, "Failed to read request body");
-    return ESP_OK;
-  }
-  buf[ret] = '\0';
+  // Read request body safely
+  auto buf = read_request_body(req);
+  if (!buf) return ESP_OK;  // Error already sent
   
   // Parse JSON
   JsonDocument doc;
-  DeserializationError error = deserializeJson(doc, buf);
-  free(buf);
+  DeserializationError error = deserializeJson(doc, buf.get());
   
   if (error) {
     self->send_error(req, 400, "Invalid JSON");
@@ -935,8 +911,14 @@ esp_err_t LEDBrickWebServer::handle_api_timezone_post(httpd_req_t *req) {
     return ESP_OK;
   }
   
+  // Check content length
+  if (req->content_len > 256) {
+    self->send_error(req, 413, "Request too large");
+    return ESP_OK;
+  }
+  
   char content[256];
-  int ret = httpd_req_recv(req, content, sizeof(content) - 1);
+  int ret = httpd_req_recv(req, content, std::min<size_t>(req->content_len, sizeof(content) - 1));
   if (ret <= 0) {
     self->send_error(req, 400, "No data received");
     return ESP_OK;
