@@ -64,7 +64,7 @@ external_components:
   - source:
       type: local
       path: components
-    components: [ ledbrick_scheduler ]
+    components: [ ledbrick_scheduler, ledbrick_web_server ]
 
 # Our custom scheduler component with services
 ledbrick_scheduler:
@@ -100,9 +100,9 @@ packages:
   # Uncomment the line below to enable the LEDBrick Scheduler with Home Assistant services
   scheduler: !include packages/scheduler_services.yaml
   
-  # Web server for HTTP control (comment out to disable)
-  # WARNING: Uses significant memory. Recommended for ESP32 only.
-  web_ui: !include packages/web_server.yaml
+  # ESP-IDF Web Server with REST API and Web Interface
+  # WARNING: ESP32 only, uses ESP-IDF framework
+  web_server_esp_idf: !include packages/web_server_esp_idf.yaml
 
 output:
   # Fan PWM output - separate from channel packages

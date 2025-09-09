@@ -1,0 +1,48 @@
+# LEDBrick Web Server Package (ESP-IDF)
+# Provides a standalone web server with REST API for controlling LEDBrick
+#
+# This uses our custom ESP-IDF web server component that includes:
+# - Built-in web interface (HTML/JS/CSS)
+# - REST API endpoints for schedule management
+# - No 255 character limits
+# - Works independently of ESPHome's web server
+#
+# WARNING: ESP32 only (requires ESP-IDF framework)
+
+# Enable our custom web server
+ledbrick_web_server:
+  id: ledbrick_web_server_instance
+  scheduler_id: main_scheduler
+  port: 80
+  # Optional authentication - uncomment to enable
+  # username: admin
+  # password: !secret web_password
+
+# Also provide some basic ESPHome web controls
+# These will work alongside our custom web server
+sensor:
+  - platform: template
+    name: "Web Server Status"
+    id: web_server_status
+    icon: mdi:web
+    lambda: |-
+      return 1;
+    update_interval: 60s
+
+text_sensor:
+  - platform: template
+    name: "Web Interface URL"
+    id: web_interface_url
+    icon: mdi:link
+    lambda: |-
+      return {"http://<device-ip>/"};
+    update_interval: never
+
+button:
+  - platform: template
+    name: "Log Web Interface"
+    id: log_web_interface_button
+    icon: mdi:information
+    on_press:
+      - lambda: |-
+          ESP_LOGI("web", "Web interface available on port 80");

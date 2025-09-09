@@ -70,6 +70,7 @@ class LEDBrickScheduler : public PollingComponent {
   // Control
   void set_enabled(bool enabled) { enabled_ = enabled; }
   bool is_enabled() const { return enabled_; }
+  size_t get_schedule_size() const { return scheduler_.get_schedule_size(); }
   
   // PWM scaling
   void set_pwm_scale(float scale);
