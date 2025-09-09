@@ -6,10 +6,11 @@ import type { Status, Schedule } from '../types';
 interface StatusDisplayProps {
   schedule: Schedule | null;
   initialStatus: Status | null;
+  onUpdate: () => void;
 }
 
 // Separate component for status polling to prevent main UI re-renders
-export function StatusDisplay({ schedule, initialStatus }: StatusDisplayProps) {
+export function StatusDisplay({ schedule, initialStatus, onUpdate }: StatusDisplayProps) {
   const [status, setStatus] = useState<Status | null>(initialStatus);
 
   useEffect(() => {
@@ -31,5 +32,5 @@ export function StatusDisplay({ schedule, initialStatus }: StatusDisplayProps) {
     setStatus(initialStatus);
   }, [initialStatus]);
 
-  return <StatusBar status={status} schedule={schedule} />;
+  return <StatusBar status={status} schedule={schedule} onUpdate={onUpdate} />;
 }

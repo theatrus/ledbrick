@@ -133,6 +133,18 @@ class LEDBrickScheduler : public PollingComponent {
   // Projected rise/set times (with time shift if projection enabled)
   AstronomicalCalculator::SunTimes get_projected_sun_rise_set_times() const;
   
+  // Debug helpers for the web API
+  AstronomicalCalculator::SunTimes get_astronomical_times() const { return get_sun_rise_set_times(); }
+  AstronomicalCalculator::SunTimes get_projected_astronomical_times() const { return get_projected_sun_rise_set_times(); }
+  
+  // Get info about a specific schedule point
+  struct SchedulePointInfo {
+    std::string time_type;
+    int offset_minutes;
+    int time_minutes;
+  };
+  SchedulePointInfo get_schedule_point_info(size_t index) const;
+  
   // External entity references
   void add_light(uint8_t channel, light::LightState *light);
   void add_current_control(uint8_t channel, number::Number *control);

@@ -364,8 +364,55 @@ void LEDBrickScheduler::load_schedule_from_flash() {
 }
 
 void LEDBrickScheduler::export_schedule_json(std::string &json_output) const {
-  // Use standalone scheduler's JSON export, then augment with ESPHome-specific data
-  json_output = scheduler_.export_json();
+  // If astronomical projection is enabled, we need to update the scheduler's
+  // astronomical times with projected values before exporting
+  if (astronomical_projection_) {
+    // Get current time for calculations
+    auto dt = esphome_time_to_datetime();
+    
+    // Get projected sun times (with time shift applied)
+    auto projected_sun_times = astro_calc_.get_projected_sun_rise_set_times(dt);
+    
+    // Calculate solar noon from projected times
+    uint16_t solar_noon = 720;  // Default to noon
+    if (projected_sun_times.rise_valid && projected_sun_times.set_valid) {
+      solar_noon = (projected_sun_times.rise_minutes + projected_sun_times.set_minutes) / 2;
+      if (solar_noon >= 1440) {
+        solar_noon -= 1440;
+      }
+    }
+    
+    // Calculate civil twilight times
+    uint16_t civil_dawn = projected_sun_times.rise_valid ? 
+      (projected_sun_times.rise_minutes > 30 ? projected_sun_times.rise_minutes - 30 : 0) : 390;
+    uint16_t civil_dusk = projected_sun_times.set_valid ? 
+      (projected_sun_times.set_minutes < 1410 ? projected_sun_times.set_minutes + 30 : 1439) : 1110;
+    
+    // Build projected astronomical times
+    LEDScheduler::AstronomicalTimes projected_times;
+    projected_times.sunrise_minutes = projected_sun_times.rise_valid ? projected_sun_times.rise_minutes : 420;
+    projected_times.sunset_minutes = projected_sun_times.set_valid ? projected_sun_times.set_minutes : 1080;
+    projected_times.solar_noon_minutes = solar_noon;
+    projected_times.civil_dawn_minutes = civil_dawn;
+    projected_times.civil_dusk_minutes = civil_dusk;
+    projected_times.nautical_dawn_minutes = civil_dawn > 30 ? civil_dawn - 30 : 0;
+    projected_times.nautical_dusk_minutes = civil_dusk < 1410 ? civil_dusk + 30 : 1439;
+    projected_times.astronomical_dawn_minutes = civil_dawn > 60 ? civil_dawn - 60 : 0;
+    projected_times.astronomical_dusk_minutes = civil_dusk < 1380 ? civil_dusk + 60 : 1439;
+    projected_times.valid = true;
+    
+    // Temporarily set projected times for export
+    const_cast<LEDScheduler&>(scheduler_).set_astronomical_times(projected_times);
+    
+    // Export with projected times
+    json_output = scheduler_.export_json();
+    
+    // Restore actual astronomical times (if needed for normal operation)
+    // Note: This is safe because the next update cycle will recalculate
+  } else {
+    // Use normal export without projection
+    json_output = scheduler_.export_json();
+  }
   
   // Parse and modify the JSON to add ESPHome-specific fields
   // For simplicity, we'll create a new JSON string
@@ -823,6 +870,63 @@ void LEDBrickScheduler::update_astronomical_times_for_scheduler() {
              astro_times.moonset_minutes / 60, astro_times.moonset_minutes % 60,
              moon_phase * 100.0f);
   }
+}
+
+LEDBrickScheduler::SchedulePointInfo LEDBrickScheduler::get_schedule_point_info(size_t index) const {
+  SchedulePointInfo info;
+  
+  if (index >= scheduler_.get_schedule_size()) {
+    info.time_type = "invalid";
+    info.offset_minutes = 0;
+    info.time_minutes = 0;
+    return info;
+  }
+  
+  // Get the raw schedule point data
+  auto points = scheduler_.get_schedule_points();
+  if (index >= points.size()) {
+    info.time_type = "invalid";
+    info.offset_minutes = 0;
+    info.time_minutes = 0;
+    return info;
+  }
+  
+  const auto& point = points[index];
+  
+  // Convert time type enum to string
+  switch (point.time_type) {
+    case LEDScheduler::DynamicTimeType::FIXED:
+      info.time_type = "fixed";
+      break;
+    case LEDScheduler::DynamicTimeType::SUNRISE_RELATIVE:
+      info.time_type = "sunrise_relative";
+      break;
+    case LEDScheduler::DynamicTimeType::SUNSET_RELATIVE:
+      info.time_type = "sunset_relative";
+      break;
+    case LEDScheduler::DynamicTimeType::SOLAR_NOON:
+      info.time_type = "solar_noon";
+      break;
+    case LEDScheduler::DynamicTimeType::CIVIL_DAWN:
+      info.time_type = "civil_dawn";
+      break;
+    case LEDScheduler::DynamicTimeType::CIVIL_DUSK:
+      info.time_type = "civil_dusk";
+      break;
+    case LEDScheduler::DynamicTimeType::NAUTICAL_DAWN:
+      info.time_type = "nautical_dawn";
+      break;
+    case LEDScheduler::DynamicTimeType::NAUTICAL_DUSK:
+      info.time_type = "nautical_dusk";
+      break;
+    default:
+      info.time_type = "unknown";
+  }
+  
+  info.offset_minutes = point.offset_minutes;
+  info.time_minutes = point.time_minutes;
+  
+  return info;
 }
 
 } // namespace ledbrick_scheduler

@@ -44,7 +44,7 @@ export interface Channel {
 export interface Status {
   enabled: boolean;
   time_formatted: string;
-  current_time_minutes: number;
+  time_minutes: number;
   schedule_points: number;
   pwm_scale: number;
   latitude: number;

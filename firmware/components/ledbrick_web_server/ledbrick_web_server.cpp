@@ -186,6 +186,14 @@ void LEDBrickWebServer::setup() {
   };
   httpd_register_uri_handler(this->server_, &pwm_scale_get);
   
+  httpd_uri_t api_schedule_debug = {
+    .uri = "/api/schedule/debug",
+    .method = HTTP_GET,
+    .handler = handle_api_schedule_debug,
+    .user_ctx = this
+  };
+  httpd_register_uri_handler(this->server_, &api_schedule_debug);
+  
   ESP_LOGI(TAG, "LEDBrick Web Server started successfully");
 }
 
@@ -814,6 +822,67 @@ esp_err_t LEDBrickWebServer::handle_api_moon_simulation_post(httpd_req_t *req) {
   response_doc["message"] = "Moon simulation settings updated";
   
   self->send_json_response(req, 200, response_doc);
+  return ESP_OK;
+}
+
+esp_err_t LEDBrickWebServer::handle_api_schedule_debug(httpd_req_t *req) {
+  auto *self = get_instance(req);
+  if (!self->check_auth(req)) return ESP_OK;
+  
+  JsonDocument doc;
+  
+  // Get current astronomical times
+  auto astro_times = self->scheduler_->get_astronomical_times();
+  JsonObject astro = doc["astronomical_times"].to<JsonObject>();
+  astro["sunrise_minutes"] = astro_times.rise_minutes;
+  astro["sunset_minutes"] = astro_times.set_minutes;
+  
+  char sunrise_buf[6];
+  char sunset_buf[6];
+  sprintf(sunrise_buf, "%02d:%02d", astro_times.rise_minutes / 60, astro_times.rise_minutes % 60);
+  sprintf(sunset_buf, "%02d:%02d", astro_times.set_minutes / 60, astro_times.set_minutes % 60);
+  astro["sunrise_formatted"] = sunrise_buf;
+  astro["sunset_formatted"] = sunset_buf;
+  
+  // Get projected astronomical times if enabled
+  if (self->scheduler_->is_astronomical_projection_enabled()) {
+    auto projected_times = self->scheduler_->get_projected_astronomical_times();
+    JsonObject proj = doc["projected_astronomical_times"].to<JsonObject>();
+    proj["sunrise_minutes"] = projected_times.rise_minutes;
+    proj["sunset_minutes"] = projected_times.set_minutes;
+    proj["time_shift_hours"] = self->scheduler_->get_time_shift_hours();
+    proj["time_shift_minutes"] = self->scheduler_->get_time_shift_minutes();
+  }
+  
+  // Get the full schedule with resolved dynamic points
+  std::string schedule_json;
+  self->scheduler_->export_schedule_json(schedule_json);
+  
+  // Parse the exported JSON and add to our document
+  JsonDocument schedule_doc;
+  deserializeJson(schedule_doc, schedule_json);
+  doc["resolved_schedule"] = schedule_doc;
+  
+  // Add debug information for each schedule point
+  JsonArray debug_points = doc["debug_points"].to<JsonArray>();
+  auto num_points = self->scheduler_->get_schedule_size();
+  
+  for (size_t i = 0; i < num_points; i++) {
+    auto point_info = self->scheduler_->get_schedule_point_info(i);
+    JsonObject debug_point = debug_points.add<JsonObject>();
+    debug_point["index"] = i;
+    debug_point["time_type"] = point_info.time_type;
+    debug_point["offset_minutes"] = point_info.offset_minutes;
+    debug_point["calculated_time_minutes"] = point_info.time_minutes;
+    debug_point["is_dynamic"] = (point_info.time_type != "fixed");
+  }
+  
+  // Add current time and status
+  doc["current_time_minutes"] = self->scheduler_->get_current_time_minutes();
+  doc["scheduler_enabled"] = self->scheduler_->is_enabled();
+  doc["astronomical_projection_enabled"] = self->scheduler_->is_astronomical_projection_enabled();
+  
+  self->send_json_response(req, 200, doc);
   return ESP_OK;
 }
 

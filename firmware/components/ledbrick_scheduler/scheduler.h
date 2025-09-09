@@ -175,6 +175,7 @@ public:
     void set_channel_max_current(uint8_t channel, float max_current);
     std::string get_channel_color(uint8_t channel) const;
     float get_channel_max_current(uint8_t channel) const;
+    
 
 private:
     uint8_t num_channels_;

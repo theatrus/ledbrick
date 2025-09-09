@@ -1,8 +1,10 @@
 import type { Status, Schedule } from '../types';
+import { StatusBarControls } from './StatusBarControls';
 
 interface StatusBarProps {
   status: Status | null;
   schedule?: Schedule | null;
+  onUpdate: () => void;
 }
 
 const DEFAULT_CHANNEL_COLORS = [
@@ -10,14 +12,11 @@ const DEFAULT_CHANNEL_COLORS = [
   '#FF0000', '#FF00FF', '#FFFF00', '#FF8000'
 ];
 
-export function StatusBar({ status, schedule }: StatusBarProps) {
+export function StatusBar({ status, schedule, onUpdate }: StatusBarProps) {
   if (!status) return null;
 
   return (
     <div className="status-bar">
-      <div className="status-item">
-        <strong>Status:</strong> {status.enabled ? 'Enabled' : 'Disabled'}
-      </div>
       <div className="status-item">
         <strong>Time:</strong> {status.time_formatted || '--:--'}
       </div>
@@ -62,6 +61,12 @@ export function StatusBar({ status, schedule }: StatusBarProps) {
           })}
         </div>
       )}
+      
+      <StatusBarControls
+        enabled={status.enabled}
+        pwmScale={status.pwm_scale || 100}
+        onUpdate={onUpdate}
+      />
     </div>
   );
 }

@@ -34,15 +34,18 @@ body {
 /* Header */
 .header {
   background: #2a2a2a;
-  padding: 20px;
-  text-align: center;
-  border-bottom: 2px solid #4a9eff;
+  padding: 10px 20px;
+  border-bottom: 1px solid #444;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .header h1 {
   margin: 0;
-  color: #4a9eff;
-  font-size: 2em;
+  color: #999;
+  font-size: 1.2em;
+  font-weight: normal;
 }
 
 /* Controls */
@@ -126,7 +129,9 @@ body {
   display: flex;
   gap: 20px;
   align-items: center;
+  justify-content: space-between;
   border-top: 1px solid #555;
+  flex-wrap: wrap;
 }
 
 .status-item {
@@ -588,4 +593,18 @@ body {
   margin-top: 0;
   margin-bottom: 15px;
   color: #4a9eff;
+}
+
+/* Debug modal styles */
+.debug-info {
+  background: #1a1a1a;
+  padding: 15px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+}
+
+.debug-info p {
+  margin: 5px 0;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
 }

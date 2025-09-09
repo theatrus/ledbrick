@@ -8,6 +8,7 @@ import { StatusDisplay } from './components/StatusDisplay';
 import { MoonSettings } from './components/MoonSettings';
 import { LocationSettings } from './components/LocationSettings';
 import { JsonModal } from './components/JsonModal';
+import { ScheduleDebug } from './components/ScheduleDebug';
 import type { Schedule, Status } from './types';
 
 export function App() {
@@ -16,6 +17,7 @@ export function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isJsonModalOpen, setIsJsonModalOpen] = useState(false);
+  const [isDebugModalOpen, setIsDebugModalOpen] = useState(false);
 
   // Load schedule data (only when needed)
   const loadSchedule = useCallback(async () => {
@@ -97,16 +99,12 @@ export function App() {
 
   return (
     <div className="app">
-      <Header />
+      <Header 
+        onOpenJsonModal={() => setIsJsonModalOpen(true)}
+        onOpenDebugModal={() => setIsDebugModalOpen(true)}
+      />
       
       <div className="container">
-        <ScheduleControls
-          enabled={status?.enabled || false}
-          pwmScale={(status?.pwm_scale || 1) * 100}
-          onToggleScheduler={handleSchedulerToggle}
-          onPWMScaleChange={handlePWMScaleChange}
-          onOpenJsonModal={() => setIsJsonModalOpen(true)}
-        />
 
         {error && (
           <div className="error-banner">
@@ -117,7 +115,7 @@ export function App() {
 
         {schedule && (
           <>
-            <ScheduleChart schedule={schedule} currentTime={status?.current_time_minutes || 0} />
+            <ScheduleChart schedule={schedule} currentTime={status?.time_minutes || 0} />
             <ScheduleTable schedule={schedule} onUpdate={loadData} />
             <MoonSettings 
               moonSimulation={status?.moon_simulation}
@@ -135,7 +133,7 @@ export function App() {
           </>
         )}
 
-        <StatusDisplay schedule={schedule} initialStatus={status} />
+        <StatusDisplay schedule={schedule} initialStatus={status} onUpdate={loadData} />
         
         <JsonModal
           isOpen={isJsonModalOpen}
@@ -143,6 +141,10 @@ export function App() {
           schedule={schedule}
           onUpdate={loadData}
         />
+        
+        {isDebugModalOpen && (
+          <ScheduleDebug onClose={() => setIsDebugModalOpen(false)} />
+        )}
       </div>
     </div>
   );
