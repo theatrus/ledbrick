@@ -6,6 +6,8 @@
 #include "web_content.h"
 #include <esp_log.h>
 #include <cstring>
+#include <ctime>
+#include <cstdlib>
 
 namespace esphome {
 namespace ledbrick_web_server {
@@ -959,6 +961,39 @@ esp_err_t LEDBrickWebServer::handle_api_timezone_post(httpd_req_t *req) {
   } else {
     self->send_error(req, 400, "Missing timezone or timezone_offset_hours");
     return ESP_OK;
+  }
+  
+  // Update SNTP timezone if it's the active time source
+  if (doc.containsKey("timezone")) {
+    const char* tz_str = doc["timezone"];
+    
+    // Convert timezone name to POSIX TZ string
+    std::string posix_tz;
+    if (strcmp(tz_str, "America/Los_Angeles") == 0) {
+      posix_tz = "PST8PDT,M3.2.0,M11.1.0";
+    } else if (strcmp(tz_str, "America/New_York") == 0) {
+      posix_tz = "EST5EDT,M3.2.0,M11.1.0";
+    } else if (strcmp(tz_str, "America/Chicago") == 0) {
+      posix_tz = "CST6CDT,M3.2.0,M11.1.0";
+    } else if (strcmp(tz_str, "America/Denver") == 0) {
+      posix_tz = "MST7MDT,M3.2.0,M11.1.0";
+    } else if (strcmp(tz_str, "Europe/London") == 0) {
+      posix_tz = "GMT0BST,M3.5.0,M10.5.0";
+    } else if (strcmp(tz_str, "Europe/Berlin") == 0) {
+      posix_tz = "CET-1CEST,M3.5.0,M10.5.0";
+    } else if (strcmp(tz_str, "Asia/Tokyo") == 0) {
+      posix_tz = "JST-9";
+    } else if (strcmp(tz_str, "Australia/Sydney") == 0) {
+      posix_tz = "AEST-10AEDT,M10.1.0,M4.1.0";
+    } else {
+      // Default to UTC if unknown
+      posix_tz = "UTC0";
+    }
+    
+    // Update system timezone
+    setenv("TZ", posix_tz.c_str(), 1);
+    tzset();
+    ESP_LOGI(TAG, "Updated system timezone to: %s (%s)", tz_str, posix_tz.c_str());
   }
   
   // Force immediate update
