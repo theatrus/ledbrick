@@ -202,6 +202,9 @@ class LEDBrickScheduler : public PollingComponent {
   void update_astro_calculator_settings() const;
   void update_astronomical_times_for_scheduler();
   
+  // Update timezone offset from time source
+  void update_timezone_from_time_source();
+  
   // Built-in presets (use astronomical data for sunrise/sunset)
   void create_sunrise_sunset_preset_with_astro_data() const;
   

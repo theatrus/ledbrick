@@ -31,6 +31,20 @@ void LEDBrickScheduler::setup() {
   // Load schedule from flash storage (includes all settings in JSON)
   load_schedule_from_flash();
   
+  // Try to get initial timezone from time source
+  if (time_source_) {
+    auto time = time_source_->now();
+    if (time.is_valid()) {
+      double detected_offset = static_cast<double>(time.timezone_offset()) / 3600.0;
+      if (abs(detected_offset - timezone_offset_hours_) > 0.01) {
+        ESP_LOGI(TAG, "Initial timezone offset detected: %.1fh (was %.1fh)", 
+                 detected_offset, timezone_offset_hours_);
+        timezone_offset_hours_ = detected_offset;
+        astro_calc_.set_timezone_offset(timezone_offset_hours_);
+      }
+    }
+  }
+  
   // Load default astronomical schedule if no points exist
   if (scheduler_.is_schedule_empty()) {
     ESP_LOGI(TAG, "No saved schedule found, loading default preset");
@@ -49,6 +63,9 @@ void LEDBrickScheduler::update() {
     ESP_LOGVV(TAG, "Scheduler disabled, skipping update");
     return;
   }
+  
+  // Update timezone offset from time source if available
+  update_timezone_from_time_source();
   
   // Update astronomical times for dynamic schedule points
   update_astronomical_times_for_scheduler();
@@ -81,7 +98,7 @@ void LEDBrickScheduler::dump_config() {
   ESP_LOGCONFIG(TAG, "  Update Interval: %u ms", update_interval_);
   ESP_LOGCONFIG(TAG, "  Enabled: %s", enabled_ ? "YES" : "NO");
   ESP_LOGCONFIG(TAG, "  PWM Scale: %.2f (%.0f%%)", pwm_scale_, pwm_scale_ * 100.0f);
-  ESP_LOGCONFIG(TAG, "  Timezone: %s", timezone_.c_str());
+  ESP_LOGCONFIG(TAG, "  Timezone: %s (UTC%+.1fh)", timezone_.c_str(), timezone_offset_hours_);
   ESP_LOGCONFIG(TAG, "  Location: %.4f°N, %.4f°W", latitude_, -longitude_);
   ESP_LOGCONFIG(TAG, "  Schedule Points: %zu", scheduler_.get_schedule_size());
   ESP_LOGCONFIG(TAG, "  Time Source: %s", time_source_ ? "CONFIGURED" : "NOT SET");
@@ -453,6 +470,7 @@ void LEDBrickScheduler::export_schedule_json(std::string &json_output) const {
   if (closing_brace != std::string::npos) {
     json_output.insert(closing_brace, 
       ",\"timezone\":\"" + timezone_ + 
+      "\",\"timezone_offset_hours\":" + std::to_string(timezone_offset_hours_) +
       "\",\"current_time_minutes\":" + std::to_string(current_time) +
       ",\"enabled\":" + std::string(enabled_ ? "true" : "false") +
       ",\"latitude\":" + std::to_string(latitude_) +
@@ -527,12 +545,23 @@ bool LEDBrickScheduler::import_schedule_json(const std::string &json_input) {
     }
   }
   
+  // Extract timezone offset if present
+  size_t tz_offset_pos = json_input.find("\"timezone_offset_hours\":");
+  if (tz_offset_pos != std::string::npos) {
+    size_t offset_start = json_input.find_first_of("-0123456789.", tz_offset_pos + 24);
+    size_t offset_end = json_input.find_first_not_of("-0123456789.", offset_start);
+    if (offset_start != std::string::npos && offset_end != std::string::npos) {
+      timezone_offset_hours_ = std::stod(json_input.substr(offset_start, offset_end - offset_start));
+    }
+  }
+  
   // Use standalone scheduler's JSON import
   bool success = scheduler_.import_json(json_input);
   
   if (success) {
     // Update astronomical calculator with loaded settings (without saving during import)
     astro_calc_.set_location(latitude_, longitude_);
+    astro_calc_.set_timezone_offset(timezone_offset_hours_);
     astro_calc_.set_projection_settings(astronomical_projection_, time_shift_hours_, time_shift_minutes_);
     
     save_schedule_to_flash();
@@ -641,6 +670,47 @@ void LEDBrickScheduler::update_astro_calculator_settings() const {
   astro_calc_.set_location(latitude_, longitude_);
   astro_calc_.set_timezone_offset(timezone_offset_hours_);
   astro_calc_.set_projection_settings(astronomical_projection_, time_shift_hours_, time_shift_minutes_);
+}
+
+void LEDBrickScheduler::update_timezone_from_time_source() {
+  static uint32_t last_tz_update = 0;
+  uint32_t current_millis = millis();
+  
+  // Only check every 60 seconds to reduce overhead
+  if (current_millis - last_tz_update < 60000 && last_tz_update != 0) {
+    return;
+  }
+  
+  last_tz_update = current_millis;
+  
+  if (!time_source_) {
+    return;
+  }
+  
+  auto time = time_source_->now();
+  if (!time.is_valid()) {
+    return;
+  }
+  
+  // ESPHome's ESPTime struct has a UTC offset in seconds
+  // Convert to hours for our astronomical calculator
+  double new_timezone_offset = static_cast<double>(time.timezone_offset()) / 3600.0;
+  
+  // Check if timezone offset has changed
+  if (abs(new_timezone_offset - timezone_offset_hours_) > 0.01) {
+    ESP_LOGI(TAG, "Timezone offset updated from %.1fh to %.1fh", 
+             timezone_offset_hours_, new_timezone_offset);
+    timezone_offset_hours_ = new_timezone_offset;
+    
+    // Update the astronomical calculator with new timezone
+    astro_calc_.set_timezone_offset(timezone_offset_hours_);
+    
+    // Force recalculation of astronomical times
+    update_astronomical_times_for_scheduler();
+    
+    // Save the new timezone offset
+    save_schedule_to_flash();
+  }
 }
 
 void LEDBrickScheduler::set_location(double latitude, double longitude) {
