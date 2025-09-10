@@ -474,7 +474,7 @@ number:
 
 esphome:
   on_boot:
-    priority: 100  # Run after other components are set up
+    priority: 50   # Run later to ensure all components are initialized
     then:
       - lambda: |-
           ESP_LOGI("main", "=== Scheduler Services on_boot lambda executing ===");
@@ -518,13 +518,8 @@ esphome:
           if (id(ch7_color)) id(main_scheduler).add_color_text_sensor(6, id(ch7_color));
           if (id(ch8_color)) id(main_scheduler).add_color_text_sensor(7, id(ch8_color));
           
-          // Connect temperature control to scheduler
-          if (id(fan_output)) {
-            id(main_scheduler).set_fan(id(fan_output));
-            ESP_LOGI("main", "Connected fan to scheduler");
-          } else {
-            ESP_LOGW("main", "Fan output not found!");
-          }
+          // Temperature control fan wiring is handled in ledbrick-plus.yaml at priority 600
+          ESP_LOGI("main", "=== Scheduler Services on_boot lambda complete ===");
           
           // Temperature sensors will be auto-discovered by scheduler during runtime
           
