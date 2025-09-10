@@ -467,8 +467,9 @@ void LEDBrickScheduler::apply_values(const InterpolationResult &values) {
         target_current = std::min(target_current, max_current);
       }
       
-      // Only update if value has changed significantly
-      if (last_current_values_.size() <= channel || 
+      // Only update if value has changed significantly or force update
+      if (force_next_update_ ||
+          last_current_values_.size() <= channel || 
           abs(target_current - last_current_values_[channel]) > 0.01f) {
         
         // Set the current control value
@@ -481,10 +482,12 @@ void LEDBrickScheduler::apply_values(const InterpolationResult &values) {
         
         // Enhanced logging for channel 1 when values change
         if (channel == 0) {
-          ESP_LOGD(TAG, "Ch1 current update: %.3fA (input: %.3fA, max limit: %.3fA)", 
+          ESP_LOGD(TAG, "Ch1 current update: %.3fA (input: %.3fA, max limit: %.3fA, was: %.3fA, forced: %s)", 
                    target_current, values.current_values[channel],
                    max_current_it != max_current_controls_.end() && max_current_it->second ? 
-                   max_current_it->second->state : 999.0f);
+                   max_current_it->second->state : 999.0f,
+                   last_current_values_.size() > channel ? last_current_values_[channel] : -1.0f,
+                   force_next_update_ ? "yes" : "no");
         }
         
         ESP_LOGV(TAG, "Updated current %u to %.3fA (limited from %.3fA)", 
