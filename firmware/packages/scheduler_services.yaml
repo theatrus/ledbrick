@@ -518,7 +518,12 @@ esphome:
           if (id(ch8_color)) id(main_scheduler).add_color_text_sensor(7, id(ch8_color));
           
           // Connect temperature control to scheduler
-          if (id(fan_output)) id(main_scheduler).set_fan(id(fan_output));
+          if (id(fan_output)) {
+            id(main_scheduler).set_fan(id(fan_output));
+            ESP_LOGI("main", "Connected fan to scheduler");
+          } else {
+            ESP_LOGW("main", "Fan output not found!");
+          }
           
           // Temperature sensors will be auto-discovered by scheduler during runtime
           

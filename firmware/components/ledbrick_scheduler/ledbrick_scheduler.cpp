@@ -1334,6 +1334,7 @@ void LEDBrickScheduler::update_temperature_sensors() {
   static uint32_t last_discovery_check = 0;
   if (temp_sensors_.empty() && (now - last_discovery_check > 10000)) {  // Check every 10 seconds
     last_discovery_check = now;
+    ESP_LOGI(TAG, "Searching for temperature sensors...");
     
     // Scan all sensors for temperature sensors (by unit of measurement)
     for (auto* sensor : App.get_sensors()) {
@@ -1365,6 +1366,8 @@ void LEDBrickScheduler::update_temperature_sensors() {
         
         if (!found) {
           temp_sensors_.push_back({name, sensor});
+          // Also add the sensor to the temperature control system
+          temp_control_.add_temperature_sensor(name);
           ESP_LOGI(TAG, "Auto-discovered temperature sensor: %s (%s)", name.c_str(), unit.c_str());
         }
       }
@@ -1372,9 +1375,14 @@ void LEDBrickScheduler::update_temperature_sensors() {
   }
   
   // Update temperature sensors
+  if (!temp_sensors_.empty()) {
+    ESP_LOGD(TAG, "Updating %zu temperature sensors", temp_sensors_.size());
+  }
+  
   for (const auto &mapping : temp_sensors_) {
     if (mapping.sensor && mapping.sensor->has_state()) {
       float temp = mapping.sensor->state;
+      ESP_LOGD(TAG, "Temperature sensor '%s': %.2f°C", mapping.name.c_str(), temp);
       
       // Basic sanity check on temperature value
       if (temp > -50.0f && temp < 150.0f) {
@@ -1383,6 +1391,8 @@ void LEDBrickScheduler::update_temperature_sensors() {
         ESP_LOGW(TAG, "Invalid temperature reading from %s: %.1f°C", 
                 mapping.name.c_str(), temp);
       }
+    } else {
+      ESP_LOGD(TAG, "Temperature sensor '%s': no valid state", mapping.name.c_str());
     }
   }
 }
