@@ -152,6 +152,8 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
       
       setHasChanges(false);
       await onUpdate();
+      // Close the modal after successful save
+      onClose();
     } catch (err: any) {
       setError(err.message || 'Failed to save settings');
     } finally {

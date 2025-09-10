@@ -42,7 +42,7 @@ export function StatusBarControls({ enabled, pwmScale, onUpdate }: StatusBarCont
     try {
       await api.setSchedulerEnabled(!localEnabled);
       setLocalEnabled(!localEnabled);
-      onUpdate();
+      // Don't call onUpdate - let the status polling handle it
     } catch (error) {
       console.error('Failed to toggle scheduler:', error);
       setLocalEnabled(enabled); // Reset on error
@@ -56,7 +56,7 @@ export function StatusBarControls({ enabled, pwmScale, onUpdate }: StatusBarCont
     setIsSaving(true);
     try {
       await api.setPwmScale(value);
-      onUpdate();
+      // Don't call onUpdate - let the status polling handle it
     } catch (error) {
       console.error('Failed to set PWM scale:', error);
       setLocalPwmScale(pwmScale); // Reset on error

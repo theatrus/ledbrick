@@ -34,7 +34,7 @@ export function ChannelControl({
     
     try {
       await api.setChannelManualControl(channel, pwm, current);
-      onUpdate();
+      // Don't call onUpdate - let the status polling handle it
       onClose();
     } catch (err: any) {
       setError(err.error || 'Failed to update channel');
