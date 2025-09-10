@@ -63,9 +63,14 @@ export function TemperatureControlModal({ isOpen, onClose }: TemperatureControlM
   const loadFanCurve = async () => {
     try {
       const data = await api.getFanCurve();
-      setFanCurve(data);
+      if (data !== null) {
+        setFanCurve(data);
+      }
+      // If data is null, temperature control is not available
+      // Don't try to reload - this prevents rapid refresh loop
     } catch (err) {
       console.error('Failed to load fan curve:', err);
+      // Don't set error state here to avoid refresh loops
     }
   };
 

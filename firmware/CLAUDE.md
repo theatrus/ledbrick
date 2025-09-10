@@ -134,6 +134,23 @@ The project follows a clean separation between core algorithms and ESPHome integ
    - Dynamic channel count support
    - Comprehensive unit tests covering all functionality
 
+3. **PIDController** - Pure C++ PID control implementation
+   - Proportional-Integral-Derivative control algorithm
+   - Anti-windup protection for integral term
+   - Derivative-on-measurement to prevent setpoint kick
+   - Configurable output limits and tuning parameters
+   - Reset functionality for state management
+   - 42 comprehensive unit tests
+
+4. **TemperatureControl** - Thermal management system
+   - Multi-sensor support with averaging and validation
+   - Temperature filtering for noise reduction
+   - Emergency thermal protection with configurable thresholds
+   - Fan curve generation based on temperature
+   - PID-based fan speed control
+   - JSON configuration import/export
+   - 49 comprehensive unit tests
+
 ### ESPHome Integration Layer
 - **LEDBrickScheduler** - ESPHome component that:
   - Wraps standalone components
@@ -171,14 +188,18 @@ The project follows a clean separation between core algorithms and ESPHome integ
 - `GET /api/status` - System status with sensor data
 - `GET /api/schedule` - Current schedule configuration
 - `POST /api/schedule` - Update schedule configuration
-- `POST /api/point` - Add/update schedule point
+- `POST /api/schedule/point` - Add/update schedule point
 - `POST /api/location` - Update location settings
-- `POST /api/time-shift` - Update time shift settings
-- `POST /api/moon-simulation` - Update moon simulation settings
-- `POST /api/scheduler/enable|disable` - Control scheduler state
-- `POST /api/pwm-scale` - Set global PWM scaling
-- `POST /api/channel-control` - Manual channel control
-- `POST /api/channel-configs` - Update channel configurations
+- `POST /api/time_shift` - Update time shift settings (also `/api/time_projection`)
+- `POST /api/moon_simulation` - Update moon simulation settings
+- `POST /switch/web_scheduler_enable/turn_on|turn_off` - Control scheduler state
+- `POST /number/pwm_scale/set` - Set global PWM scaling
+- `POST /api/channel/control` - Manual channel control
+- `POST /api/channel/configs` - Update channel configurations
+- `GET /api/temperature/config` - Get temperature control configuration
+- `POST /api/temperature/config` - Update temperature control settings
+- `GET /api/temperature/status` - Get temperature control status
+- `GET /api/temperature/fan-curve` - Get current fan curve points
 
 ## Hardware Integration
 
@@ -199,11 +220,16 @@ The project follows a clean separation between core algorithms and ESPHome integ
 - **Astronomical times error**: Use `rise_minutes`/`set_minutes` instead of `sunrise`/`sunset`
 - **Sensor not found**: Ensure sensor IDs match configuration (use explicit IDs)
 - **Web content missing**: Run `npm run build` and `npm run generate-cpp`
+- **PID controller not found**: Ensure pid_controller.cpp/h are in components/ledbrick_scheduler/
+- **Clean build needed**: Run `make clean-all` if adding new files to components
 
 ### Runtime Issues
 - **JSON parsing errors**: Check for extra quotes or malformed JSON in API responses
 - **Modal positioning**: Ensure proper z-index and DOM structure
 - **Refresh on control changes**: Remove unnecessary onUpdate() calls
+- **Temperature sensors not reading**: Check 1-wire bus connections and sensor IDs
+- **Emergency recovery bug**: Known issue - emergency_cooldown_ prevents recovery (line 186)
+- **Fan curve rapid refresh loop**: Fixed - API returns null when temperature control unavailable
 
 ### Debugging
 - **Frontend errors**: Use `LEDBRICK_IP=device-ip make dev` for development server

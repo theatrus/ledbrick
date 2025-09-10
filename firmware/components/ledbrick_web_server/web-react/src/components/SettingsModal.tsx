@@ -150,9 +150,15 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
       ]);
       if (config) {
         setTempConfig(config);
-        setFanCurve(curve);
+        // Only set fan curve if it's not null
+        if (curve !== null) {
+          setFanCurve(curve);
+        }
       } else {
-        setError('Temperature control not available');
+        // Temperature control not available - this is not an error
+        // Just don't show the temperature tab
+        setTempConfig(null);
+        setFanCurve(null);
       }
     } catch (err: any) {
       setError('Failed to load temperature configuration: ' + err.message);
@@ -213,7 +219,10 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
         await api.updateTemperatureConfig(tempConfig);
         // Reload fan curve to reflect new settings
         const curve = await api.getFanCurve();
-        setFanCurve(curve);
+        if (curve !== null) {
+          setFanCurve(curve);
+        }
+        // If curve is null, temperature control is not available - don't update
       }
       
       setHasChanges(false);

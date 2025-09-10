@@ -30,7 +30,7 @@ void LEDBrickWebServer::setup() {
   config.server_port = this->port_;
   config.ctrl_port = this->port_;
   config.stack_size = 8192;
-  config.max_uri_handlers = 26;  // We register 24 handlers
+  config.max_uri_handlers = 28;  // We register 26 handlers
   config.recv_wait_timeout = 10;
   config.send_wait_timeout = 10;
   
