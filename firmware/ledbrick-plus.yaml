@@ -286,6 +286,7 @@ sensor:
   # Dallas temperature sensors (DS18B20) - auto-discovery enabled
   # ESPHome will automatically discover and create entities for all DS18B20 sensors
   - platform: dallas_temp
+    update_interval: 5s
     one_wire_id: onewire_bus
     # Auto-discovery: omitting address makes ESPHome discover all sensors
     name: "Temperature Sensor"

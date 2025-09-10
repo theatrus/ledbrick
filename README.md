@@ -140,6 +140,13 @@ make help           # Show all available targets
 - **Fan Control**: PWM speed control with RPM monitoring and on/off state
 - **Status Bar**: Responsive layout showing all sensor data and channel status
 
+#### Temperature Control System
+- **PID Controller**: Professional-grade temperature regulation with anti-windup protection
+- **Multi-Sensor Support**: Average multiple temperature sensors for accurate readings
+- **Emergency Thermal Protection**: Automatic shutdown with configurable thresholds
+- **Fan Curve Management**: Dynamic fan speed based on temperature with customizable curve
+- **Real-time Monitoring**: Temperature status and PID performance metrics in web UI
+
 #### Smart Home Integration
 - **Home Assistant**: Native ESPHome integration with automatic discovery
 - **RESTful API**: Complete HTTP API for schedule management and control

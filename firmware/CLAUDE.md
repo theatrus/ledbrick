@@ -23,6 +23,8 @@ To build and test the LEDBrick firmware:
    ```bash
    make test-astro      # Test astronomical calculator only
    make test-scheduler  # Test LED scheduler only
+   make test-pid        # Test PID controller only
+   make test-temperature # Test temperature control only
    ```
 
 4. Cross-compiler testing:
@@ -76,6 +78,8 @@ The web interface is built with React + TypeScript + Vite:
 - `make` or `make test` - Run all unit tests
 - `make test-astro` - Test astronomical calculator only
 - `make test-scheduler` - Test LED scheduler only
+- `make test-pid` - Test PID controller only
+- `make test-temperature` - Test temperature control only
 - `make test-clang` - Run tests with clang++ compiler
 - `make web` - Build React web UI and generate C++
 - `make dev` - Start React development server with device proxy
@@ -95,8 +99,12 @@ The web interface is built with React + TypeScript + Vite:
 ### Standalone Components (No ESPHome Dependencies)
 - `astronomical_calculator.h/cpp` - Standalone C++ astronomical calculator with timezone support
 - `scheduler.h/cpp` - Standalone C++ LED scheduler with interpolation, presets, and serialization
+- `pid_controller.h/cpp` - Standalone C++ PID controller with anti-windup and derivative-on-measurement
+- `temperature_control.h/cpp` - Temperature management system with multi-sensor support and emergency protection
 - `test_astronomical.cpp` - Unit test suite for the astronomical calculator  
 - `test_scheduler.cpp` - Unit test suite for the LED scheduler
+- `test_pid_controller.cpp` - Unit test suite for the PID controller
+- `test_temperature_control.cpp` - Unit test suite for temperature control
 - `test_framework.h` - Common test framework for consistent testing across components
 - `Makefile` - Consolidated build system for all unit tests and cross-compiler testing
 
