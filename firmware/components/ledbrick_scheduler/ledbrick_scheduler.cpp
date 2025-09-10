@@ -1089,6 +1089,13 @@ void LEDBrickScheduler::set_moon_base_current(const std::vector<float>& current)
 void LEDBrickScheduler::set_moon_simulation(const LEDScheduler::MoonSimulation& config) {
   // Check if values actually changed  
   auto current_moon = scheduler_.get_moon_simulation();
+  
+  ESP_LOGD(TAG, "Current moon: enabled=%d, pwm_scale=%d, curr_scale=%d, min_curr=%.3f",
+           current_moon.enabled, current_moon.phase_scaling_pwm, 
+           current_moon.phase_scaling_current, current_moon.min_current_threshold);
+  ESP_LOGD(TAG, "New moon: enabled=%d, pwm_scale=%d, curr_scale=%d, min_curr=%.3f",
+           config.enabled, config.phase_scaling_pwm, 
+           config.phase_scaling_current, config.min_current_threshold);
   if (current_moon.enabled == config.enabled && 
       current_moon.phase_scaling == config.phase_scaling &&
       current_moon.phase_scaling_pwm == config.phase_scaling_pwm &&

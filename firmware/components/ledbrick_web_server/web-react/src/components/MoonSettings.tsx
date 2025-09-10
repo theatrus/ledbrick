@@ -155,6 +155,12 @@ export function MoonSettings({ moonSimulation, schedule, onUpdate }: MoonSetting
                 checked={phaseScalingPWM}
                 onChange={(e) => {
                   setPhaseScalingPWM(e.target.checked);
+                  // Also update legacy field for compatibility
+                  if (!e.target.checked && !phaseScalingCurrent) {
+                    setPhaseScaling(false);
+                  } else {
+                    setPhaseScaling(true);
+                  }
                   setHasUnsavedChanges(true);
                 }}
               />
@@ -169,6 +175,12 @@ export function MoonSettings({ moonSimulation, schedule, onUpdate }: MoonSetting
                 checked={phaseScalingCurrent}
                 onChange={(e) => {
                   setPhaseScalingCurrent(e.target.checked);
+                  // Also update legacy field for compatibility
+                  if (!e.target.checked && !phaseScalingPWM) {
+                    setPhaseScaling(false);
+                  } else {
+                    setPhaseScaling(true);
+                  }
                   setHasUnsavedChanges(true);
                 }}
               />
@@ -182,10 +194,20 @@ export function MoonSettings({ moonSimulation, schedule, onUpdate }: MoonSetting
                 <span>Minimum current threshold (A):</span>
                 <input
                   type="number"
-                  value={minCurrentThreshold.toFixed(3)}
+                  value={minCurrentThreshold}
                   onChange={(e) => {
-                    setMinCurrentThreshold(Math.max(0, Math.min(2, parseFloat(e.target.value) || 0)));
-                    setHasUnsavedChanges(true);
+                    const value = parseFloat(e.target.value);
+                    if (!isNaN(value)) {
+                      setMinCurrentThreshold(Math.max(0, Math.min(2, value)));
+                      setHasUnsavedChanges(true);
+                    }
+                  }}
+                  onBlur={(e) => {
+                    // On blur, ensure we have a valid value
+                    const value = parseFloat(e.target.value);
+                    if (isNaN(value)) {
+                      setMinCurrentThreshold(0);
+                    }
                   }}
                   min="0"
                   max="2"

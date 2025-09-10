@@ -575,11 +575,7 @@ void LEDScheduler::set_moon_simulation(const MoonSimulation& config) {
     moon_simulation_.base_intensity.resize(num_channels_, 0.0f);
     moon_simulation_.base_current.resize(num_channels_, 0.0f);
     
-    // Maintain backward compatibility - if only legacy phase_scaling is set, apply to both new fields
-    if (config.phase_scaling && !config.phase_scaling_pwm && !config.phase_scaling_current) {
-        moon_simulation_.phase_scaling_pwm = true;
-        moon_simulation_.phase_scaling_current = true;
-    }
+    // No need for special backward compatibility here since the struct constructors handle it
 }
 
 void LEDScheduler::enable_moon_simulation(bool enabled) {
