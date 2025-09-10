@@ -280,7 +280,7 @@ class LEDBrickScheduler : public PollingComponent {
   
   // Update the astronomical calculator settings when location/projection changes
   void update_astro_calculator_settings() const;
-  void update_astronomical_times_for_scheduler();
+  void update_astronomical_times_for_scheduler(bool force = false);
   
   // Built-in presets (use astronomical data for sunrise/sunset)
   void create_sunrise_sunset_preset_with_astro_data() const;

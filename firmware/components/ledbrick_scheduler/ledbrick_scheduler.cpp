@@ -973,7 +973,10 @@ void LEDBrickScheduler::set_location(double latitude, double longitude) {
   astro_calc_.set_location(latitude_, longitude_);
   
   // Force immediate recalculation of astronomical times for dynamic schedule points
-  update_astronomical_times_for_scheduler();
+  update_astronomical_times_for_scheduler(true);
+  
+  // Force next update to re-evaluate schedule with new astronomical times
+  force_next_update_ = true;
   
   // Save complete schedule (includes all settings)
   save_schedule_to_flash();
@@ -990,7 +993,10 @@ void LEDBrickScheduler::set_astronomical_projection(bool enabled) {
   astro_calc_.set_projection_settings(astronomical_projection_, time_shift_hours_, time_shift_minutes_);
   
   // Force immediate recalculation of astronomical times for dynamic schedule points
-  update_astronomical_times_for_scheduler();
+  update_astronomical_times_for_scheduler(true);
+  
+  // Force next update to re-evaluate schedule with new astronomical times
+  force_next_update_ = true;
   
   // Save complete schedule (includes all settings)
   save_schedule_to_flash();
@@ -1008,7 +1014,10 @@ void LEDBrickScheduler::set_time_shift(int hours, int minutes) {
   astro_calc_.set_projection_settings(astronomical_projection_, time_shift_hours_, time_shift_minutes_);
   
   // Force immediate recalculation of astronomical times for dynamic schedule points
-  update_astronomical_times_for_scheduler();
+  update_astronomical_times_for_scheduler(true);
+  
+  // Force next update to re-evaluate schedule with new astronomical times
+  force_next_update_ = true;
   
   // Save to persistent storage (scheduler JSON)
   save_schedule_to_flash();
@@ -1179,12 +1188,12 @@ void LEDBrickScheduler::set_moon_simulation(const LEDScheduler::MoonSimulation& 
   ESP_LOGI(TAG, "Moon simulation configuration updated and saved");
 }
 
-void LEDBrickScheduler::update_astronomical_times_for_scheduler() {
+void LEDBrickScheduler::update_astronomical_times_for_scheduler(bool force) {
   static uint32_t last_astro_update = 0;
   uint32_t current_millis = millis();
   
-  // Update astronomical times every 5 minutes (300000 ms)
-  if (current_millis - last_astro_update < 300000 && last_astro_update != 0) {
+  // Update astronomical times every 5 minutes (300000 ms) unless forced
+  if (!force && current_millis - last_astro_update < 300000 && last_astro_update != 0) {
     return; // Skip update if less than 5 minutes have passed
   }
   
