@@ -36,8 +36,9 @@ void TemperatureControl::set_config(const TemperatureControlConfig& config) {
     
     // Update PID controller
     pid_controller_.set_target(config_.target_temp_c);
-    pid_controller_.set_tunings(config_.kp, config_.ki, config_.kd);
-    pid_controller_.set_output_limits(config_.min_fan_pwm, config_.max_fan_pwm);
+    // For cooling: use negative gains so that when temp > target, we get positive output
+    pid_controller_.set_tunings(-config_.kp, -config_.ki, -config_.kd);
+    pid_controller_.set_output_limits(0.0f, config_.max_fan_pwm);
     
     status_.target_temp_c = config_.target_temp_c;
     
@@ -241,11 +242,34 @@ void TemperatureControl::update_fan_control(uint32_t current_time_ms) {
     
     status_.pid_error = pid_controller_.get_error();
     status_.pid_output = pid_output;
-    status_.fan_pwm_percent = pid_output;
     
-    // Enable fan if PWM > 0
-    bool should_enable_fan = pid_output > 0.1f;
+    // For cooling: when current temp > target, we need cooling
+    float cooling_error = status_.current_temp_c - config_.target_temp_c;
     
+    // Determine if we should enable the fan
+    bool should_enable_fan = false;
+    float fan_pwm_output = 0.0f;
+    
+    if (cooling_error > 0.1f) {  // Temperature above target + hysteresis
+        should_enable_fan = true;
+        // PID output will be positive when we need cooling (due to negative gains)
+        // Apply minimum fan PWM if PID output is too low
+        if (pid_output < config_.min_fan_pwm) {
+            fan_pwm_output = config_.min_fan_pwm;
+        } else {
+            fan_pwm_output = pid_output;
+        }
+    } else if (cooling_error > -0.1f && status_.fan_enabled) {
+        // In hysteresis band and fan is already on - keep it at minimum
+        should_enable_fan = true;
+        fan_pwm_output = config_.min_fan_pwm;
+    } else {
+        // Temperature below target - hysteresis, no cooling needed
+        should_enable_fan = false;
+        fan_pwm_output = 0.0f;
+    }
+    
+    // Update fan enable state
     if (should_enable_fan != status_.fan_enabled) {
         status_.fan_enabled = should_enable_fan;
         if (fan_enable_callback_) {
@@ -253,9 +277,10 @@ void TemperatureControl::update_fan_control(uint32_t current_time_ms) {
         }
     }
     
-    // Set fan PWM
+    // Update fan PWM
+    status_.fan_pwm_percent = fan_pwm_output;
     if (fan_pwm_callback_) {
-        fan_pwm_callback_(should_enable_fan ? pid_output : 0.0f);
+        fan_pwm_callback_(fan_pwm_output);
     }
 }
 

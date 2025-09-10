@@ -1,5 +1,6 @@
 #include "ledbrick_temperature_control.h"
 #include "esphome/core/log.h"
+#include "esphome/core/helpers.h"
 
 namespace esphome {
 namespace ledbrick_temperature_control {
@@ -14,6 +15,13 @@ void LEDBrickTemperatureControl::setup() {
         this->mark_failed();
         return;
     }
+    
+    // Initialize preferences with a unique hash
+    uint32_t pref_hash = 0x54454D50;  // "TEMP" in hex
+    preferences_ = global_preferences->make_preference<uint32_t>(pref_hash);
+    
+    // Load saved configuration
+    load_config_();
     
     // Configure the temperature control module
     temp_control_.set_config(config_);
@@ -118,6 +126,9 @@ void LEDBrickTemperatureControl::set_manual_target_temperature(float temp) {
     temp_control_.set_config(config_);
     
     ESP_LOGI(TAG, "Target temperature set to %.1f°C", temp);
+    
+    // Save to preferences
+    save_config_();
     
     // Update target temperature sensor
     if (target_temp_sensor_) {
@@ -261,6 +272,108 @@ void LEDBrickTemperatureControl::publish_sensor_values_() {
     if (enable_switch_ && enable_switch_->state != status.enabled) {
         enable_switch_->publish_state(status.enabled);
     }
+}
+
+bool LEDBrickTemperatureControl::import_config_json(const std::string& json) {
+    if (!temp_control_.import_config_json(json)) {
+        return false;
+    }
+    
+    // Update our local config
+    config_ = temp_control_.get_config();
+    
+    // Save to preferences
+    save_config_();
+    
+    return true;
+}
+
+void LEDBrickTemperatureControl::save_config_() {
+    
+    // Create a simple hash of the config to detect changes
+    uint32_t new_hash = 0;
+    new_hash ^= static_cast<uint32_t>(config_.target_temp_c * 100);
+    new_hash ^= static_cast<uint32_t>(config_.kp * 1000) << 8;
+    new_hash ^= static_cast<uint32_t>(config_.ki * 10000) << 16;
+    new_hash ^= static_cast<uint32_t>(config_.kd * 1000) << 24;
+    new_hash ^= static_cast<uint32_t>(config_.min_fan_pwm);
+    new_hash ^= static_cast<uint32_t>(config_.max_fan_pwm) << 8;
+    new_hash ^= static_cast<uint32_t>(config_.emergency_temp_c * 100) << 16;
+    new_hash ^= static_cast<uint32_t>(config_.recovery_temp_c * 100) << 24;
+    
+    // Only save if config has changed
+    if (new_hash != config_hash_) {
+        config_hash_ = new_hash;
+        
+        // Save config as JSON string
+        std::string json_config = temp_control_.export_config_json();
+        
+        // ESPHome preferences can't store strings directly, so we'll store individual values
+        global_preferences->sync();
+        
+        // Use multiple preference objects for different config values
+        uint32_t base_hash = 0x54454D50;  // "TEMP" in hex
+        auto pref_target = global_preferences->make_preference<float>(base_hash ^ 0x1000);
+        auto pref_kp = global_preferences->make_preference<float>(base_hash ^ 0x1001);
+        auto pref_ki = global_preferences->make_preference<float>(base_hash ^ 0x1002);
+        auto pref_kd = global_preferences->make_preference<float>(base_hash ^ 0x1003);
+        auto pref_min_fan = global_preferences->make_preference<float>(base_hash ^ 0x1004);
+        auto pref_max_fan = global_preferences->make_preference<float>(base_hash ^ 0x1005);
+        auto pref_emerg_temp = global_preferences->make_preference<float>(base_hash ^ 0x1006);
+        auto pref_recov_temp = global_preferences->make_preference<float>(base_hash ^ 0x1007);
+        auto pref_emerg_delay = global_preferences->make_preference<uint32_t>(base_hash ^ 0x1008);
+        
+        pref_target.save(&config_.target_temp_c);
+        pref_kp.save(&config_.kp);
+        pref_ki.save(&config_.ki);
+        pref_kd.save(&config_.kd);
+        pref_min_fan.save(&config_.min_fan_pwm);
+        pref_max_fan.save(&config_.max_fan_pwm);
+        pref_emerg_temp.save(&config_.emergency_temp_c);
+        pref_recov_temp.save(&config_.recovery_temp_c);
+        pref_emerg_delay.save(&config_.emergency_delay_ms);
+        
+        preferences_.save(&config_hash_);
+        
+        ESP_LOGI(TAG, "Saved temperature control configuration to preferences");
+    }
+}
+
+void LEDBrickTemperatureControl::load_config_() {
+    uint32_t saved_hash = 0;
+    if (!preferences_.load(&saved_hash) || saved_hash == 0) {
+        ESP_LOGI(TAG, "No saved temperature control configuration found, using defaults");
+        return;
+    }
+    
+    // Load individual config values
+    uint32_t base_hash = 0x54454D50;  // "TEMP" in hex
+    auto pref_target = global_preferences->make_preference<float>(base_hash ^ 0x1000);
+    auto pref_kp = global_preferences->make_preference<float>(base_hash ^ 0x1001);
+    auto pref_ki = global_preferences->make_preference<float>(base_hash ^ 0x1002);
+    auto pref_kd = global_preferences->make_preference<float>(base_hash ^ 0x1003);
+    auto pref_min_fan = global_preferences->make_preference<float>(base_hash ^ 0x1004);
+    auto pref_max_fan = global_preferences->make_preference<float>(base_hash ^ 0x1005);
+    auto pref_emerg_temp = global_preferences->make_preference<float>(base_hash ^ 0x1006);
+    auto pref_recov_temp = global_preferences->make_preference<float>(base_hash ^ 0x1007);
+    auto pref_emerg_delay = global_preferences->make_preference<uint32_t>(base_hash ^ 0x1008);
+    
+    // Load each value, keeping defaults if not found
+    pref_target.load(&config_.target_temp_c);
+    pref_kp.load(&config_.kp);
+    pref_ki.load(&config_.ki);
+    pref_kd.load(&config_.kd);
+    pref_min_fan.load(&config_.min_fan_pwm);
+    pref_max_fan.load(&config_.max_fan_pwm);
+    pref_emerg_temp.load(&config_.emergency_temp_c);
+    pref_recov_temp.load(&config_.recovery_temp_c);
+    pref_emerg_delay.load(&config_.emergency_delay_ms);
+    
+    config_hash_ = saved_hash;
+    
+    ESP_LOGI(TAG, "Loaded temperature control configuration from preferences");
+    ESP_LOGI(TAG, "  Target: %.1f°C, PID: %.2f/%.3f/%.2f", 
+             config_.target_temp_c, config_.kp, config_.ki, config_.kd);
 }
 
 } // namespace ledbrick_temperature_control

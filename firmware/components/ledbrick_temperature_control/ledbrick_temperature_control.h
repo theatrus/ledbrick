@@ -2,6 +2,7 @@
 
 #include "esphome/core/component.h"
 #include "esphome/core/automation.h"
+#include "esphome/core/preferences.h"
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/binary_sensor/binary_sensor.h"
 #include "esphome/components/fan/fan.h"
@@ -77,7 +78,7 @@ public:
     // Configuration access
     ledbrick::TemperatureControlConfig get_config() const { return temp_control_.get_config(); }
     std::string export_config_json() const { return temp_control_.export_config_json(); }
-    bool import_config_json(const std::string& json) { return temp_control_.import_config_json(json); }
+    bool import_config_json(const std::string& json);
     std::vector<ledbrick::TemperatureControl::FanCurvePoint> get_fan_curve() const { 
         return temp_control_.get_fan_curve(); 
     }
@@ -123,6 +124,12 @@ protected:
     void update_temperature_sensors_();
     void update_fan_speed_();
     void publish_sensor_values_();
+    
+    // Persistence
+    void save_config_();
+    void load_config_();
+    ESPPreferenceObject preferences_;
+    uint32_t config_hash_{0};
     
     bool initialized_{false};
 };

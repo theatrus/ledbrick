@@ -84,6 +84,8 @@ export function TemperatureControlModal({ isOpen, onClose }: TemperatureControlM
       setHasChanges(false);
       // Reload fan curve to reflect new settings
       loadFanCurve();
+      // Close modal after successful save
+      onClose();
     } catch (err: any) {
       setError('Failed to save configuration: ' + err.message);
     } finally {

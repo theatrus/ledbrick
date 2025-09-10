@@ -227,7 +227,11 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
       
       setHasChanges(false);
       await onUpdate();
-      // Don't close modal after save - user might want to continue editing
+      // Close modal after saving temperature settings
+      if (activeTab === 'temperature') {
+        onClose();
+      }
+      // Don't close modal after save for other tabs - user might want to continue editing
     } catch (err: any) {
       setError(err.message || 'Failed to save settings');
     } finally {
