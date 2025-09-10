@@ -519,7 +519,17 @@ esphome:
           
           // Connect temperature control to scheduler
           if (id(fan_output)) id(main_scheduler).set_fan(id(fan_output));
-          if (id(temperature_sensor)) id(main_scheduler).add_temperature_sensor("Primary", id(temperature_sensor));
+          
+          // Auto-discover and connect all temperature sensors
+          for (auto* sensor : App.get_sensors()) {
+            // Check if this is a temperature sensor by unit of measurement
+            std::string unit = sensor->get_unit_of_measurement().c_str();
+            if (unit == "°C" || unit == "°F") {
+              std::string name = sensor->get_name().c_str();
+              id(main_scheduler).add_temperature_sensor(name, sensor);
+              ESP_LOGI("main", "Connected temperature sensor: %s (%s)", name.c_str(), unit.c_str());
+            }
+          }
           
           // Set current channels to their maximum configured values at boot
           if (id(current_1) && id(max_current_1)) {
@@ -616,142 +626,6 @@ switch:
             id(main_scheduler)->set_astronomical_projection(false);
           }
 
-# === Location Preset Buttons ===
-
-button:
-  # City presets
-  - platform: template
-    name: "Location: Vancouver, BC"
-    id: preset_vancouver
-    icon: "mdi:city"
-    entity_category: config
-    on_press:
-      - lambda: |-
-          if (id(main_scheduler) != nullptr) {
-            id(main_scheduler)->set_location(49.2827, -123.1207);
-          }
-  
-  - platform: template
-    name: "Location: Seattle, WA"
-    id: preset_seattle
-    icon: "mdi:city"
-    entity_category: config
-    on_press:
-      - lambda: |-
-          if (id(main_scheduler) != nullptr) {
-            id(main_scheduler)->set_location(47.6062, -122.3321);
-          }
-  
-  - platform: template
-    name: "Location: Los Angeles, CA"
-    id: preset_los_angeles
-    icon: "mdi:city"
-    entity_category: config
-    on_press:
-      - lambda: |-
-          if (id(main_scheduler) != nullptr) {
-            id(main_scheduler)->set_location(34.0522, -118.2437);
-          }
-  
-  - platform: template
-    name: "Location: Singapore"
-    id: preset_singapore
-    icon: "mdi:city"
-    entity_category: config
-    on_press:
-      - lambda: |-
-          if (id(main_scheduler) != nullptr) {
-            id(main_scheduler)->set_location(1.3521, 103.8198);
-          }
-
-  # Reef location presets
-  - platform: template
-    name: "Reef: Great Barrier Reef"
-    id: preset_great_barrier_reef
-    icon: "mdi:coral"
-    entity_category: config
-    on_press:
-      - lambda: |-
-          if (id(main_scheduler) != nullptr) {
-            id(main_scheduler)->set_location(-18.2871, 147.6992);
-          }
-  
-  - platform: template
-    name: "Reef: Caribbean (USVI)"
-    id: preset_caribbean
-    icon: "mdi:palm-tree"
-    entity_category: config
-    on_press:
-      - lambda: |-
-          if (id(main_scheduler) != nullptr) {
-            id(main_scheduler)->set_location(18.3358, -64.8963);
-          }
-  
-  - platform: template
-    name: "Reef: Red Sea"
-    id: preset_red_sea
-    icon: "mdi:fish"
-    entity_category: config
-    on_press:
-      - lambda: |-
-          if (id(main_scheduler) != nullptr) {
-            id(main_scheduler)->set_location(25.0000, 35.0000);
-          }
-  
-  - platform: template
-    name: "Reef: Bali, Indonesia"
-    id: preset_bali
-    icon: "mdi:diving"
-    entity_category: config
-    on_press:
-      - lambda: |-
-          if (id(main_scheduler) != nullptr) {
-            id(main_scheduler)->set_location(-8.3405, 115.0920);
-          }
-  
-  - platform: template
-    name: "Reef: Palau"
-    id: preset_palau
-    icon: "mdi:jellyfish-outline"
-    entity_category: config
-    on_press:
-      - lambda: |-
-          if (id(main_scheduler) != nullptr) {
-            id(main_scheduler)->set_location(7.5000, 134.5000);
-          }
-  
-  - platform: template
-    name: "Reef: Tahiti"
-    id: preset_tahiti
-    icon: "mdi:island"
-    entity_category: config
-    on_press:
-      - lambda: |-
-          if (id(main_scheduler) != nullptr) {
-            id(main_scheduler)->set_location(-17.6797, -149.4068);
-          }
-  
-  - platform: template
-    name: "Reef: Belize Barrier Reef"
-    id: preset_belize_reef
-    icon: "mdi:swim"
-    entity_category: config
-    on_press:
-      - lambda: |-
-          if (id(main_scheduler) != nullptr) {
-            id(main_scheduler)->set_location(17.1899, -88.1982);
-          }
-  
-  - platform: template
-    name: "Reef: Maldives"
-    id: preset_maldives
-    icon: "mdi:turtle"
-    entity_category: config
-    on_press:
-      - lambda: |-
-          if (id(main_scheduler) != nullptr) {
-            id(main_scheduler)->set_location(3.2028, 73.2207);
-          }
 
 text_sensor:
   # Current time as human-readable string

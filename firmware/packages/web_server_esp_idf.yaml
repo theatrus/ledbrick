@@ -23,10 +23,8 @@ ledbrick_web_server:
   # Wire fan sensors
   fan_speed_sensor_id: fan_speed
   fan_state_sensor_id: fan_speed  # Use fan speed as state (>0 = on, 0 = off)
-  # Wire temperature sensors
-  temperature_sensors:
-    - sensor_id: temperature_sensor
-      name: "Board"
+  # Temperature sensors will be auto-discovered by the scheduler
+  # and passed to the web server automatically
 
 # Also provide some basic ESPHome web controls
 # These will work alongside our custom web server

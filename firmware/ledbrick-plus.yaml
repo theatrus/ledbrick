@@ -90,8 +90,16 @@ esphome:
             id(main_scheduler).set_fan_power_switch(id(fan_pwr));
             id(main_scheduler).set_fan_speed_sensor(id(fan_speed));
             
-            // Add temperature sensor
-            id(main_scheduler).add_temperature_sensor("Primary", id(temperature_sensor));
+            // Auto-discover and add all temperature sensors
+            for (auto* sensor : App.get_sensors()) {
+              // Check if this is a temperature sensor by unit of measurement
+              std::string unit = sensor->get_unit_of_measurement().c_str();
+              if (unit == "°C" || unit == "°F") {
+                std::string name = sensor->get_name().c_str();
+                id(main_scheduler).add_temperature_sensor(name, sensor);
+                ESP_LOGI("main", "Connected temperature sensor: %s (%s)", name.c_str(), unit.c_str());
+              }
+            }
             
             // Configure temperature monitoring sensors
             id(main_scheduler).set_current_temp_sensor(id(temp_control_current));
@@ -323,8 +331,7 @@ sensor:
     update_interval: 5s
     one_wire_id: onewire_bus
     # Auto-discovery: omitting address makes ESPHome discover all sensors
-    name: "Temperature Sensor"
-    id: temperature_sensor
+    name: "Dallas Temperature"
     # Additional sensors can be configured manually if specific naming is needed:
     # - platform: dallas_temp
     #   one_wire_id: onewire_bus
