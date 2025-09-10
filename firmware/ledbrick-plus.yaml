@@ -85,8 +85,7 @@ esphome:
             }
             
             // Configure temperature control
-            // Fan connections
-            id(main_scheduler).set_fan(id(fan_output));
+            // Fan connections are handled in scheduler_services.yaml
             id(main_scheduler).set_fan_power_switch(id(fan_pwr));
             id(main_scheduler).set_fan_speed_sensor(id(fan_speed));
             

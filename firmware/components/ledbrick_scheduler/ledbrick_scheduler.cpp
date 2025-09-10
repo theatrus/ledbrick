@@ -1344,6 +1344,16 @@ void LEDBrickScheduler::update_temperature_sensors() {
       ESP_LOGD(TAG, "Checking sensor '%s' with unit '%s'", name.c_str(), unit.c_str());
       
       if ((unit == "°C" || unit == "°F" || unit == "C" || unit == "F") && sensor->has_state()) {
+        // Exclude template sensors that are used for temperature control monitoring
+        if (name.find("Temperature Control") != std::string::npos || 
+            name.find("Control Current") != std::string::npos ||
+            name.find("Control Target") != std::string::npos ||
+            name.find("Control Fan") != std::string::npos ||
+            name.find("PID") != std::string::npos) {
+          ESP_LOGD(TAG, "Skipping template sensor: %s", name.c_str());
+          continue;
+        }
+        
         // Check if we already have this sensor
         bool found = false;
         for (const auto &existing : temp_sensors_) {
