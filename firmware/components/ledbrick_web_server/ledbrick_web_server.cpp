@@ -524,8 +524,8 @@ esp_err_t LEDBrickWebServer::handle_api_status_get(httpd_req_t *req) {
   snprintf(time_str, sizeof(time_str), "%02d:%02d", time_min / 60, time_min % 60);
   doc["time_formatted"] = time_str;
   
-  // Add astronomical times
-  auto astro = self->scheduler_->get_astronomical_times();
+  // Add astronomical times (use projected times if projection is enabled)
+  auto astro = self->scheduler_->get_projected_astronomical_times();
   if (astro.rise_valid) {
     char sunrise_str[6];
     snprintf(sunrise_str, sizeof(sunrise_str), "%02d:%02d", astro.rise_minutes / 60, astro.rise_minutes % 60);
