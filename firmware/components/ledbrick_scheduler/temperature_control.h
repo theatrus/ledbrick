@@ -4,6 +4,7 @@
 #include <functional>
 #include <cstdint>
 #include <string>
+#include "pid_controller.h"
 
 namespace ledbrick {
 
@@ -15,36 +16,7 @@ struct TemperatureSensor {
     uint32_t last_update_ms;
 };
 
-// PID controller for temperature regulation
-class PIDController {
-public:
-    PIDController(float kp, float ki, float kd, float min_output, float max_output);
-    
-    void set_target(float target);
-    void set_tunings(float kp, float ki, float kd);
-    void set_output_limits(float min_output, float max_output);
-    void reset();
-    
-    float compute(float input, uint32_t dt_ms);
-    
-    // Getters for monitoring
-    float get_target() const { return target_; }
-    float get_error() const { return error_; }
-    float get_integral() const { return integral_; }
-    float get_derivative() const { return derivative_; }
-    float get_output() const { return output_; }
-
-private:
-    float kp_, ki_, kd_;
-    float target_;
-    float integral_;
-    float last_input_;
-    float error_;
-    float derivative_;
-    float output_;
-    float min_output_, max_output_;
-    bool first_run_;
-};
+// Using standalone PIDController from pid_controller.h
 
 // Temperature control configuration
 struct TemperatureControlConfig {

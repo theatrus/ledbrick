@@ -14,15 +14,19 @@ TEST_DIR := tests
 # Source files
 ASTRO_SOURCES := $(COMPONENT_DIR)/astronomical_calculator.cpp
 SCHEDULER_SOURCES := $(COMPONENT_DIR)/scheduler.cpp $(COMPONENT_DIR)/cJSON.c
+PID_SOURCES := $(COMPONENT_DIR)/pid_controller.cpp
+TEMP_CONTROL_SOURCES := $(COMPONENT_DIR)/temperature_control.cpp $(COMPONENT_DIR)/cJSON.c
 TEST_FRAMEWORK := test_framework.h
 
 # Test executables
 ASTRO_TEST := $(BUILD_DIR)/test_astronomical
 SCHEDULER_TEST := $(BUILD_DIR)/test_scheduler
-ALL_TESTS := $(ASTRO_TEST) $(SCHEDULER_TEST)
+PID_TEST := $(BUILD_DIR)/test_pid_controller
+TEMP_CONTROL_TEST := $(BUILD_DIR)/test_temperature_control
+ALL_TESTS := $(ASTRO_TEST) $(SCHEDULER_TEST) $(PID_TEST) $(TEMP_CONTROL_TEST)
 
 # Phony targets
-.PHONY: all test test-astro test-scheduler clean help setup esphome web dev
+.PHONY: all test test-astro test-scheduler test-pid test-temperature clean help setup esphome web dev
 
 # Default target
 all: test
@@ -41,6 +45,16 @@ $(SCHEDULER_TEST): test_scheduler.cpp $(SCHEDULER_SOURCES) $(TEST_FRAMEWORK) | $
 	@echo "🔨 Building scheduler tests..."
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -o $@ test_scheduler.cpp $(SCHEDULER_SOURCES)
 
+# Build PID controller tests
+$(PID_TEST): test_pid_controller.cpp $(PID_SOURCES) $(TEST_FRAMEWORK) | $(BUILD_DIR)
+	@echo "🔨 Building PID controller tests..."
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -o $@ test_pid_controller.cpp $(PID_SOURCES)
+
+# Build temperature control tests
+$(TEMP_CONTROL_TEST): test_temperature_control.cpp $(TEMP_CONTROL_SOURCES) $(PID_SOURCES) $(TEST_FRAMEWORK) | $(BUILD_DIR)
+	@echo "🔨 Building temperature control tests..."
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -o $@ test_temperature_control.cpp $(TEMP_CONTROL_SOURCES) $(PID_SOURCES)
+
 # Run all tests
 test: $(ALL_TESTS)
 	@echo "=== LEDBrick Firmware Test Suite ==="
@@ -50,6 +64,12 @@ test: $(ALL_TESTS)
 	@echo
 	@echo "🧪 Running scheduler tests..."
 	@$(SCHEDULER_TEST)
+	@echo
+	@echo "🧪 Running PID controller tests..."
+	@$(PID_TEST)
+	@echo
+	@echo "🧪 Running temperature control tests..."
+	@$(TEMP_CONTROL_TEST)
 	@echo
 	@echo "=== ALL TESTS COMPLETED ==="
 
@@ -61,6 +81,14 @@ test-astro: $(ASTRO_TEST)
 test-scheduler: $(SCHEDULER_TEST)
 	@echo "🧪 Running scheduler tests..."
 	@$(SCHEDULER_TEST)
+
+test-pid: $(PID_TEST)
+	@echo "🧪 Running PID controller tests..."
+	@$(PID_TEST)
+
+test-temperature: $(TEMP_CONTROL_TEST)
+	@echo "🧪 Running temperature control tests..."
+	@$(TEMP_CONTROL_TEST)
 
 # Cross-compiler testing
 test-clang: CXX := clang++
