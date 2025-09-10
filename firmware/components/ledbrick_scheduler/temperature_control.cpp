@@ -184,7 +184,7 @@ void TemperatureControl::update_emergency_state(uint32_t current_time_ms) {
         }
     } else {
         // Check for recovery condition
-        if (status_.current_temp_c <= config_.recovery_temp_c && !emergency_cooldown_) {
+        if (status_.current_temp_c <= config_.recovery_temp_c) {
             should_clear_emergency = true;
         }
     }

@@ -202,6 +202,14 @@ export function ScheduleChart({ schedule, currentTime, moonriseTime, moonsetTime
   const options: ChartOptions<'line'> = {
     responsive: true,
     maintainAspectRatio: false,
+    layout: {
+      padding: {
+        top: 10,
+        right: 10,
+        bottom: 10,
+        left: 10
+      }
+    },
     interaction: {
       mode: 'index',
       intersect: false,
@@ -235,7 +243,7 @@ export function ScheduleChart({ schedule, currentTime, moonriseTime, moonsetTime
               backgroundColor: 'rgba(255, 0, 0, 0.8)',
               color: 'white',
               font: { size: 12 },
-              yAdjust: -10
+              yAdjust: -5
             }
           },
           ...(moonrisePosition !== null && {
@@ -253,7 +261,7 @@ export function ScheduleChart({ schedule, currentTime, moonriseTime, moonsetTime
                 backgroundColor: 'rgba(255, 255, 0, 0.8)',
                 color: 'black',
                 font: { size: 14 },
-                yAdjust: -30,
+                yAdjust: -5,
                 xAdjust: -10
               }
             }
@@ -273,7 +281,7 @@ export function ScheduleChart({ schedule, currentTime, moonriseTime, moonsetTime
                 backgroundColor: 'rgba(100, 100, 255, 0.8)',
                 color: 'white',
                 font: { size: 14 },
-                yAdjust: -50,
+                yAdjust: -5,
                 xAdjust: -10
               }
             }
@@ -298,9 +306,13 @@ export function ScheduleChart({ schedule, currentTime, moonriseTime, moonsetTime
           text: 'PWM (%)'
         },
         min: 0,
-        max: 100,
+        max: 115,  // Extra space for moon labels
         ticks: {
-          stepSize: 10
+          stepSize: 10,
+          callback: function(value) {
+            // Only show tick labels up to 100%
+            return value <= 100 ? value : '';
+          }
         },
         grid: {
           display: true,

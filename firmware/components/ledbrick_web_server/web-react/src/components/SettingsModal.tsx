@@ -191,6 +191,30 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
     setHasChanges(true);
   };
 
+  const handleClose = () => {
+    if (hasChanges) {
+      const confirmClose = window.confirm(
+        'You have unsaved changes. Are you sure you want to close without saving?'
+      );
+      if (!confirmClose) {
+        return;
+      }
+    }
+    onClose();
+  };
+
+  const handleTabChange = (newTab: 'channels' | 'location' | 'temperature') => {
+    if (hasChanges && newTab !== activeTab) {
+      const confirmSwitch = window.confirm(
+        'You have unsaved changes on this tab. Are you sure you want to switch tabs without saving?'
+      );
+      if (!confirmSwitch) {
+        return;
+      }
+    }
+    setActiveTab(newTab);
+  };
+
   const handleSave = async () => {
     setSaving(true);
     setError(null);
@@ -227,11 +251,8 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
       
       setHasChanges(false);
       await onUpdate();
-      // Close modal after saving temperature settings
-      if (activeTab === 'temperature') {
-        onClose();
-      }
-      // Don't close modal after save for other tabs - user might want to continue editing
+      // Close modal after successful save
+      onClose();
     } catch (err: any) {
       setError(err.message || 'Failed to save settings');
     } finally {
@@ -240,11 +261,11 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={handleClose}>
       <div className="modal-dialog modal-large" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>Settings</h2>
-          <button className="modal-close" onClick={onClose}>&times;</button>
+          <button className="modal-close" onClick={handleClose}>&times;</button>
         </div>
         
         <div className="modal-body">
@@ -261,7 +282,7 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
                 background: activeTab === 'channels' ? '#4a9eff' : '#444',
                 color: activeTab === 'channels' ? '#fff' : '#e0e0e0'
               }}
-              onClick={() => setActiveTab('channels')}
+              onClick={() => handleTabChange('channels')}
             >
               Channel Configuration
             </button>
@@ -271,7 +292,7 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
                 background: activeTab === 'location' ? '#4a9eff' : '#444',
                 color: activeTab === 'location' ? '#fff' : '#e0e0e0'
               }}
-              onClick={() => setActiveTab('location')}
+              onClick={() => handleTabChange('location')}
             >
               Location & Time
             </button>
@@ -281,7 +302,7 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
                 background: activeTab === 'temperature' ? '#4a9eff' : '#444',
                 color: activeTab === 'temperature' ? '#fff' : '#e0e0e0'
               }}
-              onClick={() => setActiveTab('temperature')}
+              onClick={() => handleTabChange('temperature')}
             >
               Temperature Control
             </button>
@@ -733,7 +754,7 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
         </div>
         
         <div className="modal-footer">
-          <button className="button-secondary" onClick={onClose}>
+          <button className="button-secondary" onClick={handleClose}>
             Cancel
           </button>
           <button 

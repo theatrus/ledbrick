@@ -205,6 +205,7 @@ class LEDBrickScheduler : public PollingComponent {
   uint32_t update_interval_{1000}; // 1 second for smooth transitions
   bool enabled_{true};
   bool thermal_emergency_{false};  // Emergency thermal shutdown flag
+  bool force_next_update_{false};   // Force update after emergency recovery
   std::string timezone_{"UTC"};
   float pwm_scale_{1.0f};  // Global PWM scaling factor (0.0-1.0)
   

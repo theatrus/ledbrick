@@ -168,10 +168,8 @@ void test_emergency_state_machine(TestRunner& runner) {
     temp_control.update_temperature_sensor("sensor1", 64.0f, 4000);
     temp_control.update(4100);
     status = temp_control.get_status();
-    // TODO: There's a bug in temperature_control.cpp - emergency_cooldown_ prevents recovery
-    // The logic at line 186 checks !emergency_cooldown_ but cooldown is true during emergency
-    // For now, we expect emergency to remain active (matching current buggy behavior)
-    runner.assert_true(status.thermal_emergency, "Emergency remains (bug in implementation)");
+    // Emergency should be cleared when temperature drops below recovery threshold
+    runner.assert_false(status.thermal_emergency, "Emergency cleared");
 }
 
 void test_fan_curve_generation(TestRunner& runner) {

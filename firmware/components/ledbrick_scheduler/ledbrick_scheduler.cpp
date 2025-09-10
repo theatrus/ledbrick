@@ -92,57 +92,67 @@ void LEDBrickScheduler::setup() {
 }
 
 void LEDBrickScheduler::update() {
-  if (!enabled_) {
-    ESP_LOGV(TAG, "Scheduler disabled, skipping update");
-    return;
-  }
-  
-  // Update timezone offset from time source if available
-  update_timezone_from_time_source();
-  
-  // Update astronomical times for dynamic schedule points
-  update_astronomical_times_for_scheduler();
-  
-  // Get current values from standalone scheduler and apply them
-  uint16_t current_time = get_current_time_minutes();
-  
-  // Use astronomical interpolation if we have dynamic points
-  auto values = scheduler_.get_values_at_time_with_astro(current_time, scheduler_.get_astronomical_times());
-  ESP_LOGD(TAG, "Scheduler values at %02d:%02d - valid: %s, channels: %zu, schedule_points: %zu", 
-           current_time / 60, current_time % 60, 
-           values.valid ? "true" : "false", 
-           values.pwm_values.size(),
-           scheduler_.get_schedule_size());
-           
-  // Check if moon simulation is active
-  if (scheduler_.get_moon_simulation().enabled && values.valid && values.pwm_values.size() > 0) {
-    // Get moon visibility status
-    auto moon_times = get_moon_rise_set_times();
-    bool moon_visible = (moon_times.rise_minutes < moon_times.set_minutes) ?
-                       (current_time >= moon_times.rise_minutes && current_time <= moon_times.set_minutes) :
-                       (current_time >= moon_times.rise_minutes || current_time <= moon_times.set_minutes);
+  // ALWAYS check thermal emergency first, even if scheduler is disabled
+  if (thermal_emergency_) {
+    // During thermal emergency, continuously force all outputs to zero
+    // This prevents manual control from setting unsafe values
+    for (uint8_t channel = 0; channel < num_channels_; channel++) {
+      force_channel_output(channel, 0.0f, 0.0f);
+    }
+    // Skip to temperature control update
+  } else if (!enabled_) {
+    ESP_LOGV(TAG, "Scheduler disabled, skipping schedule update");
+    // When scheduler is disabled but not in emergency, we don't change outputs
+    // This allows manual control to work
+  } else {
+    // Normal scheduler operation
+    // Update timezone offset from time source if available
+    update_timezone_from_time_source();
     
-    // Check if channels are dark
-    bool all_dark = true;
-    for (size_t i = 0; i < values.pwm_values.size(); i++) {
-      if (values.pwm_values[i] > 0.1f) {
-        all_dark = false;
-        break;
+    // Update astronomical times for dynamic schedule points
+    update_astronomical_times_for_scheduler();
+    
+    // Get current values from standalone scheduler and apply them
+    uint16_t current_time = get_current_time_minutes();
+    
+    // Use astronomical interpolation if we have dynamic points
+    auto values = scheduler_.get_values_at_time_with_astro(current_time, scheduler_.get_astronomical_times());
+    ESP_LOGD(TAG, "Scheduler values at %02d:%02d - valid: %s, channels: %zu, schedule_points: %zu", 
+             current_time / 60, current_time % 60, 
+             values.valid ? "true" : "false", 
+             values.pwm_values.size(),
+             scheduler_.get_schedule_size());
+             
+    // Check if moon simulation is active
+    if (scheduler_.get_moon_simulation().enabled && values.valid && values.pwm_values.size() > 0) {
+      // Get moon visibility status
+      auto moon_times = get_moon_rise_set_times();
+      bool moon_visible = (moon_times.rise_minutes < moon_times.set_minutes) ?
+                         (current_time >= moon_times.rise_minutes && current_time <= moon_times.set_minutes) :
+                         (current_time >= moon_times.rise_minutes || current_time <= moon_times.set_minutes);
+      
+      // Check if channels are dark
+      bool all_dark = true;
+      for (size_t i = 0; i < values.pwm_values.size(); i++) {
+        if (values.pwm_values[i] > 0.1f) {
+          all_dark = false;
+          break;
+        }
       }
+      
+      ESP_LOGD(TAG, "Moon sim status - Enabled: yes, Moon visible: %s, Channels dark: %s, Phase: %.1f%%, Ch1: PWM=%.1f%%, Current=%.3fA", 
+               moon_visible ? "yes" : "no",
+               all_dark ? "yes" : "no",
+               get_moon_phase() * 100.0f,
+               values.pwm_values[0], values.current_values[0]);
     }
     
-    ESP_LOGD(TAG, "Moon sim status - Enabled: yes, Moon visible: %s, Channels dark: %s, Phase: %.1f%%, Ch1: PWM=%.1f%%, Current=%.3fA", 
-             moon_visible ? "yes" : "no",
-             all_dark ? "yes" : "no",
-             get_moon_phase() * 100.0f,
-             values.pwm_values[0], values.current_values[0]);
-  }
-           
-  if (values.valid) {
-    apply_values(values);
-  } else {
-    ESP_LOGW(TAG, "Scheduler returned invalid values at time %02d:%02d, schedule has %zu points", 
-             current_time / 60, current_time % 60, scheduler_.get_schedule_size());
+    if (values.valid) {
+      apply_values(values);
+    } else {
+      ESP_LOGW(TAG, "Scheduler returned invalid values at time %02d:%02d, schedule has %zu points", 
+               current_time / 60, current_time % 60, scheduler_.get_schedule_size());
+    }
   }
   
   // Update temperature control
@@ -166,14 +176,34 @@ void LEDBrickScheduler::update() {
     }
   }
   
-  // Log current interpolated values every 10 seconds (reduce log spam)
+  // Log status every 10 seconds (reduce log spam)
   static uint32_t last_log_time = 0;
   if (current_millis - last_log_time > 10000) {
-    ESP_LOGD(TAG, "Scheduler active at %02u:%02u - Ch1: PWM=%.1f%%, Ch2: PWM=%.1f%%, Moon: %s", 
-             current_time / 60, current_time % 60,
-             values.pwm_values.size() > 0 ? values.pwm_values[0] : 0.0f,
-             values.pwm_values.size() > 1 ? values.pwm_values[1] : 0.0f,
-             scheduler_.get_moon_simulation().enabled ? "enabled" : "disabled");
+    if (thermal_emergency_) {
+      ESP_LOGD(TAG, "THERMAL EMERGENCY - All outputs forced to zero");
+    } else if (!enabled_) {
+      ESP_LOGD(TAG, "Scheduler disabled - manual control active");
+    } else {
+      uint16_t log_time = get_current_time_minutes();
+      auto log_values = scheduler_.get_values_at_time_with_astro(log_time, scheduler_.get_astronomical_times());
+      ESP_LOGD(TAG, "Scheduler active at %02u:%02u - Ch1: PWM=%.1f%%, Ch2: PWM=%.1f%%, Moon: %s", 
+               log_time / 60, log_time % 60,
+               log_values.pwm_values.size() > 0 ? log_values.pwm_values[0] : 0.0f,
+               log_values.pwm_values.size() > 1 ? log_values.pwm_values[1] : 0.0f,
+               scheduler_.get_moon_simulation().enabled ? "enabled" : "disabled");
+      
+      // Also log if we recently recovered from emergency
+      static bool was_emergency = false;
+      static uint32_t recovery_time = 0;
+      if (was_emergency && !thermal_emergency_) {
+        recovery_time = current_millis;
+        ESP_LOGI(TAG, "Recently recovered from thermal emergency");
+      }
+      if (recovery_time > 0 && current_millis - recovery_time < 30000) {  // Log for 30 seconds after recovery
+        ESP_LOGD(TAG, "Post-emergency recovery: %d seconds ago", (current_millis - recovery_time) / 1000);
+      }
+      was_emergency = thermal_emergency_;
+    }
     last_log_time = current_millis;
   }
 }
@@ -391,12 +421,15 @@ void LEDBrickScheduler::apply_values(const InterpolationResult &values) {
       float scaled_pwm = values.pwm_values[channel] * pwm_scale_;
       float brightness = scaled_pwm / 100.0f; // Convert percentage to 0-1
       
-      // Only update if value has changed significantly (reduce unnecessary calls)
-      if (last_pwm_values_.size() <= channel || 
-          abs(brightness - last_pwm_values_[channel]) > 0.001f) {
-        
-        ESP_LOGV(TAG, "Updating light %u: scaled_pwm=%.2f%%, brightness=%.3f", 
-                 channel, scaled_pwm, brightness);
+      // Only update if value has changed significantly (reduce unnecessary calls) or force update
+      bool should_update = force_next_update_ ||
+                          (last_pwm_values_.size() <= channel || 
+                           abs(brightness - last_pwm_values_[channel]) > 0.001f);
+      
+      if (should_update) {
+        ESP_LOGD(TAG, "Updating light %u: scaled_pwm=%.2f%%, brightness=%.3f (was %.3f)", 
+                 channel, scaled_pwm, brightness, 
+                 (last_pwm_values_.size() > channel) ? last_pwm_values_[channel] : -1.0f);
         
         // Create light call to set brightness
         auto call = light_it->second->make_call();
@@ -404,7 +437,10 @@ void LEDBrickScheduler::apply_values(const InterpolationResult &values) {
         if (brightness > 0.001f) {
           call.set_brightness(brightness);
         }
+        call.set_transition_length(0);  // No transition for immediate response
         call.perform();
+        
+        ESP_LOGV(TAG, "Light %u call performed", channel);
         
         if (last_pwm_values_.size() <= channel) {
           last_pwm_values_.resize(num_channels_, -1.0f);
@@ -457,6 +493,12 @@ void LEDBrickScheduler::apply_values(const InterpolationResult &values) {
     } else {
       ESP_LOGVV(TAG, "No current control found for channel %u", channel);
     }
+  }
+  
+  // Clear force update flag after applying all values
+  if (force_next_update_) {
+    ESP_LOGD(TAG, "Force update completed - clearing flag");
+    force_next_update_ = false;
   }
 }
 
@@ -1344,19 +1386,21 @@ void LEDBrickScheduler::set_thermal_emergency(bool emergency) {
 void LEDBrickScheduler::force_channel_output(uint8_t channel, float pwm, float current) {
   // Force specific PWM and current values regardless of schedule
   
-  // Set light brightness
+  // Set light brightness using same method as apply_values for consistency
   auto light_it = lights_.find(channel);
   if (light_it != lights_.end() && light_it->second) {
-    if (pwm <= 0.0f) {
-      // Turn off completely
-      auto call = light_it->second->turn_off();
-      call.perform();
-    } else {
-      // Set specific brightness
-      auto call = light_it->second->turn_on();
-      call.set_brightness(pwm / 100.0f);  // Convert percentage to 0-1
-      call.perform();
+    float brightness = pwm / 100.0f;  // Convert percentage to 0-1
+    
+    // Use make_call() to ensure consistent state management
+    auto call = light_it->second->make_call();
+    call.set_state(brightness > 0.001f); // Turn on if brightness > 0
+    if (brightness > 0.001f) {
+      call.set_brightness(brightness);
     }
+    call.set_transition_length(0);  // No transition for immediate response
+    call.perform();
+    
+    ESP_LOGV(TAG, "Force channel %u: PWM=%.1f%%, brightness=%.3f", channel, pwm, brightness);
   }
   
   // Set current control
@@ -1579,10 +1623,35 @@ void LEDBrickScheduler::on_emergency_change(bool emergency) {
     
     // Set thermal emergency flag which affects light output
     thermal_emergency_ = true;
+    
+    // Force all channels to zero immediately
+    for (uint8_t channel = 0; channel < num_channels_; channel++) {
+      force_channel_output(channel, 0.0f, 0.0f);
+    }
   } else {
-    ESP_LOGI(TAG, "Thermal emergency cleared");
+    ESP_LOGI(TAG, "Thermal emergency cleared - restoring normal operation");
     
     thermal_emergency_ = false;
+    
+    // Force the next update to apply all values
+    force_next_update_ = true;
+    
+    // Immediately restore normal operation if scheduler is enabled
+    if (enabled_) {
+      // Get current values and apply them
+      uint16_t current_time = get_current_time_minutes();
+      auto values = scheduler_.get_values_at_time_with_astro(current_time, scheduler_.get_astronomical_times());
+      
+      if (values.valid) {
+        ESP_LOGI(TAG, "Restoring scheduled values at %02d:%02d", current_time / 60, current_time % 60);
+        // Log the values we're trying to restore
+        for (size_t i = 0; i < values.pwm_values.size() && i < 3; i++) {
+          ESP_LOGI(TAG, "  Channel %d: PWM=%.1f%%, Current=%.3fA", 
+                   i, values.pwm_values[i], values.current_values[i]);
+        }
+        apply_values(values);
+      }
+    }
   }
   
   // Update emergency sensor
