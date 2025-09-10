@@ -17,7 +17,6 @@ export function MoonSettings({ moonSimulation, schedule, onUpdate }: MoonSetting
   const numChannels = schedule.num_channels || 8;
   const [isInitialized, setIsInitialized] = useState(false);
   const [enabled, setEnabled] = useState(false);
-  const [phaseScaling, setPhaseScaling] = useState(false);
   const [phaseScalingPWM, setPhaseScalingPWM] = useState(true);
   const [phaseScalingCurrent, setPhaseScalingCurrent] = useState(true);
   const [minCurrentThreshold, setMinCurrentThreshold] = useState(0);
@@ -30,10 +29,9 @@ export function MoonSettings({ moonSimulation, schedule, onUpdate }: MoonSetting
   useEffect(() => {
     if (moonSimulation && !isInitialized) {
       setEnabled(moonSimulation.enabled);
-      setPhaseScaling(moonSimulation.phase_scaling);
-      setPhaseScalingPWM(moonSimulation.phase_scaling_pwm ?? moonSimulation.phase_scaling);
-      setPhaseScalingCurrent(moonSimulation.phase_scaling_current ?? moonSimulation.phase_scaling);
-      setMinCurrentThreshold(moonSimulation.min_current_threshold ?? 0);
+      setPhaseScalingPWM(moonSimulation.phase_scaling_pwm);
+      setPhaseScalingCurrent(moonSimulation.phase_scaling_current);
+      setMinCurrentThreshold(moonSimulation.min_current_threshold);
       
       // Ensure arrays have correct length
       const intensity = new Array(schedule.num_channels || 8).fill(0);
@@ -63,10 +61,9 @@ export function MoonSettings({ moonSimulation, schedule, onUpdate }: MoonSetting
     
     const changed = 
       enabled !== moonSimulation.enabled ||
-      phaseScaling !== moonSimulation.phase_scaling ||
-      phaseScalingPWM !== (moonSimulation.phase_scaling_pwm ?? moonSimulation.phase_scaling) ||
-      phaseScalingCurrent !== (moonSimulation.phase_scaling_current ?? moonSimulation.phase_scaling) ||
-      Math.abs(minCurrentThreshold - (moonSimulation.min_current_threshold ?? 0)) > 0.001 ||
+      phaseScalingPWM !== moonSimulation.phase_scaling_pwm ||
+      phaseScalingCurrent !== moonSimulation.phase_scaling_current ||
+      Math.abs(minCurrentThreshold - moonSimulation.min_current_threshold) > 0.001 ||
       baseIntensity.some((val, i) => 
         Math.abs(val - (moonSimulation.base_intensity?.[i] || 0)) > 0.01
       ) ||
@@ -75,7 +72,7 @@ export function MoonSettings({ moonSimulation, schedule, onUpdate }: MoonSetting
       );
     
     setHasUnsavedChanges(changed);
-  }, [enabled, phaseScaling, phaseScalingPWM, phaseScalingCurrent, minCurrentThreshold, baseIntensity, baseCurrent, moonSimulation, isInitialized]);
+  }, [enabled, phaseScalingPWM, phaseScalingCurrent, minCurrentThreshold, baseIntensity, baseCurrent, moonSimulation, isInitialized]);
 
   const handlePwmChange = (channel: number, value: number) => {
     const newValues = [...baseIntensity];
@@ -108,7 +105,6 @@ export function MoonSettings({ moonSimulation, schedule, onUpdate }: MoonSetting
     setIsSaving(true);
     const moonData: MoonSimulation = {
       enabled,
-      phase_scaling: phaseScaling,
       phase_scaling_pwm: phaseScalingPWM,
       phase_scaling_current: phaseScalingCurrent,
       min_current_threshold: minCurrentThreshold,
@@ -155,12 +151,6 @@ export function MoonSettings({ moonSimulation, schedule, onUpdate }: MoonSetting
                 checked={phaseScalingPWM}
                 onChange={(e) => {
                   setPhaseScalingPWM(e.target.checked);
-                  // Also update legacy field for compatibility
-                  if (!e.target.checked && !phaseScalingCurrent) {
-                    setPhaseScaling(false);
-                  } else {
-                    setPhaseScaling(true);
-                  }
                   setHasUnsavedChanges(true);
                 }}
               />
@@ -175,12 +165,6 @@ export function MoonSettings({ moonSimulation, schedule, onUpdate }: MoonSetting
                 checked={phaseScalingCurrent}
                 onChange={(e) => {
                   setPhaseScalingCurrent(e.target.checked);
-                  // Also update legacy field for compatibility
-                  if (!e.target.checked && !phaseScalingPWM) {
-                    setPhaseScaling(false);
-                  } else {
-                    setPhaseScaling(true);
-                  }
                   setHasUnsavedChanges(true);
                 }}
               />

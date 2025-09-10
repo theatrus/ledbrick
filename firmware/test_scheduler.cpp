@@ -723,7 +723,8 @@ void test_moon_simulation(TestRunner& runner) {
     LEDScheduler::MoonSimulation moon_config;
     moon_config.enabled = true;
     moon_config.base_intensity = {3.0f, 0.0f, 0.0f, 1.5f};  // Blue and white channels
-    moon_config.phase_scaling = true;
+    moon_config.phase_scaling_pwm = true;
+    moon_config.phase_scaling_current = true;
     scheduler.set_moon_simulation(moon_config);
     
     // Verify moon config was set
@@ -811,7 +812,8 @@ void test_moon_simulation(TestRunner& runner) {
     
     // Test 7: Phase scaling disabled
     scheduler.enable_moon_simulation(true);
-    moon_config.phase_scaling = false;
+    moon_config.phase_scaling_pwm = false;
+    moon_config.phase_scaling_current = false;
     scheduler.set_moon_simulation(moon_config);
     astro_times.moon_phase = 0.25f;  // Quarter moon
     auto no_scale_result = scheduler.get_values_at_time_with_astro(1320, astro_times);
@@ -824,7 +826,8 @@ void test_moon_simulation(TestRunner& runner) {
     astro_times.moonrise_minutes = 1380;  // 11:00 PM
     astro_times.moonset_minutes = 360;    // 6:00 AM (next day)
     astro_times.moon_phase = 0.5f;
-    moon_config.phase_scaling = true;  // Re-enable phase scaling
+    moon_config.phase_scaling_pwm = true;  // Re-enable phase scaling
+    moon_config.phase_scaling_current = true;
     scheduler.set_moon_simulation(moon_config);
     auto midnight_moon_result = scheduler.get_values_at_time_with_astro(60, astro_times);  // 1:00 AM
     runner.assert_equals(3.0f, midnight_moon_result.pwm_values[0], 0.01f, 

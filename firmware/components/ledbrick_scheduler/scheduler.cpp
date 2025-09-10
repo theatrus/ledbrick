@@ -979,7 +979,6 @@ std::string LEDScheduler::export_json() const {
     cJSON* moon_obj = cJSON_CreateObject();
     if (moon_obj) {
         cJSON_AddBoolToObject(moon_obj, "enabled", moon_simulation_.enabled);
-        cJSON_AddBoolToObject(moon_obj, "phase_scaling", moon_simulation_.phase_scaling);
         cJSON_AddBoolToObject(moon_obj, "phase_scaling_pwm", moon_simulation_.phase_scaling_pwm);
         cJSON_AddBoolToObject(moon_obj, "phase_scaling_current", moon_simulation_.phase_scaling_current);
         cJSON_AddNumberToObject(moon_obj, "min_current_threshold", moon_simulation_.min_current_threshold);
@@ -1108,7 +1107,6 @@ std::string LEDScheduler::export_json_minified() const {
     cJSON* moon_obj = cJSON_CreateObject();
     if (moon_obj) {
         cJSON_AddBoolToObject(moon_obj, "enabled", moon_simulation_.enabled);
-        cJSON_AddBoolToObject(moon_obj, "phase_scaling", moon_simulation_.phase_scaling);
         cJSON_AddBoolToObject(moon_obj, "phase_scaling_pwm", moon_simulation_.phase_scaling_pwm);
         cJSON_AddBoolToObject(moon_obj, "phase_scaling_current", moon_simulation_.phase_scaling_current);
         cJSON_AddNumberToObject(moon_obj, "min_current_threshold", moon_simulation_.min_current_threshold);
@@ -1275,16 +1273,7 @@ bool LEDScheduler::import_json(const std::string& json_str) {
             moon_config.enabled = cJSON_IsTrue(enabled_item);
         }
         
-        // Parse phase_scaling (legacy field)
-        cJSON* phase_scaling_item = cJSON_GetObjectItem(moon_obj, "phase_scaling");
-        if (cJSON_IsBool(phase_scaling_item)) {
-            moon_config.phase_scaling = cJSON_IsTrue(phase_scaling_item);
-            // If new fields not present, use legacy value for both
-            moon_config.phase_scaling_pwm = moon_config.phase_scaling;
-            moon_config.phase_scaling_current = moon_config.phase_scaling;
-        }
-        
-        // Parse new phase scaling fields
+        // Parse phase scaling fields
         cJSON* phase_scaling_pwm_item = cJSON_GetObjectItem(moon_obj, "phase_scaling_pwm");
         if (cJSON_IsBool(phase_scaling_pwm_item)) {
             moon_config.phase_scaling_pwm = cJSON_IsTrue(phase_scaling_pwm_item);

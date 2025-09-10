@@ -1097,7 +1097,6 @@ void LEDBrickScheduler::set_moon_simulation(const LEDScheduler::MoonSimulation& 
            config.enabled, config.phase_scaling_pwm, 
            config.phase_scaling_current, config.min_current_threshold);
   if (current_moon.enabled == config.enabled && 
-      current_moon.phase_scaling == config.phase_scaling &&
       current_moon.phase_scaling_pwm == config.phase_scaling_pwm &&
       current_moon.phase_scaling_current == config.phase_scaling_current &&
       abs(current_moon.min_current_threshold - config.min_current_threshold) < 0.001f &&

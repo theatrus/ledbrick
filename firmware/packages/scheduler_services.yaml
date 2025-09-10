@@ -227,17 +227,21 @@ api:
     - service: configure_moon_simulation
       variables:
         enabled: bool
-        phase_scaling: bool
+        phase_scaling_pwm: bool
+        phase_scaling_current: bool
       then:
         - lambda: |-
             LEDScheduler::MoonSimulation config;
             config.enabled = enabled;
-            config.phase_scaling = phase_scaling;
+            config.phase_scaling_pwm = phase_scaling_pwm;
+            config.phase_scaling_current = phase_scaling_current;
             // Use default base_intensity values if not set
             // The set_moon_simulation method will handle the configuration
             id(main_scheduler).set_moon_simulation(config);
-            ESP_LOGI("main", "Moon simulation configured - Enabled: %s, Phase scaling: %s",
-                     enabled ? "YES" : "NO", phase_scaling ? "YES" : "NO");
+            ESP_LOGI("main", "Moon simulation configured - Enabled: %s, PWM scaling: %s, Current scaling: %s",
+                     enabled ? "YES" : "NO", 
+                     phase_scaling_pwm ? "YES" : "NO",
+                     phase_scaling_current ? "YES" : "NO");
     
     # === Control Services ===
     

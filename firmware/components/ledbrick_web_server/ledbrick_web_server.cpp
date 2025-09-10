@@ -498,7 +498,9 @@ esp_err_t LEDBrickWebServer::handle_api_status_get(httpd_req_t *req) {
   auto moon_config = self->scheduler_->get_moon_simulation();
   JsonObject moon_obj = doc["moon_simulation"].to<JsonObject>();
   moon_obj["enabled"] = moon_config.enabled;
-  moon_obj["phase_scaling"] = moon_config.phase_scaling;
+  moon_obj["phase_scaling_pwm"] = moon_config.phase_scaling_pwm;
+  moon_obj["phase_scaling_current"] = moon_config.phase_scaling_current;
+  moon_obj["min_current_threshold"] = moon_config.min_current_threshold;
   JsonArray moon_intensity = moon_obj["base_intensity"].to<JsonArray>();
   for (float intensity : moon_config.base_intensity) {
     moon_intensity.add(intensity);
@@ -888,26 +890,16 @@ esp_err_t LEDBrickWebServer::handle_api_moon_simulation_post(httpd_req_t *req) {
   
   // Extract moon simulation settings
   bool enabled = doc["enabled"] | false;
-  bool phase_scaling = doc["phase_scaling"] | true;
-  
-  // Check if new fields exist in JSON, otherwise use legacy value
-  bool phase_scaling_pwm = phase_scaling;
-  if (doc.containsKey("phase_scaling_pwm")) {
-    phase_scaling_pwm = doc["phase_scaling_pwm"].as<bool>();
-  }
-  
-  bool phase_scaling_current = phase_scaling;
-  if (doc.containsKey("phase_scaling_current")) {
-    phase_scaling_current = doc["phase_scaling_current"].as<bool>();
-  }
+  bool phase_scaling_pwm = doc["phase_scaling_pwm"] | true;
+  bool phase_scaling_current = doc["phase_scaling_current"] | true;
   
   float min_current_threshold = 0.0f;
   if (doc.containsKey("min_current_threshold")) {
     min_current_threshold = doc["min_current_threshold"].as<float>();
   }
   
-  ESP_LOGD(TAG, "Received moon sim: enabled=%d, phase=%d, pwm_scale=%d, curr_scale=%d, min_curr=%.3f", 
-           enabled, phase_scaling, phase_scaling_pwm, phase_scaling_current, min_current_threshold);
+  ESP_LOGD(TAG, "Received moon sim: enabled=%d, pwm_scale=%d, curr_scale=%d, min_curr=%.3f", 
+           enabled, phase_scaling_pwm, phase_scaling_current, min_current_threshold);
   
   // Extract base_intensity array
   std::vector<float> base_intensity(8, 0.0f);
@@ -944,7 +936,6 @@ esp_err_t LEDBrickWebServer::handle_api_moon_simulation_post(httpd_req_t *req) {
   // Create moon simulation configuration
   LEDScheduler::MoonSimulation moon_config;
   moon_config.enabled = enabled;
-  moon_config.phase_scaling = phase_scaling;
   moon_config.phase_scaling_pwm = phase_scaling_pwm;
   moon_config.phase_scaling_current = phase_scaling_current;
   moon_config.min_current_threshold = min_current_threshold;
@@ -963,7 +954,6 @@ esp_err_t LEDBrickWebServer::handle_api_moon_simulation_post(httpd_req_t *req) {
   JsonDocument response_doc;
   response_doc["success"] = true;
   response_doc["enabled"] = enabled;
-  response_doc["phase_scaling"] = phase_scaling;
   response_doc["phase_scaling_pwm"] = phase_scaling_pwm;
   response_doc["phase_scaling_current"] = phase_scaling_current;
   response_doc["min_current_threshold"] = min_current_threshold;

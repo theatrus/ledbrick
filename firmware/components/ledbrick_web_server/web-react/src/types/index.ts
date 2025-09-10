@@ -14,10 +14,9 @@ export interface ChannelConfig {
 
 export interface MoonSimulation {
   enabled: boolean;
-  phase_scaling: boolean;  // Legacy field
-  phase_scaling_pwm?: boolean;
-  phase_scaling_current?: boolean;
-  min_current_threshold?: number;
+  phase_scaling_pwm: boolean;
+  phase_scaling_current: boolean;
+  min_current_threshold: number;
   base_intensity: number[];
   base_current: number[];
 }
