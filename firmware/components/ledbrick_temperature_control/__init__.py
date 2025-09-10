@@ -1,6 +1,6 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import sensor, binary_sensor, output, switch, number
+from esphome.components import sensor, binary_sensor, fan, switch, number
 from esphome.const import (
     CONF_ID,
     CONF_UPDATE_INTERVAL,
@@ -16,7 +16,7 @@ from esphome.const import (
     ICON_GAUGE,
 )
 
-DEPENDENCIES = ["ledbrick_scheduler", "sensor", "binary_sensor", "output", "switch", "number"]
+DEPENDENCIES = ["ledbrick_scheduler", "sensor", "binary_sensor", "fan", "switch", "number"]
 AUTO_LOAD = ["binary_sensor", "sensor", "number", "switch"]
 CODEOWNERS = ["@ledbrick"]
 
@@ -33,8 +33,8 @@ CONF_RECOVERY_TEMPERATURE = "recovery_temperature"
 CONF_EMERGENCY_DELAY = "emergency_delay"
 
 # Hardware connections
-CONF_FAN_PWM_OUTPUT = "fan_pwm_output"
-CONF_FAN_ENABLE_SWITCH = "fan_enable_switch"
+CONF_FAN = "fan"
+CONF_FAN_POWER_SWITCH = "fan_power_switch"
 CONF_FAN_SPEED_SENSOR = "fan_speed_sensor"
 CONF_TEMPERATURE_SENSORS = "temperature_sensors"
 
@@ -85,8 +85,8 @@ CONFIG_SCHEMA = cv.Schema({
     cv.Optional(CONF_EMERGENCY_DELAY, default="5s"): cv.positive_time_period_milliseconds,
     
     # Hardware connections
-    cv.Optional(CONF_FAN_PWM_OUTPUT): cv.use_id(output.FloatOutput),
-    cv.Optional(CONF_FAN_ENABLE_SWITCH): cv.use_id(switch.Switch),
+    cv.Optional(CONF_FAN): cv.use_id(fan.Fan),
+    cv.Optional(CONF_FAN_POWER_SWITCH): cv.use_id(switch.Switch),
     cv.Optional(CONF_FAN_SPEED_SENSOR): cv.use_id(sensor.Sensor),
     cv.Optional(CONF_TEMPERATURE_SENSORS, default=[]): cv.ensure_list(TEMPERATURE_SENSOR_SCHEMA),
     
@@ -171,13 +171,13 @@ async def to_code(config):
     cg.add(var.set_emergency_delay(config[CONF_EMERGENCY_DELAY]))
     
     # Configure hardware connections
-    if CONF_FAN_PWM_OUTPUT in config:
-        fan_pwm = await cg.get_variable(config[CONF_FAN_PWM_OUTPUT])
-        cg.add(var.set_fan_pwm_output(fan_pwm))
+    if CONF_FAN in config:
+        fan_obj = await cg.get_variable(config[CONF_FAN])
+        cg.add(var.set_fan(fan_obj))
     
-    if CONF_FAN_ENABLE_SWITCH in config:
-        fan_switch = await cg.get_variable(config[CONF_FAN_ENABLE_SWITCH])
-        cg.add(var.set_fan_enable_switch(fan_switch))
+    if CONF_FAN_POWER_SWITCH in config:
+        power_switch = await cg.get_variable(config[CONF_FAN_POWER_SWITCH])
+        cg.add(var.set_fan_power_switch(power_switch))
     
     if CONF_FAN_SPEED_SENSOR in config:
         fan_sensor = await cg.get_variable(config[CONF_FAN_SPEED_SENSOR])

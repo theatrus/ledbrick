@@ -4,7 +4,7 @@
 #include "esphome/core/automation.h"
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/binary_sensor/binary_sensor.h"
-#include "esphome/components/output/float_output.h"
+#include "esphome/components/fan/fan.h"
 #include "esphome/components/switch/switch.h"
 #include "esphome/components/number/number.h"
 #include "../ledbrick_scheduler/temperature_control.h"
@@ -45,8 +45,8 @@ public:
     void set_emergency_delay(uint32_t delay_ms) { config_.emergency_delay_ms = delay_ms; }
     
     // Hardware connections
-    void set_fan_pwm_output(output::FloatOutput *output) { fan_pwm_output_ = output; }
-    void set_fan_enable_switch(switch_::Switch *fan_switch) { fan_enable_switch_ = fan_switch; }
+    void set_fan(fan::Fan *fan) { fan_ = fan; }
+    void set_fan_power_switch(switch_::Switch *power_switch) { fan_power_switch_ = power_switch; }
     void set_fan_speed_sensor(sensor::Sensor *sensor) { fan_speed_sensor_ = sensor; }
     
     // Temperature sensor management
@@ -92,8 +92,8 @@ protected:
     uint32_t last_sensor_publish_{0};
     
     // Hardware components
-    output::FloatOutput *fan_pwm_output_{nullptr};
-    switch_::Switch *fan_enable_switch_{nullptr};
+    fan::Fan *fan_{nullptr};
+    switch_::Switch *fan_power_switch_{nullptr};
     sensor::Sensor *fan_speed_sensor_{nullptr};
     switch_::Switch *enable_switch_{nullptr};
     number::Number *target_temp_number_{nullptr};

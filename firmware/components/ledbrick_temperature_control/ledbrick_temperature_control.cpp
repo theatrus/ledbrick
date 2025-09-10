@@ -133,16 +133,35 @@ void LEDBrickTemperatureControl::reset_pid() {
 void LEDBrickTemperatureControl::on_fan_pwm_change_(float pwm) {
     ESP_LOGD(TAG, "Setting fan PWM to %.1f%%", pwm);
     
-    if (fan_pwm_output_) {
-        fan_pwm_output_->set_level(pwm / 100.0f);  // Convert percentage to 0-1
+    if (fan_) {
+        if (pwm <= 0.001f) {
+            // Turn off fan when PWM is 0
+            auto call = fan_->turn_off();
+            call.perform();
+        } else {
+            // Turn on fan and set speed
+            auto call = fan_->turn_on();
+            call.set_speed(pwm / 100.0f);  // Convert percentage to 0-1
+            call.perform();
+        }
     }
 }
 
 void LEDBrickTemperatureControl::on_fan_enable_change_(bool enabled) {
-    ESP_LOGD(TAG, "Setting fan enable to %s", enabled ? "ON" : "OFF");
+    ESP_LOGD(TAG, "Setting fan power to %s", enabled ? "ON" : "OFF");
     
-    if (fan_enable_switch_) {
-        fan_enable_switch_->publish_state(enabled);
+    if (fan_power_switch_) {
+        if (enabled) {
+            fan_power_switch_->turn_on();
+        } else {
+            fan_power_switch_->turn_off();
+        }
+    }
+    
+    // Also ensure fan is off when power is disabled
+    if (!enabled && fan_) {
+        auto call = fan_->turn_off();
+        call.perform();
     }
 }
 

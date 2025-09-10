@@ -20,8 +20,8 @@ ledbrick_temperature_control:
   emergency_delay: 5s           # Delay before emergency action
   
   # Hardware connections
-  fan_pwm_output: fan_pwm
-  fan_enable_switch: fan_pwr
+  fan: fan_output
+  fan_power_switch: fan_pwr
   fan_speed_sensor: fan_speed
   
   # Temperature sensors - will auto-discover Dallas sensors
