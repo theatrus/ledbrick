@@ -390,6 +390,26 @@ body {
   border: 1px solid #444;
 }
 
+.legend-separator {
+  display: flex;
+  gap: 15px;
+  margin-left: auto;
+  padding-left: 20px;
+  border-left: 1px solid #444;
+}
+
+.moon-legend {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #ccc;
+  font-size: 14px;
+}
+
+.moon-icon {
+  font-size: 16px;
+}
+
 /* Modal */
 .modal-overlay {
   position: fixed;

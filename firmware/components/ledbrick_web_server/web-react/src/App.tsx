@@ -118,7 +118,12 @@ export function App() {
 
         {schedule && (
           <>
-            <ScheduleChart schedule={schedule} currentTime={status?.time_minutes || 0} />
+            <ScheduleChart 
+              schedule={schedule} 
+              currentTime={status?.time_minutes || 0} 
+              moonriseTime={status?.moonrise_time}
+              moonsetTime={status?.moonset_time}
+            />
             <ScheduleTable schedule={schedule} onUpdate={loadData} />
             <MoonSettings 
               moonSimulation={status?.moon_simulation}

@@ -30,6 +30,8 @@ ChartJS.register(
 interface ScheduleChartProps {
   schedule: Schedule;
   currentTime: number;
+  moonriseTime?: string;
+  moonsetTime?: string;
 }
 
 const DEFAULT_CHANNEL_COLORS = [
@@ -43,7 +45,7 @@ const DEFAULT_CHANNEL_COLORS = [
   '#FF8000'  // Orange
 ];
 
-export function ScheduleChart({ schedule, currentTime }: ScheduleChartProps) {
+export function ScheduleChart({ schedule, currentTime, moonriseTime, moonsetTime }: ScheduleChartProps) {
   const chartRef = useRef<ChartJS<'line'>>(null);
   const [visibleChannels, setVisibleChannels] = useState<boolean[]>(
     new Array(schedule.num_channels).fill(true)
@@ -184,6 +186,18 @@ export function ScheduleChart({ schedule, currentTime }: ScheduleChartProps) {
   const currentTimeRemainder = (currentTime % 15) / 15;
   const currentTimePosition = currentTimeIndex + currentTimeRemainder;
 
+  // Convert time string (HH:MM) to minutes and chart position
+  const timeStringToPosition = (timeStr?: string): number | null => {
+    if (!timeStr) return null;
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    if (isNaN(hours) || isNaN(minutes)) return null;
+    const totalMinutes = hours * 60 + minutes;
+    return totalMinutes / 15; // Convert to chart index position
+  };
+
+  const moonrisePosition = timeStringToPosition(moonriseTime);
+  const moonsetPosition = timeStringToPosition(moonsetTime);
+
   // Chart options
   const options: ChartOptions<'line'> = {
     responsive: true,
@@ -223,7 +237,47 @@ export function ScheduleChart({ schedule, currentTime }: ScheduleChartProps) {
               font: { size: 12 },
               yAdjust: -10
             }
-          }
+          },
+          ...(moonrisePosition !== null && {
+            moonriseLine: {
+              type: 'line',
+              scaleID: 'x',
+              value: moonrisePosition,
+              borderColor: 'rgba(255, 255, 0, 0.6)',
+              borderWidth: 2,
+              borderDash: [8, 4],
+              label: {
+                display: true,
+                content: '🌙↑',
+                position: 'start',
+                backgroundColor: 'rgba(255, 255, 0, 0.8)',
+                color: 'black',
+                font: { size: 14 },
+                yAdjust: -30,
+                xAdjust: -10
+              }
+            }
+          }),
+          ...(moonsetPosition !== null && {
+            moonsetLine: {
+              type: 'line',
+              scaleID: 'x',
+              value: moonsetPosition,
+              borderColor: 'rgba(100, 100, 255, 0.6)',
+              borderWidth: 2,
+              borderDash: [8, 4],
+              label: {
+                display: true,
+                content: '🌙↓',
+                position: 'start',
+                backgroundColor: 'rgba(100, 100, 255, 0.8)',
+                color: 'white',
+                font: { size: 14 },
+                yAdjust: -50,
+                xAdjust: -10
+              }
+            }
+          })
         }
       }
     },
@@ -293,6 +347,22 @@ export function ScheduleChart({ schedule, currentTime }: ScheduleChartProps) {
             </div>
           );
         })}
+        {(moonriseTime || moonsetTime) && (
+          <div className="legend-separator">
+            {moonriseTime && (
+              <div className="legend-item moon-legend">
+                <span className="moon-icon">🌙↑</span>
+                <span>Moonrise {moonriseTime}</span>
+              </div>
+            )}
+            {moonsetTime && (
+              <div className="legend-item moon-legend">
+                <span className="moon-icon">🌙↓</span>
+                <span>Moonset {moonsetTime}</span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
