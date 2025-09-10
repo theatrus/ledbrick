@@ -4,6 +4,7 @@
 #include "esphome/core/log.h"
 #include "esphome/core/application.h"
 #include "web_content.h"
+#include "../ledbrick_temperature_control/ledbrick_temperature_control.h"
 #include <esp_log.h>
 #include <cstring>
 #include <ctime>
@@ -240,6 +241,39 @@ void LEDBrickWebServer::setup() {
     .user_ctx = this
   };
   httpd_register_uri_handler(this->server_, &api_time_projection);
+  
+  // Temperature control configuration endpoints
+  httpd_uri_t api_temperature_config_get = {
+    .uri = "/api/temperature/config",
+    .method = HTTP_GET,
+    .handler = handle_api_temperature_config_get,
+    .user_ctx = this
+  };
+  httpd_register_uri_handler(this->server_, &api_temperature_config_get);
+  
+  httpd_uri_t api_temperature_config_post = {
+    .uri = "/api/temperature/config",
+    .method = HTTP_POST,
+    .handler = handle_api_temperature_config_post,
+    .user_ctx = this
+  };
+  httpd_register_uri_handler(this->server_, &api_temperature_config_post);
+  
+  httpd_uri_t api_temperature_status = {
+    .uri = "/api/temperature/status",
+    .method = HTTP_GET,
+    .handler = handle_api_temperature_status_get,
+    .user_ctx = this
+  };
+  httpd_register_uri_handler(this->server_, &api_temperature_status);
+  
+  httpd_uri_t api_fan_curve = {
+    .uri = "/api/temperature/fan-curve",
+    .method = HTTP_GET,
+    .handler = handle_api_fan_curve_get,
+    .user_ctx = this
+  };
+  httpd_register_uri_handler(this->server_, &api_fan_curve);
   
   ESP_LOGI(TAG, "LEDBrick Web Server started successfully");
 }
@@ -536,6 +570,13 @@ esp_err_t LEDBrickWebServer::handle_api_status_get(httpd_req_t *req) {
       }
     }
   }
+  
+  // Add thermal emergency status
+  doc["thermal_emergency"] = self->scheduler_->is_thermal_emergency();
+  
+  // TODO: Add temperature control status if component is available
+  // This would require accessing the temperature control component instance
+  // For now, we'll include the thermal emergency flag which is the critical info
   
   self->send_json_response(req, 200, doc);
   return ESP_OK;
@@ -1284,6 +1325,124 @@ esp_err_t LEDBrickWebServer::handle_api_channel_configs(httpd_req_t *req) {
 
 esp_err_t LEDBrickWebServer::handle_not_found(httpd_req_t *req) {
   httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "Not Found");
+  return ESP_OK;
+}
+
+// Temperature control API handlers
+esp_err_t LEDBrickWebServer::handle_api_temperature_config_get(httpd_req_t *req) {
+  auto *self = get_instance(req);
+  if (!self->check_auth(req)) return ESP_OK;
+  
+  if (!self->temperature_control_component_) {
+    self->send_error(req, 404, "Temperature control not available");
+    return ESP_OK;
+  }
+  
+  // Get temperature control component
+  auto *temp_control = static_cast<ledbrick_temperature_control::LEDBrickTemperatureControl*>(
+    self->temperature_control_component_
+  );
+  
+  // Export configuration as JSON
+  std::string config_json = temp_control->export_config_json();
+  
+  httpd_resp_set_type(req, "application/json");
+  httpd_resp_send(req, config_json.c_str(), config_json.length());
+  return ESP_OK;
+}
+
+esp_err_t LEDBrickWebServer::handle_api_temperature_config_post(httpd_req_t *req) {
+  auto *self = get_instance(req);
+  if (!self->check_auth(req)) return ESP_OK;
+  
+  if (!self->temperature_control_component_) {
+    self->send_error(req, 404, "Temperature control not available");
+    return ESP_OK;
+  }
+  
+  // Read request body
+  auto buf = read_request_body(req);
+  if (!buf) return ESP_OK;
+  
+  // Get temperature control component
+  auto *temp_control = static_cast<ledbrick_temperature_control::LEDBrickTemperatureControl*>(
+    self->temperature_control_component_
+  );
+  
+  // Import configuration
+  if (temp_control->import_config_json(buf.get())) {
+    JsonDocument doc;
+    doc["success"] = true;
+    doc["message"] = "Temperature control configuration updated";
+    self->send_json_response(req, 200, doc);
+  } else {
+    self->send_error(req, 400, "Invalid configuration format");
+  }
+  
+  return ESP_OK;
+}
+
+esp_err_t LEDBrickWebServer::handle_api_temperature_status_get(httpd_req_t *req) {
+  auto *self = get_instance(req);
+  if (!self->check_auth(req)) return ESP_OK;
+  
+  if (!self->temperature_control_component_) {
+    self->send_error(req, 404, "Temperature control not available");
+    return ESP_OK;
+  }
+  
+  // Get temperature control component
+  auto *temp_control = static_cast<ledbrick_temperature_control::LEDBrickTemperatureControl*>(
+    self->temperature_control_component_
+  );
+  
+  // Get status
+  auto status = temp_control->get_status();
+  
+  JsonDocument doc;
+  doc["enabled"] = status.enabled;
+  doc["thermal_emergency"] = status.thermal_emergency;
+  doc["fan_enabled"] = status.fan_enabled;
+  doc["current_temp_c"] = status.current_temp_c;
+  doc["target_temp_c"] = status.target_temp_c;
+  doc["fan_pwm_percent"] = status.fan_pwm_percent;
+  doc["fan_rpm"] = status.fan_rpm;
+  doc["pid_error"] = status.pid_error;
+  doc["pid_output"] = status.pid_output;
+  doc["sensors_valid_count"] = status.sensors_valid_count;
+  doc["sensors_total_count"] = status.sensors_total_count;
+  
+  self->send_json_response(req, 200, doc);
+  return ESP_OK;
+}
+
+esp_err_t LEDBrickWebServer::handle_api_fan_curve_get(httpd_req_t *req) {
+  auto *self = get_instance(req);
+  if (!self->check_auth(req)) return ESP_OK;
+  
+  if (!self->temperature_control_component_) {
+    self->send_error(req, 404, "Temperature control not available");
+    return ESP_OK;
+  }
+  
+  // Get temperature control component  
+  auto *temp_control = static_cast<ledbrick_temperature_control::LEDBrickTemperatureControl*>(
+    self->temperature_control_component_
+  );
+  
+  // Get fan curve
+  auto curve = temp_control->get_fan_curve();
+  
+  JsonDocument doc;
+  JsonArray points = doc["points"].to<JsonArray>();
+  
+  for (const auto& point : curve) {
+    JsonObject p = points.add<JsonObject>();
+    p["temperature"] = point.temperature;
+    p["fan_pwm"] = point.fan_pwm;
+  }
+  
+  self->send_json_response(req, 200, doc);
   return ESP_OK;
 }
 

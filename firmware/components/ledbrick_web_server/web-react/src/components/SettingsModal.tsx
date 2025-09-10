@@ -1,6 +1,27 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api/client';
-import type { Schedule } from '../types';
+import type { Schedule, TemperatureConfig, FanCurve } from '../types';
+import { Line } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend
+} from 'chart.js';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend
+);
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -47,13 +68,18 @@ const REEF_PRESETS = [
 ];
 
 export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsModalProps) {
-  const [activeTab, setActiveTab] = useState<'channels' | 'location'>('channels');
+  const [activeTab, setActiveTab] = useState<'channels' | 'location' | 'temperature'>('channels');
   const [channelConfigs, setChannelConfigs] = useState<ChannelConfigForm[]>([]);
   const [hasChanges, setHasChanges] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [localSchedule, setLocalSchedule] = useState<Schedule | null>(schedule);
+  
+  // Temperature control state
+  const [tempConfig, setTempConfig] = useState<TemperatureConfig | null>(null);
+  const [fanCurve, setFanCurve] = useState<FanCurve | null>(null);
+  const [loadingTemp, setLoadingTemp] = useState(false);
   
   // Location settings
   const [latitude, setLatitude] = useState<string>('');
@@ -107,6 +133,34 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
     }
   }, [schedule, localSchedule, isOpen]);
 
+  // Load temperature config when temperature tab is selected
+  useEffect(() => {
+    if (isOpen && activeTab === 'temperature' && !tempConfig && !loadingTemp) {
+      loadTemperatureConfig();
+    }
+  }, [isOpen, activeTab, tempConfig, loadingTemp]);
+
+  const loadTemperatureConfig = async () => {
+    setLoadingTemp(true);
+    setError(null);
+    try {
+      const [config, curve] = await Promise.all([
+        api.getTemperatureConfig(),
+        api.getFanCurve()
+      ]);
+      if (config) {
+        setTempConfig(config);
+        setFanCurve(curve);
+      } else {
+        setError('Temperature control not available');
+      }
+    } catch (err: any) {
+      setError('Failed to load temperature configuration: ' + err.message);
+    } finally {
+      setLoadingTemp(false);
+    }
+  };
+
   if (!isOpen) return null;
 
   const handleChannelConfigChange = (index: number, field: keyof ChannelConfigForm, value: string | number) => {
@@ -125,6 +179,12 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
     setHasChanges(true);
   };
 
+  const updateTempConfig = (field: keyof TemperatureConfig, value: number) => {
+    if (!tempConfig) return;
+    setTempConfig({ ...tempConfig, [field]: value });
+    setHasChanges(true);
+  };
+
   const handleSave = async () => {
     setSaving(true);
     setError(null);
@@ -133,7 +193,7 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
       if (activeTab === 'channels') {
         // Save channel configurations
         await api.updateChannelConfigs(channelConfigs);
-      } else {
+      } else if (activeTab === 'location') {
         // Save location settings
         // The backend now accepts timezone_offset_hours in the location endpoint
         await api.updateLocation(
@@ -148,12 +208,17 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
           parseInt(timeShiftHours) || 0,
           parseInt(timeShiftMinutes) || 0
         );
+      } else if (activeTab === 'temperature' && tempConfig) {
+        // Save temperature configuration
+        await api.updateTemperatureConfig(tempConfig);
+        // Reload fan curve to reflect new settings
+        const curve = await api.getFanCurve();
+        setFanCurve(curve);
       }
       
       setHasChanges(false);
       await onUpdate();
-      // Close the modal after successful save
-      onClose();
+      // Don't close modal after save - user might want to continue editing
     } catch (err: any) {
       setError(err.message || 'Failed to save settings');
     } finally {
@@ -196,6 +261,16 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
               onClick={() => setActiveTab('location')}
             >
               Location & Time
+            </button>
+            <button
+              className={`preset-button ${activeTab === 'temperature' ? 'active' : ''}`}
+              style={{ 
+                background: activeTab === 'temperature' ? '#4a9eff' : '#444',
+                color: activeTab === 'temperature' ? '#fff' : '#e0e0e0'
+              }}
+              onClick={() => setActiveTab('temperature')}
+            >
+              Temperature Control
             </button>
           </div>
 
@@ -266,7 +341,7 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
                 </div>
               ))}
             </div>
-          ) : (
+          ) : activeTab === 'location' ? (
             <>
               <div className="form-row">
                 <div className="form-group">
@@ -368,6 +443,277 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
                 )}
               </div>
             </>
+          ) : (
+            // Temperature Control Tab
+            loadingTemp ? (
+              <div style={{ padding: '60px', textAlign: 'center' }}>
+                <div className="loading">Loading temperature configuration...</div>
+              </div>
+            ) : tempConfig ? (
+              <>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Target Temperature (°C)</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      value={tempConfig.target_temp_c}
+                      onChange={(e) => updateTempConfig('target_temp_c', parseFloat(e.target.value))}
+                      step="0.5"
+                      min="20"
+                      max="70"
+                    />
+                    <div className="help-text">
+                      Temperature setpoint for PID control
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Emergency Temperature (°C)</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      value={tempConfig.emergency_temp_c}
+                      onChange={(e) => updateTempConfig('emergency_temp_c', parseFloat(e.target.value))}
+                      step="1"
+                      min="50"
+                      max="100"
+                    />
+                    <div className="help-text">
+                      Temperature that triggers emergency shutdown
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Recovery Temperature (°C)</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      value={tempConfig.recovery_temp_c}
+                      onChange={(e) => updateTempConfig('recovery_temp_c', parseFloat(e.target.value))}
+                      step="1"
+                      min="40"
+                      max="90"
+                    />
+                    <div className="help-text">
+                      Temperature to recover from emergency
+                    </div>
+                  </div>
+                </div>
+
+                <h3>PID Controller Settings</h3>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Proportional (Kp)</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      value={tempConfig.kp}
+                      onChange={(e) => updateTempConfig('kp', parseFloat(e.target.value))}
+                      step="0.1"
+                      min="0"
+                      max="10"
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Integral (Ki)</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      value={tempConfig.ki}
+                      onChange={(e) => updateTempConfig('ki', parseFloat(e.target.value))}
+                      step="0.01"
+                      min="0"
+                      max="1"
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Derivative (Kd)</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      value={tempConfig.kd}
+                      onChange={(e) => updateTempConfig('kd', parseFloat(e.target.value))}
+                      step="0.1"
+                      min="0"
+                      max="5"
+                    />
+                  </div>
+                </div>
+
+                <h3>Fan Control</h3>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Minimum Fan PWM (%)</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      value={tempConfig.min_fan_pwm}
+                      onChange={(e) => updateTempConfig('min_fan_pwm', parseFloat(e.target.value))}
+                      step="5"
+                      min="0"
+                      max="100"
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Maximum Fan PWM (%)</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      value={tempConfig.max_fan_pwm}
+                      onChange={(e) => updateTempConfig('max_fan_pwm', parseFloat(e.target.value))}
+                      step="5"
+                      min="0"
+                      max="100"
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Update Interval (ms)</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      value={tempConfig.fan_update_interval_ms}
+                      onChange={(e) => updateTempConfig('fan_update_interval_ms', parseInt(e.target.value))}
+                      step="100"
+                      min="100"
+                      max="10000"
+                    />
+                  </div>
+                </div>
+
+                <h3>Advanced Settings</h3>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Emergency Delay (ms)</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      value={tempConfig.emergency_delay_ms}
+                      onChange={(e) => updateTempConfig('emergency_delay_ms', parseInt(e.target.value))}
+                      step="1000"
+                      min="0"
+                      max="60000"
+                    />
+                    <div className="help-text">
+                      Time temperature must exceed limit before emergency
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Sensor Timeout (ms)</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      value={tempConfig.sensor_timeout_ms}
+                      onChange={(e) => updateTempConfig('sensor_timeout_ms', parseInt(e.target.value))}
+                      step="1000"
+                      min="1000"
+                      max="60000"
+                    />
+                    <div className="help-text">
+                      Maximum age for sensor readings
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Temperature Filter Alpha</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      value={tempConfig.temp_filter_alpha}
+                      onChange={(e) => updateTempConfig('temp_filter_alpha', parseFloat(e.target.value))}
+                      step="0.05"
+                      min="0"
+                      max="1"
+                    />
+                    <div className="help-text">
+                      Low-pass filter coefficient (0-1, higher = less filtering)
+                    </div>
+                  </div>
+                </div>
+
+                {fanCurve && (
+                  <div className="chart-container" style={{ height: '300px', marginTop: '20px' }}>
+                    <Line 
+                      data={{
+                        labels: fanCurve.points.map(p => p.temperature.toFixed(0)),
+                        datasets: [
+                          {
+                            label: 'Fan PWM %',
+                            data: fanCurve.points.map(p => p.fan_pwm),
+                            borderColor: 'rgb(74, 158, 255)',
+                            backgroundColor: 'rgba(74, 158, 255, 0.1)',
+                            tension: 0,
+                          }
+                        ]
+                      }} 
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                          legend: {
+                            display: true,
+                            labels: {
+                              color: '#e0e0e0'
+                            }
+                          },
+                          title: {
+                            display: true,
+                            text: 'Fan Response Curve',
+                            color: '#e0e0e0'
+                          },
+                          tooltip: {
+                            callbacks: {
+                              label: (context: any) => {
+                                return `${context.parsed.y.toFixed(1)}% at ${context.label}°C`;
+                              }
+                            }
+                          }
+                        },
+                        scales: {
+                          y: {
+                            beginAtZero: true,
+                            max: 100,
+                            title: {
+                              display: true,
+                              text: 'Fan PWM %',
+                              color: '#e0e0e0'
+                            },
+                            ticks: {
+                              color: '#e0e0e0'
+                            },
+                            grid: {
+                              color: '#444'
+                            }
+                          },
+                          x: {
+                            title: {
+                              display: true,
+                              text: 'Temperature °C',
+                              color: '#e0e0e0'
+                            },
+                            ticks: {
+                              color: '#e0e0e0'
+                            },
+                            grid: {
+                              color: '#444'
+                            }
+                          }
+                        }
+                      }} 
+                    />
+                  </div>
+                )}
+              </>
+            ) : (
+              <div style={{ padding: '60px', textAlign: 'center' }}>
+                <div>Temperature control not available</div>
+              </div>
+            )
           )}
           </>
           )}

@@ -90,6 +90,11 @@ class LEDBrickScheduler : public PollingComponent {
   // Control
   void set_enabled(bool enabled) { enabled_ = enabled; }
   bool is_enabled() const { return enabled_; }
+  
+  // Thermal emergency control
+  void set_thermal_emergency(bool emergency);
+  bool is_thermal_emergency() const { return thermal_emergency_; }
+  void force_channel_output(uint8_t channel, float pwm, float current);
   size_t get_schedule_size() const { return scheduler_.get_schedule_size(); }
   
   // PWM scaling
@@ -165,6 +170,7 @@ class LEDBrickScheduler : public PollingComponent {
   uint8_t num_channels_{8};
   uint32_t update_interval_{1000}; // 1 second for smooth transitions
   bool enabled_{true};
+  bool thermal_emergency_{false};  // Emergency thermal shutdown flag
   std::string timezone_{"UTC"};
   float pwm_scale_{1.0f};  // Global PWM scaling factor (0.0-1.0)
   

@@ -27,7 +27,16 @@ export function StatusBar({ status, schedule, onUpdate }: StatusBarProps) {
   };
 
   return (
-    <div className="status-bar">
+    <div className={`status-bar ${status.thermal_emergency ? 'thermal-emergency' : ''}`}>
+      {status.thermal_emergency && (
+        <div className="thermal-emergency-banner">
+          <span className="emergency-icon">⚠️</span>
+          <span className="emergency-text">THERMAL EMERGENCY - All LEDs Disabled</span>
+          <span className="emergency-temp">
+            {status.temperature_control?.current_temp?.toFixed(1) || '--'}°C
+          </span>
+        </div>
+      )}
       {/* Time, astronomical info, and sensors */}
       <div className="status-bar-info">
         <div className="status-grid">
@@ -76,6 +85,16 @@ export function StatusBar({ status, schedule, onUpdate }: StatusBarProps) {
                   {temp.value.toFixed(1)}°C{temp.name ? ` (${temp.name})` : ''}
                 </span>
               ))}
+            </div>
+          )}
+          {status.temperature_control && (
+            <div className="status-item">
+              <strong>Temp Control:</strong>
+              <span className={status.temperature_control.enabled ? 'active' : 'inactive'}>
+                {status.temperature_control.current_temp.toFixed(1)}°C
+                {status.temperature_control.enabled && 
+                  ` → ${status.temperature_control.target_temp.toFixed(1)}°C`}
+              </span>
             </div>
           )}
         </div>

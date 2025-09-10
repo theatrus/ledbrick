@@ -144,7 +144,7 @@ external_components:
   - source:
       type: local
       path: components
-    components: [ ledbrick_scheduler, ledbrick_web_server ]
+    components: [ ledbrick_scheduler, ledbrick_web_server, ledbrick_temperature_control ]
 
 # Our custom scheduler component with services
 ledbrick_scheduler:
@@ -179,6 +179,9 @@ packages:
   channel8: !include { file: packages/channel.yaml, vars: { channel_number: "8", pwm_pin: "GPIO33", current_pin: "GPIO34" } }
   # Uncomment the line below to enable the LEDBrick Scheduler with Home Assistant services
   scheduler: !include packages/scheduler_services.yaml
+  
+  # Temperature control with PID fan control and thermal protection
+  temperature_control: !include packages/temperature_control.yaml
   
   # ESP-IDF Web Server with REST API and Web Interface
   # WARNING: ESP32 only, uses ESP-IDF framework

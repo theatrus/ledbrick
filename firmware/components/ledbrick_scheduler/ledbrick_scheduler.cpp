@@ -1121,5 +1121,51 @@ void LEDBrickScheduler::set_channel_manual_control(uint8_t channel, float pwm, f
   }
 }
 
+void LEDBrickScheduler::set_thermal_emergency(bool emergency) {
+  if (thermal_emergency_ == emergency) {
+    return; // No change
+  }
+  
+  thermal_emergency_ = emergency;
+  
+  if (emergency) {
+    ESP_LOGW(TAG, "THERMAL EMERGENCY ACTIVATED - Forcing all channels to 0%%/0A");
+    
+    // Force all channels to zero PWM and current immediately
+    for (uint8_t channel = 0; channel < num_channels_; channel++) {
+      force_channel_output(channel, 0.0f, 0.0f);
+    }
+  } else {
+    ESP_LOGI(TAG, "Thermal emergency cleared - Normal operation resumed");
+  }
+}
+
+void LEDBrickScheduler::force_channel_output(uint8_t channel, float pwm, float current) {
+  // Force specific PWM and current values regardless of schedule
+  
+  // Set light brightness
+  auto light_it = lights_.find(channel);
+  if (light_it != lights_.end() && light_it->second) {
+    if (pwm <= 0.0f) {
+      // Turn off completely
+      auto call = light_it->second->turn_off();
+      call.perform();
+    } else {
+      // Set specific brightness
+      auto call = light_it->second->turn_on();
+      call.set_brightness(pwm / 100.0f);  // Convert percentage to 0-1
+      call.perform();
+    }
+  }
+  
+  // Set current control
+  auto current_it = current_controls_.find(channel);
+  if (current_it != current_controls_.end() && current_it->second) {
+    current_it->second->publish_state(current);
+  }
+  
+  ESP_LOGD(TAG, "Forced channel %u to PWM: %.1f%%, Current: %.2fA", channel, pwm, current);
+}
+
 } // namespace ledbrick_scheduler
 } // namespace esphome

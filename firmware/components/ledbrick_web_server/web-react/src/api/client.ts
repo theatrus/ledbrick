@@ -162,6 +162,44 @@ class LEDBrickAPI {
       time_shift_minutes 
     });
   }
+
+  // Temperature control API
+  async getTemperatureConfig(): Promise<any> {
+    try {
+      return await this.request('GET', '/api/temperature/config');
+    } catch (error: any) {
+      if (error.message && error.message.includes('404')) {
+        return null; // Temperature control not available
+      }
+      throw error;
+    }
+  }
+
+  async updateTemperatureConfig(config: any): Promise<any> {
+    return this.request('POST', '/api/temperature/config', config);
+  }
+
+  async getTemperatureStatus(): Promise<any> {
+    try {
+      return await this.request('GET', '/api/temperature/status');
+    } catch (error: any) {
+      if (error.message && error.message.includes('404')) {
+        return null; // Temperature control not available
+      }
+      throw error;
+    }
+  }
+
+  async getFanCurve(): Promise<any> {
+    try {
+      return await this.request('GET', '/api/temperature/fan-curve');
+    } catch (error: any) {
+      if (error.message && error.message.includes('404')) {
+        return null; // Temperature control not available
+      }
+      throw error;
+    }
+  }
 }
 
 export const api = new LEDBrickAPI();

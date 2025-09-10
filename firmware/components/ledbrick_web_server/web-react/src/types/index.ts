@@ -69,6 +69,14 @@ export interface Status {
   fan_speed?: number;
   fan_on?: boolean;
   temperatures?: TemperatureSensor[];
+  thermal_emergency?: boolean;
+  temperature_control?: {
+    enabled: boolean;
+    current_temp: number;
+    target_temp: number;
+    fan_pwm: number;
+    pid_error: number;
+  };
 }
 
 export interface InterpolationResult {
@@ -86,3 +94,41 @@ export type DynamicTimeType =
   | 'civil_dusk_relative'
   | 'nautical_dawn_relative'
   | 'nautical_dusk_relative';
+
+export interface TemperatureConfig {
+  target_temp_c: number;
+  kp: number;
+  ki: number;
+  kd: number;
+  min_fan_pwm: number;
+  max_fan_pwm: number;
+  fan_update_interval_ms: number;
+  emergency_temp_c: number;
+  recovery_temp_c: number;
+  emergency_delay_ms: number;
+  sensor_timeout_ms: number;
+  temp_filter_alpha: number;
+}
+
+export interface TemperatureStatus {
+  enabled: boolean;
+  thermal_emergency: boolean;
+  fan_enabled: boolean;
+  current_temp_c: number;
+  target_temp_c: number;
+  fan_pwm_percent: number;
+  fan_rpm: number;
+  pid_error: number;
+  pid_output: number;
+  sensors_valid_count: number;
+  sensors_total_count: number;
+}
+
+export interface FanCurvePoint {
+  temperature: number;
+  fan_pwm: number;
+}
+
+export interface FanCurve {
+  points: FanCurvePoint[];
+}

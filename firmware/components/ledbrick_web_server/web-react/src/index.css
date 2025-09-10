@@ -270,6 +270,54 @@ body {
   color: #4a9eff;
 }
 
+/* Thermal emergency styles */
+.status-bar.thermal-emergency {
+  border-top: 3px solid #ff0000;
+  background: #3a0000;
+}
+
+.thermal-emergency-banner {
+  position: absolute;
+  top: -30px;
+  left: 0;
+  right: 0;
+  background: #d32f2f;
+  color: #fff;
+  padding: 5px 20px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  font-weight: 600;
+  animation: pulse-emergency 2s ease-in-out infinite;
+}
+
+@keyframes pulse-emergency {
+  0%, 100% { background: #d32f2f; }
+  50% { background: #f44336; }
+}
+
+.emergency-icon {
+  font-size: 20px;
+}
+
+.emergency-text {
+  flex: 1;
+}
+
+.emergency-temp {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+/* Temperature control status */
+.status-item .active {
+  color: #4caf50;
+}
+
+.status-item .inactive {
+  color: #999;
+}
+
 
 
 /* Table */

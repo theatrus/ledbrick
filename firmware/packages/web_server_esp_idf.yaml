@@ -27,6 +27,8 @@ ledbrick_web_server:
   temperature_sensors:
     - sensor_id: temperature_sensor
       name: "Board"
+  # Wire temperature control component
+  temperature_control_id: temperature_control
 
 # Also provide some basic ESPHome web controls
 # These will work alongside our custom web server

@@ -71,6 +71,10 @@ class LEDBrickWebServer : public Component {
   static esp_err_t handle_api_timezone_post(httpd_req_t *req);
   static esp_err_t handle_api_channel_control(httpd_req_t *req);
   static esp_err_t handle_api_channel_configs(httpd_req_t *req);
+  static esp_err_t handle_api_temperature_config_get(httpd_req_t *req);
+  static esp_err_t handle_api_temperature_config_post(httpd_req_t *req);
+  static esp_err_t handle_api_temperature_status_get(httpd_req_t *req);
+  static esp_err_t handle_api_fan_curve_get(httpd_req_t *req);
   static esp_err_t handle_not_found(httpd_req_t *req);
   
   // Helper methods
@@ -99,6 +103,14 @@ class LEDBrickWebServer : public Component {
     std::string name;
   };
   std::vector<TemperatureSensorInfo> temperature_sensors_;
+  
+  // Temperature control component reference
+  Component *temperature_control_component_{nullptr};
+  
+public:
+  void set_temperature_control_component(Component *component) { 
+    temperature_control_component_ = component; 
+  }
 };
 
 }  // namespace ledbrick_web_server

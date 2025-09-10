@@ -1,0 +1,103 @@
+# Temperature control package with PID cooling and thermal protection
+ledbrick_temperature_control:
+  id: temperature_control
+  scheduler_id: main_scheduler
+  update_interval: 1s
+  
+  # PID controller settings
+  target_temperature: 45.0  # Target temperature in Celsius
+  kp: 2.0                  # Proportional gain
+  ki: 0.1                  # Integral gain  
+  kd: 0.5                  # Derivative gain
+  
+  # Fan control settings
+  min_fan_pwm: 10%         # Minimum fan speed
+  max_fan_pwm: 100%        # Maximum fan speed
+  
+  # Emergency thermal protection
+  emergency_temperature: 70.0   # Temperature to trigger emergency shutdown
+  recovery_temperature: 65.0    # Temperature to recover from emergency
+  emergency_delay: 5s           # Delay before emergency action
+  
+  # Hardware connections
+  fan_pwm_output: fan_pwm
+  fan_enable_switch: fan_pwr
+  fan_speed_sensor: fan_speed
+  
+  # Temperature sensors - will auto-discover Dallas sensors
+  temperature_sensors:
+    - id: temperature_sensor
+      name: "Primary"
+  
+  # Home Assistant sensor entities
+  current_temp_sensor:
+    name: "Temperature Control Current"
+    id: temp_control_current
+    accuracy_decimals: 1
+  
+  target_temp_sensor:
+    name: "Temperature Control Target"
+    id: temp_control_target
+    accuracy_decimals: 1
+    
+  fan_pwm_sensor:
+    name: "Temperature Control Fan PWM"
+    id: temp_control_fan_pwm
+    accuracy_decimals: 1
+    
+  pid_error_sensor:
+    name: "Temperature Control PID Error"
+    id: temp_control_pid_error
+    accuracy_decimals: 2
+    internal: true  # Hide from Home Assistant UI
+    
+  pid_output_sensor:
+    name: "Temperature Control PID Output"  
+    id: temp_control_pid_output
+    accuracy_decimals: 1
+    internal: true  # Hide from Home Assistant UI
+    
+  thermal_emergency_sensor:
+    name: "Thermal Emergency"
+    id: thermal_emergency
+    device_class: problem
+    
+  fan_enabled_sensor:
+    name: "Temperature Control Fan Active"
+    id: temp_control_fan_active
+    device_class: running
+    
+  # Control entities
+  enable_switch:
+    name: "Temperature Control Enable"
+    id: temp_control_enable
+    restore_mode: RESTORE_DEFAULT_ON
+    icon: "mdi:thermostat"
+    
+  target_temp_number:
+    name: "Temperature Control Setpoint"
+    id: temp_control_setpoint
+    icon: "mdi:thermometer"
+
+# Additional Home Assistant services for temperature control
+api:
+  services:
+    - service: reset_temperature_pid
+      then:
+        - lambda: |-
+            if (id(temperature_control)) {
+              id(temperature_control)->reset_pid();
+              ESP_LOGI("temp_control", "PID controller reset");
+            }
+            
+    - service: set_temperature_pid_params
+      variables:
+        kp: float
+        ki: float 
+        kd: float
+      then:
+        - lambda: |-
+            if (id(temperature_control)) {
+              id(temperature_control)->set_pid_parameters(kp, ki, kd);
+              ESP_LOGI("temp_control", "PID parameters updated: Kp=%.2f, Ki=%.3f, Kd=%.2f", kp, ki, kd);
+            }
