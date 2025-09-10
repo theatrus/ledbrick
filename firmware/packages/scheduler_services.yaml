@@ -477,6 +477,7 @@ esphome:
     priority: 100  # Run after other components are set up
     then:
       - lambda: |-
+          ESP_LOGI("main", "=== Scheduler Services on_boot lambda executing ===");
           // Connect lights to scheduler (channels are 1-indexed in config, 0-indexed in code)
           if (id(lpwm1)) id(main_scheduler).add_light(0, id(lpwm1));
           if (id(lpwm2)) id(main_scheduler).add_light(1, id(lpwm2));
