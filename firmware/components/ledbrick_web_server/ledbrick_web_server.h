@@ -103,14 +103,6 @@ class LEDBrickWebServer : public Component {
     std::string name;
   };
   std::vector<TemperatureSensorInfo> temperature_sensors_;
-  
-  // Temperature control component reference
-  Component *temperature_control_component_{nullptr};
-  
-public:
-  void set_temperature_control_component(Component *component) { 
-    temperature_control_component_ = component; 
-  }
 };
 
 }  // namespace ledbrick_web_server

@@ -32,6 +32,23 @@ void LEDBrickScheduler::setup() {
   // Load schedule from flash storage (includes all settings in JSON)
   load_schedule_from_flash();
   
+  // Initialize temperature control
+  temp_control_.set_config(temp_config_);
+  
+  // Set up temperature control callbacks
+  temp_control_.set_fan_pwm_callback([this](float pwm) { this->on_fan_pwm_change(pwm); });
+  temp_control_.set_fan_enable_callback([this](bool enabled) { this->on_fan_enable_change(enabled); });
+  temp_control_.set_emergency_callback([this](bool emergency) { this->on_emergency_change(emergency); });
+  
+  // Add temperature sensors to the control module
+  for (const auto &mapping : temp_sensors_) {
+    temp_control_.add_temperature_sensor(mapping.name);
+  }
+  
+  // Enable temperature control by default
+  temp_control_.enable(true);
+  temp_control_initialized_ = true;
+  
   // Try to get initial timezone from time source
   if (time_source_) {
     auto time = time_source_->now();
@@ -60,6 +77,10 @@ void LEDBrickScheduler::setup() {
   update_color_sensors();
   
   ESP_LOGCONFIG(TAG, "LEDBrick Scheduler setup complete");
+  ESP_LOGCONFIG(TAG, "Temperature Control:");
+  ESP_LOGCONFIG(TAG, "  Fan object: %s", fan_ ? "Connected" : "NOT CONNECTED");
+  ESP_LOGCONFIG(TAG, "  Fan power switch: %s", fan_power_switch_ ? "Connected" : "NOT CONNECTED");
+  ESP_LOGCONFIG(TAG, "  Temperature sensors: %zu", temp_sensors_.size());
 }
 
 void LEDBrickScheduler::update() {
@@ -92,9 +113,29 @@ void LEDBrickScheduler::update() {
              current_time / 60, current_time % 60, scheduler_.get_schedule_size());
   }
   
+  // Update temperature control
+  uint32_t current_millis = millis();
+  if (temp_control_initialized_ && current_millis - last_temp_update_ >= 1000) {  // Update every second
+    last_temp_update_ = current_millis;
+    
+    // Update temperature sensors
+    update_temperature_sensors();
+    
+    // Update fan speed
+    update_fan_speed();
+    
+    // Run temperature control update
+    temp_control_.update(current_millis);
+    
+    // Publish sensor values periodically (every 5 seconds)
+    if (current_millis - last_sensor_publish_ >= 5000) {
+      publish_temp_sensor_values();
+      last_sensor_publish_ = current_millis;
+    }
+  }
+  
   // Log current interpolated values every 10 seconds (reduce log spam)
   static uint32_t last_log_time = 0;
-  uint32_t current_millis = millis();
   if (current_millis - last_log_time > 10000) {
     ESP_LOGD(TAG, "Scheduler active at %02u:%02u - Ch1: PWM=%.1f%%, Ch2: PWM=%.1f%%, Moon: %s", 
              current_time / 60, current_time % 60,
@@ -128,6 +169,14 @@ void LEDBrickScheduler::dump_config() {
     ESP_LOGCONFIG(TAG, "  Current Local Time: %02u:%02u (%u minutes)", 
                   current_time / 60, current_time % 60, current_time);
   }
+  
+  // Temperature control configuration
+  ESP_LOGCONFIG(TAG, "Temperature Control:");
+  ESP_LOGCONFIG(TAG, "  Target Temperature: %.1f°C", temp_config_.target_temp_c);
+  ESP_LOGCONFIG(TAG, "  PID Parameters: Kp=%.2f, Ki=%.3f, Kd=%.2f", temp_config_.kp, temp_config_.ki, temp_config_.kd);
+  ESP_LOGCONFIG(TAG, "  Fan PWM Range: %.1f%% - %.1f%%", temp_config_.min_fan_pwm, temp_config_.max_fan_pwm);
+  ESP_LOGCONFIG(TAG, "  Emergency Temperature: %.1f°C", temp_config_.emergency_temp_c);
+  ESP_LOGCONFIG(TAG, "  Temperature Sensors: %zu", temp_sensors_.size());
 }
 
 void LEDBrickScheduler::add_schedule_point(const SchedulePoint &point) {
@@ -536,6 +585,9 @@ void LEDBrickScheduler::export_schedule_json(std::string &json_output) const {
   
   size_t closing_brace = json_output.rfind('}');
   if (closing_brace != std::string::npos) {
+    // Add temperature control configuration
+    std::string temp_config_json = temp_control_.export_config_json();
+    
     json_output.insert(closing_brace, 
       ",\"timezone\":\"" + timezone_ + 
       "\",\"timezone_offset_hours\":" + std::to_string(timezone_offset_hours_) +
@@ -545,7 +597,8 @@ void LEDBrickScheduler::export_schedule_json(std::string &json_output) const {
       ",\"longitude\":" + std::to_string(longitude_) +
       ",\"astronomical_projection\":" + std::string(astronomical_projection_ ? "true" : "false") +
       ",\"time_shift_hours\":" + std::to_string(time_shift_hours_) +
-      ",\"time_shift_minutes\":" + std::to_string(time_shift_minutes_));
+      ",\"time_shift_minutes\":" + std::to_string(time_shift_minutes_) +
+      ",\"temperature_control\":" + temp_config_json);
   }
 }
 
@@ -620,6 +673,33 @@ bool LEDBrickScheduler::import_schedule_json(const std::string &json_input) {
     size_t offset_end = json_input.find_first_not_of("-0123456789.", offset_start);
     if (offset_start != std::string::npos && offset_end != std::string::npos) {
       timezone_offset_hours_ = std::stod(json_input.substr(offset_start, offset_end - offset_start));
+    }
+  }
+  
+  // Extract temperature control configuration if present
+  size_t temp_config_pos = json_input.find("\"temperature_control\":");
+  if (temp_config_pos != std::string::npos) {
+    // Find the opening brace for the temperature_control object
+    size_t temp_start = json_input.find('{', temp_config_pos + 22);
+    if (temp_start != std::string::npos) {
+      // Find the matching closing brace
+      int brace_depth = 1;
+      size_t pos = temp_start + 1;
+      while (pos < json_input.length() && brace_depth > 0) {
+        if (json_input[pos] == '{') {
+          brace_depth++;
+        } else if (json_input[pos] == '}') {
+          brace_depth--;
+        }
+        pos++;
+      }
+      
+      if (brace_depth == 0) {
+        std::string temp_config_json = json_input.substr(temp_start, pos - temp_start);
+        temp_control_.import_config_json(temp_config_json);
+        temp_config_ = temp_control_.get_config();
+        ESP_LOGI(TAG, "Imported temperature control configuration");
+      }
     }
   }
   
@@ -1204,6 +1284,177 @@ void LEDBrickScheduler::force_channel_output(uint8_t channel, float pwm, float c
   }
   
   ESP_LOGD(TAG, "Forced channel %u to PWM: %.1f%%, Current: %.2fA", channel, pwm, current);
+}
+
+void LEDBrickScheduler::add_temperature_sensor(const std::string &name, sensor::Sensor *sensor) {
+  if (!sensor) {
+    ESP_LOGW(TAG, "Cannot add null temperature sensor: %s", name.c_str());
+    return;
+  }
+  
+  TempSensorMapping mapping;
+  mapping.name = name;
+  mapping.sensor = sensor;
+  temp_sensors_.push_back(mapping);
+  
+  ESP_LOGD(TAG, "Added temperature sensor: %s", name.c_str());
+}
+
+void LEDBrickScheduler::enable_temperature_control(bool enabled) {
+  temp_control_.enable(enabled);
+  ESP_LOGI(TAG, "Temperature control %s", enabled ? "enabled" : "disabled");
+  
+  // Update enable switch state
+  if (temp_enable_switch_) {
+    temp_enable_switch_->publish_state(enabled);
+  }
+}
+
+bool LEDBrickScheduler::set_temperature_config_json(const std::string& json) {
+  if (!temp_control_.import_config_json(json)) {
+    return false;
+  }
+  
+  // Update our local config
+  temp_config_ = temp_control_.get_config();
+  
+  // Save to flash with the schedule
+  save_schedule_to_flash();
+  
+  return true;
+}
+
+void LEDBrickScheduler::update_temperature_sensors() {
+  uint32_t now = millis();
+  
+  for (const auto &mapping : temp_sensors_) {
+    if (mapping.sensor && mapping.sensor->has_state()) {
+      float temp = mapping.sensor->state;
+      
+      // Basic sanity check on temperature value
+      if (temp > -50.0f && temp < 150.0f) {
+        temp_control_.update_temperature_sensor(mapping.name, temp, now);
+      } else {
+        ESP_LOGW(TAG, "Invalid temperature reading from %s: %.1f°C", 
+                mapping.name.c_str(), temp);
+      }
+    }
+  }
+}
+
+void LEDBrickScheduler::update_fan_speed() {
+  if (fan_speed_sensor_ && fan_speed_sensor_->has_state()) {
+    float rpm = fan_speed_sensor_->state;
+    temp_control_.update_fan_rpm(rpm);
+  }
+}
+
+void LEDBrickScheduler::publish_temp_sensor_values() {
+  auto status = temp_control_.get_status();
+  
+  // Publish current temperature
+  if (current_temp_sensor_ && status.current_temp_c > -50.0f) {
+    current_temp_sensor_->publish_state(status.current_temp_c);
+  }
+  
+  // Publish target temperature
+  if (target_temp_sensor_) {
+    target_temp_sensor_->publish_state(status.target_temp_c);
+  }
+  
+  // Publish fan PWM
+  if (fan_pwm_sensor_) {
+    fan_pwm_sensor_->publish_state(status.fan_pwm_percent);
+  }
+  
+  // Publish PID error
+  if (pid_error_sensor_) {
+    pid_error_sensor_->publish_state(status.pid_error);
+  }
+  
+  // Publish PID output
+  if (pid_output_sensor_) {
+    pid_output_sensor_->publish_state(status.pid_output);
+  }
+  
+  // Publish thermal emergency state
+  if (thermal_emergency_sensor_) {
+    thermal_emergency_sensor_->publish_state(status.thermal_emergency);
+  }
+  
+  // Publish fan enabled state
+  if (fan_enabled_sensor_) {
+    fan_enabled_sensor_->publish_state(status.fan_enabled);
+  }
+  
+  // Update target temperature number control if value changed
+  if (target_temp_number_ && 
+      abs(target_temp_number_->state - status.target_temp_c) > 0.1f) {
+    target_temp_number_->publish_state(status.target_temp_c);
+  }
+  
+  // Update enable switch if needed
+  if (temp_enable_switch_ && temp_enable_switch_->state != status.enabled) {
+    temp_enable_switch_->publish_state(status.enabled);
+  }
+}
+
+void LEDBrickScheduler::on_fan_pwm_change(float pwm) {
+  ESP_LOGD(TAG, "Setting fan PWM to %.1f%%", pwm);
+  
+  if (fan_) {
+    ESP_LOGI(TAG, "Fan object exists, setting PWM to %.1f%%", pwm);
+    if (pwm <= 0.001f) {
+      // Turn off fan when PWM is 0
+      ESP_LOGI(TAG, "Turning fan OFF");
+      auto call = fan_->turn_off();
+      call.perform();
+    } else {
+      // Turn on fan and set speed
+      ESP_LOGI(TAG, "Turning fan ON with speed %.1f", pwm);
+      auto call = fan_->turn_on();
+      call.set_speed(pwm);  // ESPHome fan expects speed in range 0-100
+      call.perform();
+    }
+  } else {
+    ESP_LOGW(TAG, "Fan object is NULL - cannot control fan!");
+  }
+}
+
+void LEDBrickScheduler::on_fan_enable_change(bool enabled) {
+  ESP_LOGD(TAG, "Setting fan power to %s", enabled ? "ON" : "OFF");
+  
+  if (fan_power_switch_) {
+    if (enabled) {
+      fan_power_switch_->turn_on();
+    } else {
+      fan_power_switch_->turn_off();
+    }
+  }
+  
+  // Also ensure fan is off when power is disabled
+  if (!enabled && fan_) {
+    auto call = fan_->turn_off();
+    call.perform();
+  }
+}
+
+void LEDBrickScheduler::on_emergency_change(bool emergency) {
+  if (emergency) {
+    ESP_LOGW(TAG, "THERMAL EMERGENCY ACTIVATED!");
+    
+    // Set thermal emergency flag which affects light output
+    thermal_emergency_ = true;
+  } else {
+    ESP_LOGI(TAG, "Thermal emergency cleared");
+    
+    thermal_emergency_ = false;
+  }
+  
+  // Update emergency sensor
+  if (thermal_emergency_sensor_) {
+    thermal_emergency_sensor_->publish_state(emergency);
+  }
 }
 
 } // namespace ledbrick_scheduler

@@ -10,6 +10,11 @@
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "astronomical_calculator.h"  // Include our standalone calculator
 #include "scheduler.h"  // Include standalone scheduler
+#include "temperature_control.h"  // Include temperature control
+#include "esphome/components/sensor/sensor.h"
+#include "esphome/components/binary_sensor/binary_sensor.h"
+#include "esphome/components/fan/fan.h"
+#include "esphome/components/switch/switch.h"
 #include <vector>
 #include <map>
 #include <string>
@@ -122,6 +127,17 @@ class LEDBrickScheduler : public PollingComponent {
   float get_channel_max_current(uint8_t channel) const { return scheduler_.get_channel_max_current(channel); }
   uint8_t get_num_channels() const { return num_channels_; }
   
+  // Temperature control integration
+  void add_temperature_sensor(const std::string &name, sensor::Sensor *sensor);
+  void set_fan(fan::Fan *fan) { fan_ = fan; }
+  void set_fan_power_switch(switch_::Switch *fan_switch) { fan_power_switch_ = fan_switch; }
+  void set_fan_speed_sensor(sensor::Sensor *sensor) { fan_speed_sensor_ = sensor; }
+  void enable_temperature_control(bool enabled);
+  const ledbrick::TemperatureControlStatus& get_temperature_status() const { return temp_control_.get_status(); }
+  std::string get_temperature_config_json() const { return temp_control_.export_config_json(); }
+  bool set_temperature_config_json(const std::string& json);
+  std::vector<ledbrick::TemperatureControl::FanCurvePoint> get_fan_curve() const { return temp_control_.get_fan_curve(); }
+  
   // Current state
   uint16_t get_current_time_minutes() const;
   InterpolationResult get_current_values() const;
@@ -165,6 +181,17 @@ class LEDBrickScheduler : public PollingComponent {
   void add_light(uint8_t channel, light::LightState *light);
   void add_current_control(uint8_t channel, number::Number *control);
   void add_max_current_control(uint8_t channel, number::Number *control);
+  
+  // Temperature control sensors
+  void set_current_temp_sensor(sensor::Sensor *sensor) { current_temp_sensor_ = sensor; }
+  void set_target_temp_sensor(sensor::Sensor *sensor) { target_temp_sensor_ = sensor; }
+  void set_fan_pwm_sensor(sensor::Sensor *sensor) { fan_pwm_sensor_ = sensor; }
+  void set_pid_error_sensor(sensor::Sensor *sensor) { pid_error_sensor_ = sensor; }
+  void set_pid_output_sensor(sensor::Sensor *sensor) { pid_output_sensor_ = sensor; }
+  void set_thermal_emergency_sensor(binary_sensor::BinarySensor *sensor) { thermal_emergency_sensor_ = sensor; }
+  void set_fan_enabled_sensor(binary_sensor::BinarySensor *sensor) { fan_enabled_sensor_ = sensor; }
+  void set_target_temp_number(number::Number *number) { target_temp_number_ = number; }
+  void set_enable_switch(switch_::Switch *sw) { temp_enable_switch_ = sw; }
 
  protected:
   uint8_t num_channels_{8};
@@ -187,6 +214,7 @@ class LEDBrickScheduler : public PollingComponent {
   // Standalone components
   mutable AstronomicalCalculator astro_calc_;  // Astronomical calculations
   LEDScheduler scheduler_;  // Core scheduling logic
+  ledbrick::TemperatureControl temp_control_;  // Temperature control system
   
   time::RealTimeClock *time_source_{nullptr};
   
@@ -209,6 +237,33 @@ class LEDBrickScheduler : public PollingComponent {
   std::map<uint8_t, number::Number*> max_current_controls_;
   std::map<uint8_t, text_sensor::TextSensor*> color_text_sensors_;
   
+  // Temperature control entities
+  struct TempSensorMapping {
+    std::string name;
+    sensor::Sensor *sensor;
+  };
+  std::vector<TempSensorMapping> temp_sensors_;
+  fan::Fan *fan_{nullptr};
+  switch_::Switch *fan_power_switch_{nullptr};
+  sensor::Sensor *fan_speed_sensor_{nullptr};
+  
+  // Temperature monitoring sensors
+  sensor::Sensor *current_temp_sensor_{nullptr};
+  sensor::Sensor *target_temp_sensor_{nullptr};
+  sensor::Sensor *fan_pwm_sensor_{nullptr};
+  sensor::Sensor *pid_error_sensor_{nullptr};
+  sensor::Sensor *pid_output_sensor_{nullptr};
+  binary_sensor::BinarySensor *thermal_emergency_sensor_{nullptr};
+  binary_sensor::BinarySensor *fan_enabled_sensor_{nullptr};
+  number::Number *target_temp_number_{nullptr};
+  switch_::Switch *temp_enable_switch_{nullptr};
+  
+  // Temperature control state
+  bool temp_control_initialized_{false};
+  uint32_t last_temp_update_{0};
+  uint32_t last_sensor_publish_{0};
+  ledbrick::TemperatureControlConfig temp_config_;
+  
   // Internal methods
   void apply_values(const InterpolationResult &values);
   
@@ -222,7 +277,13 @@ class LEDBrickScheduler : public PollingComponent {
   // Built-in presets (use astronomical data for sunrise/sunset)
   void create_sunrise_sunset_preset_with_astro_data() const;
   
-  // Persistent storage methods
+  // Temperature control methods
+  void update_temperature_sensors();
+  void update_fan_speed();
+  void publish_temp_sensor_values();
+  void on_fan_pwm_change(float pwm);
+  void on_fan_enable_change(bool enabled);
+  void on_emergency_change(bool emergency);
 };
 
 // Automation actions

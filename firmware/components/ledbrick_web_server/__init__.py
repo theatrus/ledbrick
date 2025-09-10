@@ -20,7 +20,6 @@ CONF_FAN_STATE_SENSOR_ID = "fan_state_sensor_id"
 CONF_TEMPERATURE_SENSORS = "temperature_sensors"
 CONF_SENSOR_ID = "sensor_id"
 CONF_NAME = "name"
-CONF_TEMPERATURE_CONTROL_ID = "temperature_control_id"
 
 TEMPERATURE_SENSOR_SCHEMA = cv.Schema(
     {
@@ -42,7 +41,6 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_FAN_SPEED_SENSOR_ID): cv.use_id(sensor.Sensor),
             cv.Optional(CONF_FAN_STATE_SENSOR_ID): cv.use_id(sensor.Sensor),
             cv.Optional(CONF_TEMPERATURE_SENSORS, default=[]): cv.ensure_list(TEMPERATURE_SENSOR_SCHEMA),
-            cv.Optional(CONF_TEMPERATURE_CONTROL_ID): cv.use_id(cg.Component),
         }
     ),
     cv.only_with_esp_idf,
@@ -84,10 +82,6 @@ async def to_code(config):
         temp_sensor = await cg.get_variable(temp_config[CONF_SENSOR_ID])
         cg.add(var.add_temperature_sensor(temp_sensor, temp_config[CONF_NAME]))
     
-    # Wire temperature control component if configured
-    if CONF_TEMPERATURE_CONTROL_ID in config:
-        temp_control = await cg.get_variable(config[CONF_TEMPERATURE_CONTROL_ID])
-        cg.add(var.set_temperature_control_component(temp_control))
     
     # Add defines
     cg.add_define("USE_LEDBRICK_WEB_SERVER")

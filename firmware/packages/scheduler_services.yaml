@@ -1,8 +1,70 @@
 # LEDBrick Scheduler Services Package
-# Simplified JSON-based Home Assistant integration for the LEDBrick Scheduler
+# Template-based Home Assistant integration for the LEDBrick Scheduler
 
 api:
   services:
+    # === Schedule Point Management ===
+    
+    # Set a schedule point for all 8 channels
+    - service: set_schedule_point_8ch
+      variables:
+        time_minutes: int
+        pwm_ch1: float
+        pwm_ch2: float
+        pwm_ch3: float
+        pwm_ch4: float
+        pwm_ch5: float
+        pwm_ch6: float
+        pwm_ch7: float
+        pwm_ch8: float
+        current_ch1: float
+        current_ch2: float
+        current_ch3: float
+        current_ch4: float
+        current_ch5: float
+        current_ch6: float
+        current_ch7: float
+        current_ch8: float
+      then:
+        - lambda: |-
+            std::vector<float> pwm_values = {pwm_ch1, pwm_ch2, pwm_ch3, pwm_ch4, pwm_ch5, pwm_ch6, pwm_ch7, pwm_ch8};
+            std::vector<float> current_values = {current_ch1, current_ch2, current_ch3, current_ch4, current_ch5, current_ch6, current_ch7, current_ch8};
+            id(main_scheduler).set_schedule_point(time_minutes, pwm_values, current_values);
+        - logger.log:
+            format: "Schedule point set at %02d:%02d for all channels"
+            args: [ 'time_minutes / 60', 'time_minutes % 60' ]
+
+    # Simplified 4-channel version for testing
+    - service: set_schedule_point_4ch
+      variables:
+        time_minutes: int
+        pwm_ch1: float
+        pwm_ch2: float
+        pwm_ch3: float
+        pwm_ch4: float
+        current_ch1: float
+        current_ch2: float
+        current_ch3: float
+        current_ch4: float
+      then:
+        - lambda: |-
+            std::vector<float> pwm_values = {pwm_ch1, pwm_ch2, pwm_ch3, pwm_ch4, 0, 0, 0, 0};
+            std::vector<float> current_values = {current_ch1, current_ch2, current_ch3, current_ch4, 0, 0, 0, 0};
+            id(main_scheduler).set_schedule_point(time_minutes, pwm_values, current_values);
+        - logger.log:
+            format: "Schedule point set at %02d:%02d for channels 1-4"
+            args: [ 'time_minutes / 60', 'time_minutes % 60' ]
+
+    # Remove a schedule point
+    - service: remove_schedule_point
+      variables:
+        time_minutes: int
+      then:
+        - lambda: |-
+            id(main_scheduler).remove_schedule_point(time_minutes);
+        - logger.log:
+            format: "Removed schedule point at %02d:%02d"
+            args: [ 'time_minutes / 60', 'time_minutes % 60' ]
 
     # Clear all schedule points
     - service: clear_schedule
@@ -10,6 +72,201 @@ api:
         - lambda: |-
             id(main_scheduler).clear_schedule();
         - logger.log: "Cleared all schedule points"
+
+    # === Dynamic Schedule Point Management ===
+    
+    # Set a dynamic schedule point for all 8 channels
+    - service: set_dynamic_schedule_point_8ch
+      variables:
+        time_type: string  # "sunrise_relative", "sunset_relative", "solar_noon", etc.
+        offset_minutes: int  # Offset from reference time (-1439 to +1439)
+        pwm_ch1: float
+        pwm_ch2: float
+        pwm_ch3: float
+        pwm_ch4: float
+        pwm_ch5: float
+        pwm_ch6: float
+        pwm_ch7: float
+        pwm_ch8: float
+        current_ch1: float
+        current_ch2: float
+        current_ch3: float
+        current_ch4: float
+        current_ch5: float
+        current_ch6: float
+        current_ch7: float
+        current_ch8: float
+      then:
+        - lambda: |-
+            // Convert time_type string to enum using helper function
+            auto type = LEDScheduler::string_to_dynamic_time_type(time_type);
+            if (type == LEDScheduler::DynamicTimeType::FIXED && time_type != "fixed") {
+              ESP_LOGW("main", "Unknown time_type: %s", time_type.c_str());
+              return;
+            }
+            
+            std::vector<float> pwm_values = {pwm_ch1, pwm_ch2, pwm_ch3, pwm_ch4, pwm_ch5, pwm_ch6, pwm_ch7, pwm_ch8};
+            std::vector<float> current_values = {current_ch1, current_ch2, current_ch3, current_ch4, current_ch5, current_ch6, current_ch7, current_ch8};
+            id(main_scheduler).add_dynamic_schedule_point(type, offset_minutes, pwm_values, current_values);
+            ESP_LOGI("main", "Dynamic schedule point set: %s %+d minutes", time_type.c_str(), offset_minutes);
+
+    # Simplified 4-channel dynamic version
+    - service: set_dynamic_schedule_point_4ch
+      variables:
+        time_type: string
+        offset_minutes: int
+        pwm_ch1: float
+        pwm_ch2: float
+        pwm_ch3: float
+        pwm_ch4: float
+        current_ch1: float
+        current_ch2: float
+        current_ch3: float
+        current_ch4: float
+      then:
+        - lambda: |-
+            // Convert time_type string to enum using helper function
+            auto type = LEDScheduler::string_to_dynamic_time_type(time_type);
+            if (type == LEDScheduler::DynamicTimeType::FIXED && time_type != "fixed") {
+              ESP_LOGW("main", "Unknown time_type: %s", time_type.c_str());
+              return;
+            }
+            
+            std::vector<float> pwm_values = {pwm_ch1, pwm_ch2, pwm_ch3, pwm_ch4, 0, 0, 0, 0};
+            std::vector<float> current_values = {current_ch1, current_ch2, current_ch3, current_ch4, 0, 0, 0, 0};
+            id(main_scheduler).add_dynamic_schedule_point(type, offset_minutes, pwm_values, current_values);
+            ESP_LOGI("main", "Dynamic schedule point set: %s %+d minutes (4ch)", time_type.c_str(), offset_minutes);
+
+    # Remove a dynamic schedule point
+    - service: remove_dynamic_schedule_point
+      variables:
+        time_type: string
+        offset_minutes: int
+      then:
+        - lambda: |-
+            // Convert time_type string to enum using helper function
+            auto type = LEDScheduler::string_to_dynamic_time_type(time_type);
+            if (type == LEDScheduler::DynamicTimeType::FIXED && time_type != "fixed") {
+              ESP_LOGW("main", "Unknown time_type: %s", time_type.c_str());
+              return;
+            }
+            
+            id(main_scheduler).remove_dynamic_schedule_point(type, offset_minutes);
+            ESP_LOGI("main", "Removed dynamic schedule point: %s %+d minutes", time_type.c_str(), offset_minutes);
+
+    # === Preset Management ===
+    
+    # Load a preset schedule
+    - service: load_preset
+      variables:
+        preset_name: string
+      then:
+        - lambda: |-
+            id(main_scheduler).load_preset(preset_name);
+        - logger.log:
+            format: "Loaded preset: %s"
+            args: [ 'preset_name.c_str()' ]
+
+    # Save current schedule as preset (custom presets saved in memory only)
+    - service: save_preset
+      variables:
+        preset_name: string
+      then:
+        - lambda: |-
+            id(main_scheduler).save_preset(preset_name);
+        - logger.log:
+            format: "Saved current schedule as preset: %s"
+            args: [ 'preset_name.c_str()' ]
+
+    # === Moon Simulation Services ===
+    
+    # Enable/disable moon simulation
+    - service: set_moon_simulation_enabled
+      variables:
+        enabled: bool
+      then:
+        - lambda: |-
+            id(main_scheduler).enable_moon_simulation(enabled);
+        - logger.log:
+            format: "Moon simulation %s"
+            args: [ 'enabled ? "enabled" : "disabled"' ]
+    
+    # Set moon base intensity for all 8 channels
+    - service: set_moon_base_intensity_8ch
+      variables:
+        intensity_ch1: float
+        intensity_ch2: float
+        intensity_ch3: float
+        intensity_ch4: float
+        intensity_ch5: float
+        intensity_ch6: float
+        intensity_ch7: float
+        intensity_ch8: float
+      then:
+        - lambda: |-
+            std::vector<float> intensity = {intensity_ch1, intensity_ch2, intensity_ch3, intensity_ch4, 
+                                          intensity_ch5, intensity_ch6, intensity_ch7, intensity_ch8};
+            id(main_scheduler).set_moon_base_intensity(intensity);
+        - logger.log: "Moon base intensity set for all channels"
+    
+    # Simplified 4-channel moon intensity
+    - service: set_moon_base_intensity_4ch
+      variables:
+        intensity_ch1: float
+        intensity_ch2: float
+        intensity_ch3: float
+        intensity_ch4: float
+      then:
+        - lambda: |-
+            std::vector<float> intensity = {intensity_ch1, intensity_ch2, intensity_ch3, intensity_ch4, 
+                                          0, 0, 0, 0};
+            id(main_scheduler).set_moon_base_intensity(intensity);
+        - logger.log: "Moon base intensity set for channels 1-4"
+    
+    # Configure moon simulation with phase scaling
+    - service: configure_moon_simulation
+      variables:
+        enabled: bool
+        phase_scaling: bool
+      then:
+        - lambda: |-
+            LEDScheduler::MoonSimulation config;
+            config.enabled = enabled;
+            config.phase_scaling = phase_scaling;
+            // Use default base_intensity values if not set
+            // The set_moon_simulation method will handle the configuration
+            id(main_scheduler).set_moon_simulation(config);
+            ESP_LOGI("main", "Moon simulation configured - Enabled: %s, Phase scaling: %s",
+                     enabled ? "YES" : "NO", phase_scaling ? "YES" : "NO");
+    
+    # === Control Services ===
+    
+    # Enable/disable the scheduler
+    - service: set_scheduler_enabled
+      variables:
+        enabled: bool
+      then:
+        - lambda: |-
+            id(main_scheduler).set_enabled(enabled);
+        - logger.log:
+            format: "Scheduler %s"
+            args: [ 'enabled ? "enabled" : "disabled"' ]
+    
+
+    # Get current scheduler status (logs current state)
+    - service: get_scheduler_status
+      then:
+        - lambda: |-
+            auto current_time = id(main_scheduler).get_current_time_minutes();
+            auto values = id(main_scheduler).get_current_values();
+            ESP_LOGI("main", "Scheduler Status - Enabled: %s, Time: %02d:%02d, Channels: %d", 
+                     id(main_scheduler).is_enabled() ? "YES" : "NO",
+                     current_time / 60, current_time % 60,
+                     values.pwm_values.size());
+            for (size_t i = 0; i < values.pwm_values.size() && i < 8; i++) {
+              ESP_LOGI("main", "  Ch%d: PWM=%.1f%%, Current=%.2fA", 
+                       (int)i+1, values.pwm_values[i], values.current_values[i]);
+            }
 
     # === Data Export/Import Services ===
     
@@ -55,42 +312,7 @@ api:
         - lambda: |-
             id(main_scheduler).load_schedule_from_flash();
         - logger.log: "Schedule loaded from flash memory"
-    
-    # Set timezone offset (for when not using Home Assistant time)
-    - service: set_timezone_offset
-      variables:
-        offset_hours: float
-      then:
-        - lambda: |-
-            id(main_scheduler).set_timezone_offset_hours(offset_hours);
-            id(main_scheduler).update_timezone_from_time_source();
-            id(main_scheduler).save_schedule_to_flash();
-            ESP_LOGI("main", "Timezone offset set to UTC%+.1f hours", offset_hours);
 
-    # === Schedule Status ===
-    
-    # Get current schedule size (number of points)
-    - service: get_schedule_size
-      then:
-        - lambda: |-
-            size_t size = id(main_scheduler).get_schedule_size();
-            ESP_LOGI("main", "Schedule contains %d points", (int)size);
-
-    # Get current interpolated values (for debugging)
-    - service: get_current_values
-      then:
-        - lambda: |-
-            auto values = id(main_scheduler).get_current_values();
-            if (values.valid) {
-              ESP_LOGI("main", "Current interpolated values (%d channels):", 
-                       values.pwm_values.size());
-              for (size_t i = 0; i < values.pwm_values.size() && i < 8; i++) {
-                ESP_LOGI("main", "  Ch%d: PWM=%.1f%%, Current=%.2fA", 
-                         (int)i+1, values.pwm_values[i], values.current_values[i]);
-              }
-            } else {
-              ESP_LOGW("main", "No valid interpolated values available");
-            }
 
 # === Status Sensors ===
 # These sensors report the current state to Home Assistant
@@ -137,6 +359,7 @@ sensor:
     lambda: |-
       return id(main_scheduler).get_moon_phase() * 100.0f;
     update_interval: 3600s  # Update every hour
+  
 
 # === Number Entities ===
 
@@ -144,7 +367,7 @@ number:
   # PWM scale control (0-100%)
   - platform: template
     name: "PWM Scale"
-    id: pwm_scale
+    id: pwm_scale_number
     optimistic: false
     min_value: 0
     max_value: 100
@@ -154,48 +377,57 @@ number:
     lambda: |-
       return id(main_scheduler).get_pwm_scale() * 100.0f;
     set_action:
-      then:
-        - lambda: |-
-            id(main_scheduler).set_pwm_scale(x / 100.0f);
+      - lambda: |-
+          float scale = x / 100.0f;
+          id(main_scheduler).set_pwm_scale(scale);
+          ESP_LOGI("main", "PWM scale set to %.0f%%", x);
+    on_value:
+      - logger.log:
+          format: "PWM scale changed to %.0f%%"
+          args: [ 'x' ]
 
-  # Location controls
+  # Location configuration - reflects scheduler state, triggers save on change
   - platform: template
     id: latitude
     name: "Latitude"
     optimistic: false
-    min_value: -90
-    max_value: 90
-    step: 0.01
+    min_value: -90.0
+    max_value: 90.0
+    step: 0.0001
     unit_of_measurement: "°"
     mode: box
+    icon: "mdi:latitude"
+    entity_category: config
     lambda: |-
-      return id(main_scheduler).get_latitude();
+      return id(main_scheduler)->get_latitude();
     set_action:
       then:
         - lambda: |-
             if (id(main_scheduler) != nullptr) {
-              id(main_scheduler).set_location(x, id(main_scheduler).get_longitude());
+              id(main_scheduler)->set_location(x, id(main_scheduler)->get_longitude());
             }
-
+    
   - platform: template
     id: longitude
-    name: "Longitude"
+    name: "Longitude"  
     optimistic: false
-    min_value: -180
-    max_value: 180
-    step: 0.01
+    min_value: -180.0
+    max_value: 180.0
+    step: 0.0001
     unit_of_measurement: "°"
     mode: box
+    icon: "mdi:longitude"
+    entity_category: config
     lambda: |-
-      return id(main_scheduler).get_longitude();
+      return id(main_scheduler)->get_longitude();
     set_action:
       then:
         - lambda: |-
             if (id(main_scheduler) != nullptr) {
-              id(main_scheduler).set_location(id(main_scheduler).get_latitude(), x);
+              id(main_scheduler)->set_location(id(main_scheduler)->get_latitude(), x);
             }
 
-  # Time shift controls
+  # Time shift configuration - reflects scheduler state, triggers save on change
   - platform: template
     id: time_shift_hours
     name: "Time Shift Hours"
@@ -204,16 +436,18 @@ number:
     max_value: 12
     step: 1
     unit_of_measurement: "h"
-    mode: box
+    mode: slider
+    icon: "mdi:clock-time-four-outline"
+    entity_category: config
     lambda: |-
-      return id(main_scheduler).get_time_shift_hours();
+      return id(main_scheduler)->get_time_shift_hours();
     set_action:
       then:
         - lambda: |-
             if (id(main_scheduler) != nullptr) {
-              id(main_scheduler).set_time_shift(x, id(main_scheduler).get_time_shift_minutes());
+              id(main_scheduler)->set_time_shift(x, id(main_scheduler)->get_time_shift_minutes());
             }
-
+    
   - platform: template
     id: time_shift_minutes
     name: "Time Shift Minutes"
@@ -222,24 +456,123 @@ number:
     max_value: 59
     step: 1
     unit_of_measurement: "min"
-    mode: box
+    mode: slider
+    icon: "mdi:clock-time-four-outline"
+    entity_category: config
     lambda: |-
-      return id(main_scheduler).get_time_shift_minutes();
+      return id(main_scheduler)->get_time_shift_minutes();
     set_action:
       then:
         - lambda: |-
             if (id(main_scheduler) != nullptr) {
-              id(main_scheduler).set_time_shift(id(main_scheduler).get_time_shift_hours(), x);
+              id(main_scheduler)->set_time_shift(id(main_scheduler)->get_time_shift_hours(), x);
             }
 
-# === Switch Entities ===
+
+# === Entity Setup ===
+# Connect scheduler to actual lights and number entities
+
+esphome:
+  on_boot:
+    priority: 100  # Run after other components are set up
+    then:
+      - lambda: |-
+          // Connect lights to scheduler (channels are 1-indexed in config, 0-indexed in code)
+          if (id(lpwm1)) id(main_scheduler).add_light(0, id(lpwm1));
+          if (id(lpwm2)) id(main_scheduler).add_light(1, id(lpwm2));
+          if (id(lpwm3)) id(main_scheduler).add_light(2, id(lpwm3));
+          if (id(lpwm4)) id(main_scheduler).add_light(3, id(lpwm4));
+          if (id(lpwm5)) id(main_scheduler).add_light(4, id(lpwm5));
+          if (id(lpwm6)) id(main_scheduler).add_light(5, id(lpwm6));
+          if (id(lpwm7)) id(main_scheduler).add_light(6, id(lpwm7));
+          if (id(lpwm8)) id(main_scheduler).add_light(7, id(lpwm8));
+          
+          // Connect current controls to scheduler
+          if (id(current_1)) id(main_scheduler).add_current_control(0, id(current_1));
+          if (id(current_2)) id(main_scheduler).add_current_control(1, id(current_2));
+          if (id(current_3)) id(main_scheduler).add_current_control(2, id(current_3));
+          if (id(current_4)) id(main_scheduler).add_current_control(3, id(current_4));
+          if (id(current_5)) id(main_scheduler).add_current_control(4, id(current_5));
+          if (id(current_6)) id(main_scheduler).add_current_control(5, id(current_6));
+          if (id(current_7)) id(main_scheduler).add_current_control(6, id(current_7));
+          if (id(current_8)) id(main_scheduler).add_current_control(7, id(current_8));
+          
+          // Connect max current controls to scheduler
+          if (id(max_current_1)) id(main_scheduler).add_max_current_control(0, id(max_current_1));
+          if (id(max_current_2)) id(main_scheduler).add_max_current_control(1, id(max_current_2));
+          if (id(max_current_3)) id(main_scheduler).add_max_current_control(2, id(max_current_3));
+          if (id(max_current_4)) id(main_scheduler).add_max_current_control(3, id(max_current_4));
+          if (id(max_current_5)) id(main_scheduler).add_max_current_control(4, id(max_current_5));
+          if (id(max_current_6)) id(main_scheduler).add_max_current_control(5, id(max_current_6));
+          if (id(max_current_7)) id(main_scheduler).add_max_current_control(6, id(max_current_7));
+          if (id(max_current_8)) id(main_scheduler).add_max_current_control(7, id(max_current_8));
+          
+          // Connect color text sensors to scheduler  
+          if (id(ch1_color)) id(main_scheduler).add_color_text_sensor(0, id(ch1_color));
+          if (id(ch2_color)) id(main_scheduler).add_color_text_sensor(1, id(ch2_color));
+          if (id(ch3_color)) id(main_scheduler).add_color_text_sensor(2, id(ch3_color));
+          if (id(ch4_color)) id(main_scheduler).add_color_text_sensor(3, id(ch4_color));
+          if (id(ch5_color)) id(main_scheduler).add_color_text_sensor(4, id(ch5_color));
+          if (id(ch6_color)) id(main_scheduler).add_color_text_sensor(5, id(ch6_color));
+          if (id(ch7_color)) id(main_scheduler).add_color_text_sensor(6, id(ch7_color));
+          if (id(ch8_color)) id(main_scheduler).add_color_text_sensor(7, id(ch8_color));
+          
+          // Connect temperature control to scheduler
+          if (id(fan_output)) id(main_scheduler).set_fan(id(fan_output));
+          if (id(temperature_sensor)) id(main_scheduler).add_temperature_sensor("Primary", id(temperature_sensor));
+          
+          // Set current channels to their maximum configured values at boot
+          if (id(current_1) && id(max_current_1)) {
+            float max_val = id(max_current_1)->state;
+            id(current_1)->publish_state(max_val);
+            ESP_LOGI("main", "Set current_1 to max value: %.2fA", max_val);
+          }
+          if (id(current_2) && id(max_current_2)) {
+            float max_val = id(max_current_2)->state;
+            id(current_2)->publish_state(max_val);
+            ESP_LOGI("main", "Set current_2 to max value: %.2fA", max_val);
+          }
+          if (id(current_3) && id(max_current_3)) {
+            float max_val = id(max_current_3)->state;
+            id(current_3)->publish_state(max_val);
+            ESP_LOGI("main", "Set current_3 to max value: %.2fA", max_val);
+          }
+          if (id(current_4) && id(max_current_4)) {
+            float max_val = id(max_current_4)->state;
+            id(current_4)->publish_state(max_val);
+            ESP_LOGI("main", "Set current_4 to max value: %.2fA", max_val);
+          }
+          if (id(current_5) && id(max_current_5)) {
+            float max_val = id(max_current_5)->state;
+            id(current_5)->publish_state(max_val);
+            ESP_LOGI("main", "Set current_5 to max value: %.2fA", max_val);
+          }
+          if (id(current_6) && id(max_current_6)) {
+            float max_val = id(max_current_6)->state;
+            id(current_6)->publish_state(max_val);
+            ESP_LOGI("main", "Set current_6 to max value: %.2fA", max_val);
+          }
+          if (id(current_7) && id(max_current_7)) {
+            float max_val = id(max_current_7)->state;
+            id(current_7)->publish_state(max_val);
+            ESP_LOGI("main", "Set current_7 to max value: %.2fA", max_val);
+          }
+          if (id(current_8) && id(max_current_8)) {
+            float max_val = id(max_current_8)->state;
+            id(current_8)->publish_state(max_val);
+            ESP_LOGI("main", "Set current_8 to max value: %.2fA", max_val);
+          }
+          
+          ESP_LOGI("main", "Connected scheduler to all available lights and number entities");
+          ESP_LOGI("main", "Set all current channels to their maximum configured values");
+
+# === Control Entities ===
 
 switch:
-  # Main scheduler enable/disable
+  # Global scheduler enable/disable
   - platform: template
     name: "Scheduler Enabled"
-    id: scheduler_enabled
-    optimistic: false
+    id: scheduler_enable_switch
     restore_mode: RESTORE_DEFAULT_ON
     lambda: |-
       return id(main_scheduler).is_enabled();
@@ -249,42 +582,185 @@ switch:
     turn_off_action:
       - lambda: |-
           id(main_scheduler).set_enabled(false);
+  
+  # Moon simulation enable/disable
+  - platform: template
+    name: "Moon Simulation Enabled"
+    id: moon_sim_enable_switch
+    restore_mode: RESTORE_DEFAULT_ON
+    lambda: |-
+      return id(main_scheduler).is_moon_simulation_enabled();
+    turn_on_action:
+      - lambda: |-
+          id(main_scheduler).enable_moon_simulation(true);
+    turn_off_action:
+      - lambda: |-
+          id(main_scheduler).enable_moon_simulation(false);
 
-  # Astronomical projection toggle
+  # Astronomical projection enable/disable - reflects scheduler state, triggers save on change
   - platform: template
     name: "Astronomical Projection"
-    id: astronomical_projection
-    optimistic: false
-    restore_mode: RESTORE_DEFAULT_OFF
+    id: astronomical_projection_switch
+    icon: "mdi:telescope"
+    entity_category: config
     lambda: |-
-      return id(main_scheduler).is_astronomical_projection_enabled();
+      return id(main_scheduler)->is_astronomical_projection_enabled();
     turn_on_action:
       - lambda: |-
           if (id(main_scheduler) != nullptr) {
-            id(main_scheduler).set_astronomical_projection(true);
+            id(main_scheduler)->set_astronomical_projection(true);
           }
     turn_off_action:
       - lambda: |-
           if (id(main_scheduler) != nullptr) {
-            id(main_scheduler).set_astronomical_projection(false);
+            id(main_scheduler)->set_astronomical_projection(false);
           }
 
-# === Button Entities removed - location presets are now only in web UI ===
+# === Location Preset Buttons ===
 
-# === Text Sensors ===
+button:
+  # City presets
+  - platform: template
+    name: "Location: Vancouver, BC"
+    id: preset_vancouver
+    icon: "mdi:city"
+    entity_category: config
+    on_press:
+      - lambda: |-
+          if (id(main_scheduler) != nullptr) {
+            id(main_scheduler)->set_location(49.2827, -123.1207);
+          }
+  
+  - platform: template
+    name: "Location: Seattle, WA"
+    id: preset_seattle
+    icon: "mdi:city"
+    entity_category: config
+    on_press:
+      - lambda: |-
+          if (id(main_scheduler) != nullptr) {
+            id(main_scheduler)->set_location(47.6062, -122.3321);
+          }
+  
+  - platform: template
+    name: "Location: Los Angeles, CA"
+    id: preset_los_angeles
+    icon: "mdi:city"
+    entity_category: config
+    on_press:
+      - lambda: |-
+          if (id(main_scheduler) != nullptr) {
+            id(main_scheduler)->set_location(34.0522, -118.2437);
+          }
+  
+  - platform: template
+    name: "Location: Singapore"
+    id: preset_singapore
+    icon: "mdi:city"
+    entity_category: config
+    on_press:
+      - lambda: |-
+          if (id(main_scheduler) != nullptr) {
+            id(main_scheduler)->set_location(1.3521, 103.8198);
+          }
+
+  # Reef location presets
+  - platform: template
+    name: "Reef: Great Barrier Reef"
+    id: preset_great_barrier_reef
+    icon: "mdi:coral"
+    entity_category: config
+    on_press:
+      - lambda: |-
+          if (id(main_scheduler) != nullptr) {
+            id(main_scheduler)->set_location(-18.2871, 147.6992);
+          }
+  
+  - platform: template
+    name: "Reef: Caribbean (USVI)"
+    id: preset_caribbean
+    icon: "mdi:palm-tree"
+    entity_category: config
+    on_press:
+      - lambda: |-
+          if (id(main_scheduler) != nullptr) {
+            id(main_scheduler)->set_location(18.3358, -64.8963);
+          }
+  
+  - platform: template
+    name: "Reef: Red Sea"
+    id: preset_red_sea
+    icon: "mdi:fish"
+    entity_category: config
+    on_press:
+      - lambda: |-
+          if (id(main_scheduler) != nullptr) {
+            id(main_scheduler)->set_location(25.0000, 35.0000);
+          }
+  
+  - platform: template
+    name: "Reef: Bali, Indonesia"
+    id: preset_bali
+    icon: "mdi:diving"
+    entity_category: config
+    on_press:
+      - lambda: |-
+          if (id(main_scheduler) != nullptr) {
+            id(main_scheduler)->set_location(-8.3405, 115.0920);
+          }
+  
+  - platform: template
+    name: "Reef: Palau"
+    id: preset_palau
+    icon: "mdi:jellyfish-outline"
+    entity_category: config
+    on_press:
+      - lambda: |-
+          if (id(main_scheduler) != nullptr) {
+            id(main_scheduler)->set_location(7.5000, 134.5000);
+          }
+  
+  - platform: template
+    name: "Reef: Tahiti"
+    id: preset_tahiti
+    icon: "mdi:island"
+    entity_category: config
+    on_press:
+      - lambda: |-
+          if (id(main_scheduler) != nullptr) {
+            id(main_scheduler)->set_location(-17.6797, -149.4068);
+          }
+  
+  - platform: template
+    name: "Reef: Belize Barrier Reef"
+    id: preset_belize_reef
+    icon: "mdi:swim"
+    entity_category: config
+    on_press:
+      - lambda: |-
+          if (id(main_scheduler) != nullptr) {
+            id(main_scheduler)->set_location(17.1899, -88.1982);
+          }
+  
+  - platform: template
+    name: "Reef: Maldives"
+    id: preset_maldives
+    icon: "mdi:turtle"
+    entity_category: config
+    on_press:
+      - lambda: |-
+          if (id(main_scheduler) != nullptr) {
+            id(main_scheduler)->set_location(3.2028, 73.2207);
+          }
 
 text_sensor:
-  # Current timezone information
+  # Current time as human-readable string
   - platform: template
-    name: "Scheduler Timezone"
-    id: scheduler_timezone
+    name: "Scheduler Current Time"
+    id: scheduler_time_display
     lambda: |-
-      char buffer[64];
-      snprintf(buffer, sizeof(buffer), "%s (UTC%+.1fh)", 
-               id(main_scheduler).get_timezone().c_str(),
-               id(main_scheduler).get_timezone_offset_hours());
-      return std::string(buffer);
+      auto time_minutes = id(main_scheduler).get_current_time_minutes();
+      char time_str[10];
+      sprintf(time_str, "%02d:%02d", time_minutes / 60, time_minutes % 60);
+      return std::string(time_str);
     update_interval: 60s
-  
-  # Color sensors for each channel (registered by channels package)
-  # These are populated by the channel package and updated by the scheduler

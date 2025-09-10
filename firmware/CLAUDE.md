@@ -109,7 +109,7 @@ The web interface is built with React + TypeScript + Vite:
 - `Makefile` - Consolidated build system for all unit tests and cross-compiler testing
 
 ### ESPHome Integration
-- `components/ledbrick_scheduler/` - Main ESPHome custom component (wrapper around standalone components)
+- `components/ledbrick_scheduler/` - Main ESPHome custom component with integrated temperature control
 - `components/ledbrick_web_server/` - ESP-IDF web server component with React frontend
 - `ledbrick-plus.yaml` - ESPHome configuration file
 - `packages/` - Reusable configuration packages for channels, web server, etc.
@@ -153,11 +153,12 @@ The project follows a clean separation between core algorithms and ESPHome integ
 
 ### ESPHome Integration Layer
 - **LEDBrickScheduler** - ESPHome component that:
-  - Wraps standalone components
+  - Wraps standalone components including temperature control
   - Handles ESPHome-specific concerns (GPIO, preferences, logging)
-  - Manages persistent storage in flash
+  - Manages persistent storage in flash including temperature settings
   - Provides Home Assistant integration
   - Uses projected astronomical calculations for accurate scheduling
+  - Integrated temperature control with PID fan management
 
 - **LEDBrickWebServer** - ESP-IDF web server component that:
   - Provides standalone web interface with React frontend
@@ -222,6 +223,7 @@ The project follows a clean separation between core algorithms and ESPHome integ
 - **Web content missing**: Run `npm run build` and `npm run generate-cpp`
 - **PID controller not found**: Ensure pid_controller.cpp/h are in components/ledbrick_scheduler/
 - **Clean build needed**: Run `make clean-all` if adding new files to components
+- **Temperature control**: Now integrated into scheduler component, no separate component needed
 
 ### Runtime Issues
 - **JSON parsing errors**: Check for extra quotes or malformed JSON in API responses

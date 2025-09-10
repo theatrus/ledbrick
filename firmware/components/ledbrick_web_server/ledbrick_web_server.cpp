@@ -4,7 +4,6 @@
 #include "esphome/core/log.h"
 #include "esphome/core/application.h"
 #include "web_content.h"
-#include "../ledbrick_temperature_control/ledbrick_temperature_control.h"
 #include <esp_log.h>
 #include <cstring>
 #include <ctime>
@@ -587,9 +586,14 @@ esp_err_t LEDBrickWebServer::handle_api_status_get(httpd_req_t *req) {
   // Add thermal emergency status
   doc["thermal_emergency"] = self->scheduler_->is_thermal_emergency();
   
-  // TODO: Add temperature control status if component is available
-  // This would require accessing the temperature control component instance
-  // For now, we'll include the thermal emergency flag which is the critical info
+  // Add temperature control status from scheduler
+  auto temp_status = self->scheduler_->get_temperature_status();
+  JsonObject temp_control = doc["temperature_control"].to<JsonObject>();
+  temp_control["enabled"] = temp_status.enabled;
+  temp_control["current_temp"] = temp_status.current_temp_c;
+  temp_control["target_temp"] = temp_status.target_temp_c;
+  temp_control["fan_pwm"] = temp_status.fan_pwm_percent;
+  temp_control["thermal_emergency"] = temp_status.thermal_emergency;
   
   self->send_json_response(req, 200, doc);
   return ESP_OK;
@@ -1346,18 +1350,8 @@ esp_err_t LEDBrickWebServer::handle_api_temperature_config_get(httpd_req_t *req)
   auto *self = get_instance(req);
   if (!self->check_auth(req)) return ESP_OK;
   
-  if (!self->temperature_control_component_) {
-    self->send_error(req, 404, "Temperature control not available");
-    return ESP_OK;
-  }
-  
-  // Get temperature control component
-  auto *temp_control = static_cast<ledbrick_temperature_control::LEDBrickTemperatureControl*>(
-    self->temperature_control_component_
-  );
-  
-  // Export configuration as JSON
-  std::string config_json = temp_control->export_config_json();
+  // Get temperature configuration from scheduler
+  std::string config_json = self->scheduler_->get_temperature_config_json();
   
   httpd_resp_set_type(req, "application/json");
   httpd_resp_send(req, config_json.c_str(), config_json.length());
@@ -1368,22 +1362,12 @@ esp_err_t LEDBrickWebServer::handle_api_temperature_config_post(httpd_req_t *req
   auto *self = get_instance(req);
   if (!self->check_auth(req)) return ESP_OK;
   
-  if (!self->temperature_control_component_) {
-    self->send_error(req, 404, "Temperature control not available");
-    return ESP_OK;
-  }
-  
   // Read request body
   auto buf = read_request_body(req);
   if (!buf) return ESP_OK;
   
-  // Get temperature control component
-  auto *temp_control = static_cast<ledbrick_temperature_control::LEDBrickTemperatureControl*>(
-    self->temperature_control_component_
-  );
-  
-  // Import configuration
-  if (temp_control->import_config_json(buf.get())) {
+  // Update configuration through scheduler
+  if (self->scheduler_->set_temperature_config_json(buf.get())) {
     JsonDocument doc;
     doc["success"] = true;
     doc["message"] = "Temperature control configuration updated";
@@ -1399,18 +1383,8 @@ esp_err_t LEDBrickWebServer::handle_api_temperature_status_get(httpd_req_t *req)
   auto *self = get_instance(req);
   if (!self->check_auth(req)) return ESP_OK;
   
-  if (!self->temperature_control_component_) {
-    self->send_error(req, 404, "Temperature control not available");
-    return ESP_OK;
-  }
-  
-  // Get temperature control component
-  auto *temp_control = static_cast<ledbrick_temperature_control::LEDBrickTemperatureControl*>(
-    self->temperature_control_component_
-  );
-  
-  // Get status
-  auto status = temp_control->get_status();
+  // Get status from scheduler
+  auto status = self->scheduler_->get_temperature_status();
   
   JsonDocument doc;
   doc["enabled"] = status.enabled;
@@ -1433,18 +1407,8 @@ esp_err_t LEDBrickWebServer::handle_api_fan_curve_get(httpd_req_t *req) {
   auto *self = get_instance(req);
   if (!self->check_auth(req)) return ESP_OK;
   
-  if (!self->temperature_control_component_) {
-    self->send_error(req, 404, "Temperature control not available");
-    return ESP_OK;
-  }
-  
-  // Get temperature control component  
-  auto *temp_control = static_cast<ledbrick_temperature_control::LEDBrickTemperatureControl*>(
-    self->temperature_control_component_
-  );
-  
-  // Get fan curve
-  auto curve = temp_control->get_fan_curve();
+  // Get fan curve from scheduler
+  auto curve = self->scheduler_->get_fan_curve();
   
   JsonDocument doc;
   JsonArray points = doc["points"].to<JsonArray>();

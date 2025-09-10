@@ -67,7 +67,7 @@ esphome:
       then:
         - lambda: |-
             // Sync scheduler state with restored switch state
-            bool switch_state = id(scheduler_enabled).state;
+            bool switch_state = id(scheduler_enable_switch).state;
             bool scheduler_state = id(main_scheduler).is_enabled();
             if (switch_state != scheduler_state) {
               ESP_LOGI("main", "Syncing scheduler state: switch=%d, scheduler=%d", 
@@ -76,13 +76,34 @@ esphome:
             }
             
             // Sync astronomical projection state
-            bool astro_switch_state = id(astronomical_projection).state;
+            bool astro_switch_state = id(astronomical_projection_switch).state;
             bool astro_scheduler_state = id(main_scheduler).is_astronomical_projection_enabled();
             if (astro_switch_state != astro_scheduler_state) {
               ESP_LOGI("main", "Syncing astronomical projection: switch=%d, scheduler=%d", 
                        astro_switch_state, astro_scheduler_state);
               id(main_scheduler).set_astronomical_projection(astro_switch_state);
             }
+            
+            // Configure temperature control
+            // Fan connections
+            id(main_scheduler).set_fan(id(fan_output));
+            id(main_scheduler).set_fan_power_switch(id(fan_pwr));
+            id(main_scheduler).set_fan_speed_sensor(id(fan_speed));
+            
+            // Add temperature sensor
+            id(main_scheduler).add_temperature_sensor("Primary", id(temperature_sensor));
+            
+            // Configure temperature monitoring sensors
+            id(main_scheduler).set_current_temp_sensor(id(temp_control_current));
+            id(main_scheduler).set_target_temp_sensor(id(temp_control_target));
+            id(main_scheduler).set_fan_pwm_sensor(id(temp_control_fan_pwm));
+            id(main_scheduler).set_pid_error_sensor(id(temp_control_pid_error));
+            id(main_scheduler).set_pid_output_sensor(id(temp_control_pid_output));
+            id(main_scheduler).set_thermal_emergency_sensor(id(thermal_emergency));
+            id(main_scheduler).set_fan_enabled_sensor(id(temp_control_fan_active));
+            id(main_scheduler).set_enable_switch(id(temp_control_enable));
+            
+            ESP_LOGI("main", "Temperature control configuration complete");
 
 dashboard_import:
   package_import_url: github://theatrus/ledbrick/firmware/ledbrick-plus.yaml@master
@@ -144,7 +165,7 @@ external_components:
   - source:
       type: local
       path: components
-    components: [ ledbrick_scheduler, ledbrick_web_server, ledbrick_temperature_control ]
+    components: [ ledbrick_scheduler, ledbrick_web_server ]
 
 # Our custom scheduler component with services
 ledbrick_scheduler:
@@ -177,11 +198,10 @@ packages:
   channel6: !include { file: packages/channel.yaml, vars: { channel_number: "6", pwm_pin: "GPIO15", current_pin: "GPIO16" } }
   channel7: !include { file: packages/channel.yaml, vars: { channel_number: "7", pwm_pin: "GPIO17", current_pin: "GPIO18" } }
   channel8: !include { file: packages/channel.yaml, vars: { channel_number: "8", pwm_pin: "GPIO33", current_pin: "GPIO34" } }
-  # Uncomment the line below to enable the LEDBrick Scheduler with Home Assistant services
-  scheduler: !include packages/scheduler_services.yaml
+  # LEDBrick Scheduler with Home Assistant services
+  scheduler_services: !include packages/scheduler_services.yaml
   
-  # Temperature control with PID fan control and thermal protection
-  temperature_control: !include packages/temperature_control.yaml
+  # Temperature control is now integrated into the scheduler component
   
   # ESP-IDF Web Server with REST API and Web Interface
   # WARNING: ESP32 only, uses ESP-IDF framework
@@ -201,6 +221,20 @@ switch:
     name: "Fan power"
     id: fan_pwr
     restore_mode: RESTORE_DEFAULT_ON
+    
+  - platform: template
+    name: "Temperature Control Enable"
+    id: temp_control_enable
+    icon: "mdi:thermostat"
+    restore_mode: RESTORE_DEFAULT_ON
+    lambda: |-
+      return id(main_scheduler)->get_temperature_status().enabled;
+    turn_on_action:
+      - lambda: |-
+          id(main_scheduler)->enable_temperature_control(true);
+    turn_off_action:
+      - lambda: |-
+          id(main_scheduler)->enable_temperature_control(false);
 
 fan:
   - platform: speed
@@ -296,3 +330,71 @@ sensor:
     #   one_wire_id: onewire_bus
     #   address: 0x1c0000031edd2a28
     #   name: "Heatsink Temperature"
+    
+  # Temperature control monitoring sensors
+  - platform: template
+    name: "Temperature Control Current"
+    id: temp_control_current
+    unit_of_measurement: "°C"
+    accuracy_decimals: 1
+    lambda: |-
+      return id(main_scheduler)->get_temperature_status().current_temp_c;
+    update_interval: 5s
+    
+  - platform: template
+    name: "Temperature Control Target"
+    id: temp_control_target
+    unit_of_measurement: "°C"
+    accuracy_decimals: 1
+    lambda: |-
+      return id(main_scheduler)->get_temperature_status().target_temp_c;
+    update_interval: 5s
+    
+  - platform: template
+    name: "Temperature Control Fan PWM"
+    id: temp_control_fan_pwm
+    unit_of_measurement: "%"
+    accuracy_decimals: 1
+    lambda: |-
+      return id(main_scheduler)->get_temperature_status().fan_pwm_percent;
+    update_interval: 5s
+    
+  - platform: template
+    name: "Temperature Control PID Error"
+    id: temp_control_pid_error
+    unit_of_measurement: "°C"
+    accuracy_decimals: 2
+    internal: true
+    lambda: |-
+      return id(main_scheduler)->get_temperature_status().pid_error;
+    update_interval: 5s
+    
+  - platform: template
+    name: "Temperature Control PID Output"
+    id: temp_control_pid_output
+    unit_of_measurement: "%"
+    accuracy_decimals: 1
+    internal: true
+    lambda: |-
+      return id(main_scheduler)->get_temperature_status().pid_output;
+    update_interval: 5s
+
+# Binary sensors for temperature control status
+binary_sensor:
+  - platform: template
+    name: "Thermal Emergency"
+    id: thermal_emergency
+    device_class: problem
+    lambda: |-
+      return id(main_scheduler)->get_temperature_status().thermal_emergency;
+    
+  - platform: template
+    name: "Temperature Control Fan Active"
+    id: temp_control_fan_active
+    device_class: running
+    lambda: |-
+      return id(main_scheduler)->get_temperature_status().fan_enabled;
+
+
+
+
