@@ -267,6 +267,10 @@ class LEDBrickScheduler : public PollingComponent {
   uint32_t last_sensor_publish_{0};
   ledbrick::TemperatureControlConfig temp_config_;
   
+  // Boot state management to prevent flash save race conditions
+  bool boot_complete_{false};
+  bool save_pending_{false};
+  
   // Internal methods
   void apply_values(const InterpolationResult &values);
   

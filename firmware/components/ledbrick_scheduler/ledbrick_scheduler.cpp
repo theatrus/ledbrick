@@ -81,6 +81,14 @@ void LEDBrickScheduler::setup() {
   ESP_LOGCONFIG(TAG, "  Fan object: %s", fan_ ? "Connected" : "NOT CONNECTED");
   ESP_LOGCONFIG(TAG, "  Fan power switch: %s", fan_power_switch_ ? "Connected" : "NOT CONNECTED");
   ESP_LOGCONFIG(TAG, "  Temperature sensors: %zu", temp_sensors_.size());
+  
+  // Mark boot as complete and perform any deferred saves
+  boot_complete_ = true;
+  if (save_pending_) {
+    ESP_LOGI(TAG, "Boot complete - performing deferred schedule save");
+    save_pending_ = false;
+    save_schedule_to_flash();
+  }
 }
 
 void LEDBrickScheduler::update() {
@@ -439,6 +447,13 @@ void LEDBrickScheduler::add_max_current_control(uint8_t channel, number::Number 
 
 
 void LEDBrickScheduler::save_schedule_to_flash() {
+  // Prevent saving during boot to avoid race conditions
+  if (!boot_complete_) {
+    save_pending_ = true;
+    ESP_LOGD(TAG, "Boot in progress - deferring schedule save");
+    return;
+  }
+  
   // Export the complete schedule as JSON (includes moon settings, channel configs, etc.)
   std::string json_output;
   export_schedule_json(json_output);
@@ -715,7 +730,7 @@ bool LEDBrickScheduler::import_schedule_json(const std::string &json_input) {
     astro_calc_.set_timezone_offset(timezone_offset_hours_);
     astro_calc_.set_projection_settings(astronomical_projection_, time_shift_hours_, time_shift_minutes_);
     
-    save_schedule_to_flash();
+    // Don't save after import - we just loaded from flash, saving is redundant and causes race conditions
     ESP_LOGI(TAG, "Successfully imported %zu schedule points, enabled=%s", 
              scheduler_.get_schedule_size(), enabled_ ? "true" : "false");
     ESP_LOGI(TAG, "Location: %.4f, %.4f; Time shift: %s %+d:%02d",
