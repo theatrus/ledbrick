@@ -97,7 +97,7 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
       // Initialize location settings
       setLatitude(currentSchedule.latitude?.toString() || '37.7749');
       setLongitude(currentSchedule.longitude?.toString() || '-122.4194');
-      setTimezoneOffset(currentSchedule.timezone_offset_hours?.toString() || '0');
+      setTimezoneOffset(currentSchedule.time_shift_hours?.toString() || '0');
       setAstronomicalProjection(currentSchedule.astronomical_projection || false);
       setTimeShiftHours(currentSchedule.time_shift_hours?.toString() || '0');
       setTimeShiftMinutes(currentSchedule.time_shift_minutes?.toString() || '0');

@@ -26,6 +26,7 @@ export interface Schedule {
   channel_configs: ChannelConfig[];
   moon_simulation?: MoonSimulation;
   timezone?: string;
+  timezone_offset_hours?: number;
   current_time_minutes?: number;
   enabled?: boolean;
   latitude?: number;
