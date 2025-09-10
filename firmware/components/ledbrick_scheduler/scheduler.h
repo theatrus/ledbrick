@@ -94,13 +94,18 @@ public:
         bool enabled = false;
         std::vector<float> base_intensity;  // Base moonlight PWM per channel (0-100%)
         std::vector<float> base_current;    // Base moonlight current per channel (0-max_current)
-        bool phase_scaling = true;         // Scale PWM by moon phase
+        bool phase_scaling = true;          // Legacy: Scale both PWM and current by moon phase
+        bool phase_scaling_pwm = true;      // Scale PWM by moon phase
+        bool phase_scaling_current = true;  // Scale current by moon phase
+        float min_current_threshold = 0.0f; // Minimum current when phase scaling (0-2A)
         
         MoonSimulation() = default;
         MoonSimulation(bool enable, std::vector<float> intensity, bool scale = true)
-            : enabled(enable), base_intensity(std::move(intensity)), phase_scaling(scale) {}
+            : enabled(enable), base_intensity(std::move(intensity)), phase_scaling(scale), 
+              phase_scaling_pwm(scale), phase_scaling_current(scale) {}
         MoonSimulation(bool enable, std::vector<float> intensity, std::vector<float> current, bool scale = true)
-            : enabled(enable), base_intensity(std::move(intensity)), base_current(std::move(current)), phase_scaling(scale) {}
+            : enabled(enable), base_intensity(std::move(intensity)), base_current(std::move(current)), 
+              phase_scaling(scale), phase_scaling_pwm(scale), phase_scaling_current(scale) {}
     };
 
     // Constructor

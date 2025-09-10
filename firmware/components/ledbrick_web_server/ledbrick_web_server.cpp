@@ -889,6 +889,9 @@ esp_err_t LEDBrickWebServer::handle_api_moon_simulation_post(httpd_req_t *req) {
   // Extract moon simulation settings
   bool enabled = doc["enabled"] | false;
   bool phase_scaling = doc["phase_scaling"] | true;
+  bool phase_scaling_pwm = doc["phase_scaling_pwm"] | phase_scaling;  // Default to legacy value
+  bool phase_scaling_current = doc["phase_scaling_current"] | phase_scaling;  // Default to legacy value
+  float min_current_threshold = doc["min_current_threshold"] | 0.0f;
   
   // Extract base_intensity array
   std::vector<float> base_intensity(8, 0.0f);
@@ -926,20 +929,28 @@ esp_err_t LEDBrickWebServer::handle_api_moon_simulation_post(httpd_req_t *req) {
   LEDScheduler::MoonSimulation moon_config;
   moon_config.enabled = enabled;
   moon_config.phase_scaling = phase_scaling;
+  moon_config.phase_scaling_pwm = phase_scaling_pwm;
+  moon_config.phase_scaling_current = phase_scaling_current;
+  moon_config.min_current_threshold = min_current_threshold;
   moon_config.base_intensity = base_intensity;
   moon_config.base_current = base_current;
   
   // Update the scheduler settings (auto-saves)
   self->scheduler_->set_moon_simulation(moon_config);
   
-  ESP_LOGI(TAG, "Updated moon simulation: enabled=%s, phase_scaling=%s", 
+  ESP_LOGI(TAG, "Updated moon simulation: enabled=%s, pwm_scaling=%s, current_scaling=%s, min_current=%.3fA", 
            enabled ? "true" : "false",
-           phase_scaling ? "true" : "false");
+           phase_scaling_pwm ? "true" : "false",
+           phase_scaling_current ? "true" : "false",
+           min_current_threshold);
   
   JsonDocument response_doc;
   response_doc["success"] = true;
   response_doc["enabled"] = enabled;
   response_doc["phase_scaling"] = phase_scaling;
+  response_doc["phase_scaling_pwm"] = phase_scaling_pwm;
+  response_doc["phase_scaling_current"] = phase_scaling_current;
+  response_doc["min_current_threshold"] = min_current_threshold;
   
   // Add base_intensity to response
   JsonArray intensity_array = response_doc["base_intensity"].to<JsonArray>();

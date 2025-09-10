@@ -574,6 +574,12 @@ void LEDScheduler::set_moon_simulation(const MoonSimulation& config) {
     // Resize base_intensity and base_current to match channel count
     moon_simulation_.base_intensity.resize(num_channels_, 0.0f);
     moon_simulation_.base_current.resize(num_channels_, 0.0f);
+    
+    // Maintain backward compatibility - if only legacy phase_scaling is set, apply to both new fields
+    if (config.phase_scaling && !config.phase_scaling_pwm && !config.phase_scaling_current) {
+        moon_simulation_.phase_scaling_pwm = true;
+        moon_simulation_.phase_scaling_current = true;
+    }
 }
 
 void LEDScheduler::enable_moon_simulation(bool enabled) {
@@ -651,8 +657,8 @@ LEDScheduler::InterpolationResult LEDScheduler::apply_moon_simulation(const Inte
         if (i < moon_simulation_.base_intensity.size()) {
             float moon_intensity = moon_simulation_.base_intensity[i];
             
-            // Scale by moon phase if enabled
-            if (moon_simulation_.phase_scaling) {
+            // Scale by moon phase if enabled (use new field, fallback to legacy)
+            if (moon_simulation_.phase_scaling_pwm) {
                 moon_intensity *= moon_brightness;
             }
             
@@ -664,13 +670,21 @@ LEDScheduler::InterpolationResult LEDScheduler::apply_moon_simulation(const Inte
         if (i < moon_simulation_.base_current.size()) {
             float moon_current = moon_simulation_.base_current[i];
             
-            // Scale by moon phase if enabled
-            if (moon_simulation_.phase_scaling) {
-                moon_current *= moon_brightness;
+            // Scale by moon phase if enabled (use new field, fallback to legacy)
+            if (moon_simulation_.phase_scaling_current) {
+                // Apply phase scaling
+                float scaled_current = moon_current * moon_brightness;
+                
+                // Apply minimum threshold if phase scaling is active
+                if (moon_current > 0.0f && scaled_current < moon_simulation_.min_current_threshold) {
+                    scaled_current = moon_simulation_.min_current_threshold;
+                }
+                
+                result.current_values[i] = scaled_current;
+            } else {
+                // No phase scaling for current
+                result.current_values[i] = moon_current;
             }
-            
-            // Apply moonlight current directly
-            result.current_values[i] = moon_current;
         }
         
         // Debug logging for channel 1 (index 0)
@@ -970,6 +984,9 @@ std::string LEDScheduler::export_json() const {
     if (moon_obj) {
         cJSON_AddBoolToObject(moon_obj, "enabled", moon_simulation_.enabled);
         cJSON_AddBoolToObject(moon_obj, "phase_scaling", moon_simulation_.phase_scaling);
+        cJSON_AddBoolToObject(moon_obj, "phase_scaling_pwm", moon_simulation_.phase_scaling_pwm);
+        cJSON_AddBoolToObject(moon_obj, "phase_scaling_current", moon_simulation_.phase_scaling_current);
+        cJSON_AddNumberToObject(moon_obj, "min_current_threshold", moon_simulation_.min_current_threshold);
         
         // Add base_intensity array
         cJSON* intensity_array = cJSON_CreateArray();
@@ -1096,6 +1113,9 @@ std::string LEDScheduler::export_json_minified() const {
     if (moon_obj) {
         cJSON_AddBoolToObject(moon_obj, "enabled", moon_simulation_.enabled);
         cJSON_AddBoolToObject(moon_obj, "phase_scaling", moon_simulation_.phase_scaling);
+        cJSON_AddBoolToObject(moon_obj, "phase_scaling_pwm", moon_simulation_.phase_scaling_pwm);
+        cJSON_AddBoolToObject(moon_obj, "phase_scaling_current", moon_simulation_.phase_scaling_current);
+        cJSON_AddNumberToObject(moon_obj, "min_current_threshold", moon_simulation_.min_current_threshold);
         
         // Add base_intensity array
         cJSON* intensity_array = cJSON_CreateArray();
@@ -1259,10 +1279,30 @@ bool LEDScheduler::import_json(const std::string& json_str) {
             moon_config.enabled = cJSON_IsTrue(enabled_item);
         }
         
-        // Parse phase_scaling
+        // Parse phase_scaling (legacy field)
         cJSON* phase_scaling_item = cJSON_GetObjectItem(moon_obj, "phase_scaling");
         if (cJSON_IsBool(phase_scaling_item)) {
             moon_config.phase_scaling = cJSON_IsTrue(phase_scaling_item);
+            // If new fields not present, use legacy value for both
+            moon_config.phase_scaling_pwm = moon_config.phase_scaling;
+            moon_config.phase_scaling_current = moon_config.phase_scaling;
+        }
+        
+        // Parse new phase scaling fields
+        cJSON* phase_scaling_pwm_item = cJSON_GetObjectItem(moon_obj, "phase_scaling_pwm");
+        if (cJSON_IsBool(phase_scaling_pwm_item)) {
+            moon_config.phase_scaling_pwm = cJSON_IsTrue(phase_scaling_pwm_item);
+        }
+        
+        cJSON* phase_scaling_current_item = cJSON_GetObjectItem(moon_obj, "phase_scaling_current");
+        if (cJSON_IsBool(phase_scaling_current_item)) {
+            moon_config.phase_scaling_current = cJSON_IsTrue(phase_scaling_current_item);
+        }
+        
+        // Parse min_current_threshold
+        cJSON* min_current_item = cJSON_GetObjectItem(moon_obj, "min_current_threshold");
+        if (cJSON_IsNumber(min_current_item)) {
+            moon_config.min_current_threshold = static_cast<float>(min_current_item->valuedouble);
         }
         
         // Parse base_intensity array

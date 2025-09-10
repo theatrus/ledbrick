@@ -18,6 +18,9 @@ export function MoonSettings({ moonSimulation, schedule, onUpdate }: MoonSetting
   const [isInitialized, setIsInitialized] = useState(false);
   const [enabled, setEnabled] = useState(false);
   const [phaseScaling, setPhaseScaling] = useState(false);
+  const [phaseScalingPWM, setPhaseScalingPWM] = useState(true);
+  const [phaseScalingCurrent, setPhaseScalingCurrent] = useState(true);
+  const [minCurrentThreshold, setMinCurrentThreshold] = useState(0);
   const [baseIntensity, setBaseIntensity] = useState<number[]>(new Array(numChannels).fill(0));
   const [baseCurrent, setBaseCurrent] = useState<number[]>(new Array(numChannels).fill(0));
   const [isSaving, setIsSaving] = useState(false);
@@ -28,6 +31,9 @@ export function MoonSettings({ moonSimulation, schedule, onUpdate }: MoonSetting
     if (moonSimulation && !isInitialized) {
       setEnabled(moonSimulation.enabled);
       setPhaseScaling(moonSimulation.phase_scaling);
+      setPhaseScalingPWM(moonSimulation.phase_scaling_pwm ?? moonSimulation.phase_scaling);
+      setPhaseScalingCurrent(moonSimulation.phase_scaling_current ?? moonSimulation.phase_scaling);
+      setMinCurrentThreshold(moonSimulation.min_current_threshold ?? 0);
       
       // Ensure arrays have correct length
       const intensity = new Array(schedule.num_channels || 8).fill(0);
@@ -58,6 +64,9 @@ export function MoonSettings({ moonSimulation, schedule, onUpdate }: MoonSetting
     const changed = 
       enabled !== moonSimulation.enabled ||
       phaseScaling !== moonSimulation.phase_scaling ||
+      phaseScalingPWM !== (moonSimulation.phase_scaling_pwm ?? moonSimulation.phase_scaling) ||
+      phaseScalingCurrent !== (moonSimulation.phase_scaling_current ?? moonSimulation.phase_scaling) ||
+      Math.abs(minCurrentThreshold - (moonSimulation.min_current_threshold ?? 0)) > 0.001 ||
       baseIntensity.some((val, i) => 
         Math.abs(val - (moonSimulation.base_intensity?.[i] || 0)) > 0.01
       ) ||
@@ -66,7 +75,7 @@ export function MoonSettings({ moonSimulation, schedule, onUpdate }: MoonSetting
       );
     
     setHasUnsavedChanges(changed);
-  }, [enabled, phaseScaling, baseIntensity, baseCurrent, moonSimulation, isInitialized]);
+  }, [enabled, phaseScaling, phaseScalingPWM, phaseScalingCurrent, minCurrentThreshold, baseIntensity, baseCurrent, moonSimulation, isInitialized]);
 
   const handlePwmChange = (channel: number, value: number) => {
     const newValues = [...baseIntensity];
@@ -100,6 +109,9 @@ export function MoonSettings({ moonSimulation, schedule, onUpdate }: MoonSetting
     const moonData: MoonSimulation = {
       enabled,
       phase_scaling: phaseScaling,
+      phase_scaling_pwm: phaseScalingPWM,
+      phase_scaling_current: phaseScalingCurrent,
+      min_current_threshold: minCurrentThreshold,
       base_intensity: baseIntensity,
       base_current: baseCurrent
     };
@@ -140,15 +152,52 @@ export function MoonSettings({ moonSimulation, schedule, onUpdate }: MoonSetting
             <label className="checkbox-label">
               <input
                 type="checkbox"
-                checked={phaseScaling}
+                checked={phaseScalingPWM}
                 onChange={(e) => {
-                  setPhaseScaling(e.target.checked);
+                  setPhaseScalingPWM(e.target.checked);
                   setHasUnsavedChanges(true);
                 }}
               />
-              <span>Scale intensity with moon phase</span>
+              <span>Scale PWM with moon phase</span>
             </label>
           </div>
+
+          <div className="form-group">
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={phaseScalingCurrent}
+                onChange={(e) => {
+                  setPhaseScalingCurrent(e.target.checked);
+                  setHasUnsavedChanges(true);
+                }}
+              />
+              <span>Scale current with moon phase</span>
+            </label>
+          </div>
+
+          {phaseScalingCurrent && (
+            <div className="form-group">
+              <label>
+                <span>Minimum current threshold (A):</span>
+                <input
+                  type="number"
+                  value={minCurrentThreshold.toFixed(3)}
+                  onChange={(e) => {
+                    setMinCurrentThreshold(Math.max(0, Math.min(2, parseFloat(e.target.value) || 0)));
+                    setHasUnsavedChanges(true);
+                  }}
+                  min="0"
+                  max="2"
+                  step="0.001"
+                  style={{ marginLeft: '10px', width: '80px' }}
+                />
+              </label>
+              <small style={{ display: 'block', marginTop: '4px', color: '#666' }}>
+                When phase scaling reduces current below this value, the minimum will be used instead
+              </small>
+            </div>
+          )}
 
           <div className="preset-buttons">
             <button onClick={() => setAllChannels(0)} className="preset-button">
