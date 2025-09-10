@@ -44,6 +44,8 @@ void LEDBrickTemperatureControl::setup() {
     
     initialized_ = true;
     ESP_LOGCONFIG(TAG, "LEDBrick Temperature Control setup complete");
+    ESP_LOGCONFIG(TAG, "  Fan object: %s", fan_ ? "Connected" : "NOT CONNECTED");
+    ESP_LOGCONFIG(TAG, "  Fan power switch: %s", fan_power_switch_ ? "Connected" : "NOT CONNECTED");
 }
 
 void LEDBrickTemperatureControl::loop() {
@@ -145,16 +147,21 @@ void LEDBrickTemperatureControl::on_fan_pwm_change_(float pwm) {
     ESP_LOGD(TAG, "Setting fan PWM to %.1f%%", pwm);
     
     if (fan_) {
+        ESP_LOGI(TAG, "Fan object exists, setting PWM to %.1f%%", pwm);
         if (pwm <= 0.001f) {
             // Turn off fan when PWM is 0
+            ESP_LOGI(TAG, "Turning fan OFF");
             auto call = fan_->turn_off();
             call.perform();
         } else {
             // Turn on fan and set speed
+            ESP_LOGI(TAG, "Turning fan ON with speed %.3f", pwm / 100.0f);
             auto call = fan_->turn_on();
             call.set_speed(pwm / 100.0f);  // Convert percentage to 0-1
             call.perform();
         }
+    } else {
+        ESP_LOGW(TAG, "Fan object is NULL - cannot control fan!");
     }
 }
 

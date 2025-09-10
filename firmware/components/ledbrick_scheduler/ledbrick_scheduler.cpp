@@ -53,6 +53,9 @@ void LEDBrickScheduler::setup() {
     save_schedule_to_flash();  // Save the default schedule
   }
   
+  ESP_LOGI(TAG, "Schedule loaded - %zu points, %u channels, enabled: %s", 
+           scheduler_.get_schedule_size(), num_channels_, enabled_ ? "true" : "false");
+  
   // Update color sensors with initial values
   update_color_sensors();
   
@@ -61,7 +64,7 @@ void LEDBrickScheduler::setup() {
 
 void LEDBrickScheduler::update() {
   if (!enabled_) {
-    ESP_LOGVV(TAG, "Scheduler disabled, skipping update");
+    ESP_LOGV(TAG, "Scheduler disabled, skipping update");
     return;
   }
   
@@ -76,8 +79,17 @@ void LEDBrickScheduler::update() {
   
   // Use astronomical interpolation if we have dynamic points
   auto values = scheduler_.get_values_at_time_with_astro(current_time, scheduler_.get_astronomical_times());
+  ESP_LOGD(TAG, "Scheduler values at %02d:%02d - valid: %s, channels: %zu, schedule_points: %zu", 
+           current_time / 60, current_time % 60, 
+           values.valid ? "true" : "false", 
+           values.pwm_values.size(),
+           scheduler_.get_schedule_size());
+           
   if (values.valid) {
     apply_values(values);
+  } else {
+    ESP_LOGW(TAG, "Scheduler returned invalid values at time %02d:%02d, schedule has %zu points", 
+             current_time / 60, current_time % 60, scheduler_.get_schedule_size());
   }
   
   // Log current interpolated values every 10 seconds (reduce log spam)
@@ -285,6 +297,10 @@ void LEDBrickScheduler::create_sunrise_sunset_preset_with_astro_data() const {
 void LEDBrickScheduler::apply_values(const InterpolationResult &values) {
   static std::vector<float> last_pwm_values_(num_channels_, -1.0f);
   static std::vector<float> last_current_values_(num_channels_, -1.0f);
+  
+  ESP_LOGD(TAG, "apply_values called - num_channels: %u, values_size: %zu, first_pwm: %.1f%%", 
+           num_channels_, values.pwm_values.size(), 
+           values.pwm_values.empty() ? 0.0f : values.pwm_values[0]);
   
   for (uint8_t channel = 0; channel < num_channels_; channel++) {
     // Apply PWM to light entity
