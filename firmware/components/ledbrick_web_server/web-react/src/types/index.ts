@@ -62,6 +62,8 @@ export interface Status {
   moon_simulation?: MoonSimulation;
   sunrise_time?: string;
   sunset_time?: string;
+  moonrise_time?: string;
+  moonset_time?: string;
   solar_noon_time?: string;
   channels?: Channel[];
   voltage?: number;

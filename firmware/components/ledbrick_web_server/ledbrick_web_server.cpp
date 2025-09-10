@@ -541,6 +541,19 @@ esp_err_t LEDBrickWebServer::handle_api_status_get(httpd_req_t *req) {
   // Add moon phase
   doc["moon_phase"] = self->scheduler_->get_moon_phase();
   
+  // Add moon rise/set times
+  auto moon_times = self->scheduler_->get_moon_rise_set_times();
+  if (moon_times.rise_valid) {
+    char moonrise_str[6];
+    snprintf(moonrise_str, sizeof(moonrise_str), "%02d:%02d", moon_times.rise_minutes / 60, moon_times.rise_minutes % 60);
+    doc["moonrise_time"] = moonrise_str;
+  }
+  if (moon_times.set_valid) {
+    char moonset_str[6];
+    snprintf(moonset_str, sizeof(moonset_str), "%02d:%02d", moon_times.set_minutes / 60, moon_times.set_minutes % 60);
+    doc["moonset_time"] = moonset_str;
+  }
+  
   // Add INA280 sensor values if available
   if (self->voltage_sensor_ && self->voltage_sensor_->has_state()) {
     doc["voltage"] = self->voltage_sensor_->state;

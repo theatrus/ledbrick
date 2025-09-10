@@ -362,6 +362,40 @@ AstronomicalCalculator::SunTimes AstronomicalCalculator::get_projected_sun_rise_
     return projected_times;
 }
 
+AstronomicalCalculator::MoonTimes AstronomicalCalculator::get_projected_moon_rise_set_times(const DateTime& dt) const {
+    if (!projection_enabled_) {
+        return get_moon_rise_set_times(dt);
+    }
+    
+    // Calculate the actual moon rise/set times first
+    MoonTimes actual_times = get_moon_rise_set_times(dt);
+    
+    // Apply the time shift to the results
+    MoonTimes projected_times = actual_times;
+    
+    if (actual_times.rise_valid) {
+        // Add the time shift (convert to total minutes)
+        int shift_minutes = time_shift_hours_ * 60 + time_shift_minutes_;
+        int new_rise_minutes = static_cast<int>(actual_times.rise_minutes) + shift_minutes;
+        // Ensure the result is in the range [0, 1439]
+        while (new_rise_minutes < 0) new_rise_minutes += 1440;
+        while (new_rise_minutes >= 1440) new_rise_minutes -= 1440;
+        projected_times.rise_minutes = static_cast<uint16_t>(new_rise_minutes);
+    }
+    
+    if (actual_times.set_valid) {
+        // Add the time shift (convert to total minutes) 
+        int shift_minutes = time_shift_hours_ * 60 + time_shift_minutes_;
+        int new_set_minutes = static_cast<int>(actual_times.set_minutes) + shift_minutes;
+        // Ensure the result is in the range [0, 1439]
+        while (new_set_minutes < 0) new_set_minutes += 1440;
+        while (new_set_minutes >= 1440) new_set_minutes -= 1440;
+        projected_times.set_minutes = static_cast<uint16_t>(new_set_minutes);
+    }
+    
+    return projected_times;
+}
+
 double AstronomicalCalculator::get_projected_julian_day(const DateTime& dt) const {
     double jd = calculate_julian_day(dt);
     

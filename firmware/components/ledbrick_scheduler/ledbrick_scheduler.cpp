@@ -225,9 +225,10 @@ InterpolationResult LEDBrickScheduler::get_actual_channel_values() const {
     // Get PWM value from light entity
     auto light_it = lights_.find(channel);
     if (light_it != lights_.end() && light_it->second) {
-      auto call = light_it->second->current_values;
+      // Get actual current state (not the call values)
+      auto remote_values = light_it->second->remote_values;
       // Get brightness as percentage (0-100)
-      result.pwm_values[channel] = call.get_brightness() * 100.0f;
+      result.pwm_values[channel] = remote_values.get_brightness() * 100.0f;
     }
     
     // Get current value from current control
@@ -647,6 +648,10 @@ float LEDBrickScheduler::get_moon_phase() const {
 AstronomicalCalculator::MoonTimes LEDBrickScheduler::get_moon_rise_set_times() const {
   update_astro_calculator_settings();
   auto dt = esphome_time_to_datetime();
+  // Use projected times if projection is enabled
+  if (is_astronomical_projection_enabled()) {
+    return astro_calc_.get_projected_moon_rise_set_times(dt);
+  }
   return astro_calc_.get_moon_rise_set_times(dt);
 }
 

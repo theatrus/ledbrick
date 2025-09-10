@@ -58,6 +58,16 @@ export function StatusBar({ status, schedule, onUpdate }: StatusBarProps) {
               <strong>Moon:</strong> {(status.moon_phase * 100).toFixed(1)}%
             </div>
           )}
+          {status.moonrise_time && (
+            <div className="status-item">
+              <strong>Moonrise:</strong> {status.moonrise_time}
+            </div>
+          )}
+          {status.moonset_time && (
+            <div className="status-item">
+              <strong>Moonset:</strong> {status.moonset_time}
+            </div>
+          )}
           {(status.voltage !== undefined || status.total_current !== undefined) && (
             <div className="status-item">
               {status.voltage !== undefined && (
