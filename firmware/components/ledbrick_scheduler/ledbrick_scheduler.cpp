@@ -1330,6 +1330,38 @@ bool LEDBrickScheduler::set_temperature_config_json(const std::string& json) {
 void LEDBrickScheduler::update_temperature_sensors() {
   uint32_t now = millis();
   
+  // Auto-discover temperature sensors if we don't have any yet
+  static uint32_t last_discovery_check = 0;
+  if (temp_sensors_.empty() && (now - last_discovery_check > 10000)) {  // Check every 10 seconds
+    last_discovery_check = now;
+    
+    // Scan all sensors for temperature sensors (by unit of measurement)
+    for (auto* sensor : App.get_sensors()) {
+      std::string unit = sensor->get_unit_of_measurement().c_str();
+      std::string name = sensor->get_name().c_str();
+      
+      // Debug log all sensors with units to help troubleshoot
+      ESP_LOGD(TAG, "Checking sensor '%s' with unit '%s'", name.c_str(), unit.c_str());
+      
+      if ((unit == "°C" || unit == "°F" || unit == "C" || unit == "F") && sensor->has_state()) {
+        // Check if we already have this sensor
+        bool found = false;
+        for (const auto &existing : temp_sensors_) {
+          if (existing.sensor == sensor) {
+            found = true;
+            break;
+          }
+        }
+        
+        if (!found) {
+          temp_sensors_.push_back({name, sensor});
+          ESP_LOGI(TAG, "Auto-discovered temperature sensor: %s (%s)", name.c_str(), unit.c_str());
+        }
+      }
+    }
+  }
+  
+  // Update temperature sensors
   for (const auto &mapping : temp_sensors_) {
     if (mapping.sensor && mapping.sensor->has_state()) {
       float temp = mapping.sensor->state;

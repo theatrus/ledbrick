@@ -90,16 +90,7 @@ esphome:
             id(main_scheduler).set_fan_power_switch(id(fan_pwr));
             id(main_scheduler).set_fan_speed_sensor(id(fan_speed));
             
-            // Auto-discover and add all temperature sensors
-            for (auto* sensor : App.get_sensors()) {
-              // Check if this is a temperature sensor by unit of measurement
-              std::string unit = sensor->get_unit_of_measurement().c_str();
-              if (unit == "°C" || unit == "°F") {
-                std::string name = sensor->get_name().c_str();
-                id(main_scheduler).add_temperature_sensor(name, sensor);
-                ESP_LOGI("main", "Connected temperature sensor: %s (%s)", name.c_str(), unit.c_str());
-              }
-            }
+            // Temperature sensors will be auto-discovered by scheduler during runtime
             
             // Configure temperature monitoring sensors
             id(main_scheduler).set_current_temp_sensor(id(temp_control_current));

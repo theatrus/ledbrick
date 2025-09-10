@@ -569,10 +569,11 @@ esp_err_t LEDBrickWebServer::handle_api_status_get(httpd_req_t *req) {
     doc["fan_on"] = self->fan_state_sensor_->state > 0.5f;  // Convert to boolean
   }
   
-  // Add temperature sensors if available
-  if (!self->temperature_sensors_.empty()) {
+  // Add temperature sensors from scheduler (auto-discovered)
+  auto scheduler_temp_sensors = self->scheduler_->get_temperature_sensors();
+  if (!scheduler_temp_sensors.empty()) {
     JsonArray temps = doc["temperatures"].to<JsonArray>();
-    for (const auto &temp_info : self->temperature_sensors_) {
+    for (const auto &temp_info : scheduler_temp_sensors) {
       if (temp_info.sensor && temp_info.sensor->has_state()) {
         JsonObject temp = temps.add<JsonObject>();
         temp["value"] = temp_info.sensor->state;

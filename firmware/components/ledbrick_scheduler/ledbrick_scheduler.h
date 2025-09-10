@@ -28,6 +28,12 @@ using InterpolationResult = LEDScheduler::InterpolationResult;
 
 class LEDBrickScheduler : public PollingComponent {
  public:
+  // Temperature sensor mapping struct
+  struct TempSensorMapping {
+    std::string name;
+    sensor::Sensor *sensor;
+  };
+
   LEDBrickScheduler() : PollingComponent() {}
   explicit LEDBrickScheduler(uint32_t update_interval) : PollingComponent(update_interval) {}
   
@@ -137,6 +143,7 @@ class LEDBrickScheduler : public PollingComponent {
   std::string get_temperature_config_json() const { return temp_control_.export_config_json(); }
   bool set_temperature_config_json(const std::string& json);
   std::vector<ledbrick::TemperatureControl::FanCurvePoint> get_fan_curve() const { return temp_control_.get_fan_curve(); }
+  const std::vector<TempSensorMapping>& get_temperature_sensors() const { return temp_sensors_; }
   
   // Current state
   uint16_t get_current_time_minutes() const;
@@ -238,10 +245,6 @@ class LEDBrickScheduler : public PollingComponent {
   std::map<uint8_t, text_sensor::TextSensor*> color_text_sensors_;
   
   // Temperature control entities
-  struct TempSensorMapping {
-    std::string name;
-    sensor::Sensor *sensor;
-  };
   std::vector<TempSensorMapping> temp_sensors_;
   fan::Fan *fan_{nullptr};
   switch_::Switch *fan_power_switch_{nullptr};

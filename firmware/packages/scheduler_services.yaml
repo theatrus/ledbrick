@@ -520,16 +520,7 @@ esphome:
           // Connect temperature control to scheduler
           if (id(fan_output)) id(main_scheduler).set_fan(id(fan_output));
           
-          // Auto-discover and connect all temperature sensors
-          for (auto* sensor : App.get_sensors()) {
-            // Check if this is a temperature sensor by unit of measurement
-            std::string unit = sensor->get_unit_of_measurement().c_str();
-            if (unit == "°C" || unit == "°F") {
-              std::string name = sensor->get_name().c_str();
-              id(main_scheduler).add_temperature_sensor(name, sensor);
-              ESP_LOGI("main", "Connected temperature sensor: %s (%s)", name.c_str(), unit.c_str());
-            }
-          }
+          // Temperature sensors will be auto-discovered by scheduler during runtime
           
           // Set current channels to their maximum configured values at boot
           if (id(current_1) && id(max_current_1)) {
