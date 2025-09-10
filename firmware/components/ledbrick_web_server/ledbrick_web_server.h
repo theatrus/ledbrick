@@ -3,6 +3,7 @@
 #include "esphome/core/component.h"
 #include "esphome/core/preferences.h"
 #include "../ledbrick_scheduler/ledbrick_scheduler.h"
+#include "esphome/components/sensor/sensor.h"
 
 #ifdef USE_ESP_IDF
 #include <esp_http_server.h>
@@ -25,6 +26,10 @@ class LEDBrickWebServer : public Component {
   void set_port(uint16_t port) { this->port_ = port; }
   void set_username(const std::string &username) { this->username_ = username; }
   void set_password(const std::string &password) { this->password_ = password; }
+  
+  // Sensor setters for INA280
+  void set_voltage_sensor(sensor::Sensor *sensor) { this->voltage_sensor_ = sensor; }
+  void set_current_sensor(sensor::Sensor *sensor) { this->current_sensor_ = sensor; }
   
  protected:
   ledbrick_scheduler::LEDBrickScheduler *scheduler_;
@@ -70,6 +75,10 @@ class LEDBrickWebServer : public Component {
   
   // Static instance for callbacks
   static LEDBrickWebServer *instance_;
+  
+  // INA280 sensor references
+  sensor::Sensor *voltage_sensor_{nullptr};
+  sensor::Sensor *current_sensor_{nullptr};
 };
 
 }  // namespace ledbrick_web_server

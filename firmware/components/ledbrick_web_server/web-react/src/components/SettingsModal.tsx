@@ -142,8 +142,8 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
           parseFloat(timezoneOffset)
         );
         
-        // Save time shift settings using the original working endpoint
-        await api.setTimeShift(
+        // Save time projection settings using the current endpoint
+        await api.updateTimeProjection(
           astronomicalProjection,
           parseInt(timeShiftHours) || 0,
           parseInt(timeShiftMinutes) || 0

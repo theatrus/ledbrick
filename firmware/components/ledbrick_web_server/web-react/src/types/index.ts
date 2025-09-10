@@ -58,6 +58,8 @@ export interface Status {
   sunset_time?: string;
   solar_noon_time?: string;
   channels?: Channel[];
+  voltage?: number;
+  total_current?: number;
 }
 
 export interface InterpolationResult {

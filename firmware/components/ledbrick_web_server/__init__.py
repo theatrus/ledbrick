@@ -1,6 +1,7 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.const import CONF_ID, CONF_PORT, CONF_USERNAME, CONF_PASSWORD
+from esphome.components import sensor
 from esphome.core import CORE, coroutine_with_priority
 import os
 import subprocess
@@ -12,6 +13,8 @@ ledbrick_web_server_ns = cg.esphome_ns.namespace("ledbrick_web_server")
 LEDBrickWebServer = ledbrick_web_server_ns.class_("LEDBrickWebServer", cg.Component)
 
 CONF_SCHEDULER_ID = "scheduler_id"
+CONF_VOLTAGE_SENSOR_ID = "voltage_sensor_id"
+CONF_CURRENT_SENSOR_ID = "current_sensor_id"
 
 CONFIG_SCHEMA = cv.All(
     cv.Schema(
@@ -21,6 +24,8 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_PORT, default=80): cv.port,
             cv.Optional(CONF_USERNAME): cv.string,
             cv.Optional(CONF_PASSWORD): cv.string,
+            cv.Optional(CONF_VOLTAGE_SENSOR_ID): cv.use_id(sensor.Sensor),
+            cv.Optional(CONF_CURRENT_SENSOR_ID): cv.use_id(sensor.Sensor),
         }
     ),
     cv.only_with_esp_idf,
@@ -42,6 +47,14 @@ async def to_code(config):
         cg.add(var.set_username(config[CONF_USERNAME]))
     if CONF_PASSWORD in config:
         cg.add(var.set_password(config[CONF_PASSWORD]))
+    
+    # Wire sensors if configured
+    if CONF_VOLTAGE_SENSOR_ID in config:
+        voltage_sensor = await cg.get_variable(config[CONF_VOLTAGE_SENSOR_ID])
+        cg.add(var.set_voltage_sensor(voltage_sensor))
+    if CONF_CURRENT_SENSOR_ID in config:
+        current_sensor = await cg.get_variable(config[CONF_CURRENT_SENSOR_ID])
+        cg.add(var.set_current_sensor(current_sensor))
     
     # Add defines
     cg.add_define("USE_LEDBRICK_WEB_SERVER")

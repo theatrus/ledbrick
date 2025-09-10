@@ -78,6 +78,20 @@ export function StatusBar({ status, schedule, onUpdate }: StatusBarProps) {
         </div>
       )}
       
+      {(status.voltage !== undefined || status.total_current !== undefined) && (
+        <div className="status-item" style={{ fontSize: '11px', color: '#999' }}>
+          {status.voltage !== undefined && (
+            <span><strong>V:</strong> {status.voltage.toFixed(1)}V</span>
+          )}
+          {status.voltage !== undefined && status.total_current !== undefined && (
+            <span style={{ margin: '0 4px' }}>|</span>
+          )}
+          {status.total_current !== undefined && (
+            <span><strong>I:</strong> {status.total_current.toFixed(2)}A</span>
+          )}
+        </div>
+      )}
+      
       <StatusBarControls
         enabled={status.enabled}
         pwmScale={status.pwm_scale || 100}

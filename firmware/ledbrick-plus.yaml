@@ -260,8 +260,12 @@ sensor:
     max_current: 20 A
     adc_range: 0
     update_interval: 5s
-    current: "INA228 Current"
-    bus_voltage: "INA228 Bus Voltage"
+    current:
+      name: "INA228 Current"
+      id: ina228_current
+    bus_voltage:
+      name: "INA228 Bus Voltage" 
+      id: ina228_bus_voltage
     charge: "INA228 Charge"
 
   - platform: pulse_counter

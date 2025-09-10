@@ -17,6 +17,9 @@ ledbrick_web_server:
   # Optional authentication - uncomment to enable
   # username: admin
   # password: !secret web_password
+  # Wire INA228 sensors if available
+  voltage_sensor_id: ina228_bus_voltage
+  current_sensor_id: ina228_current
 
 # Also provide some basic ESPHome web controls
 # These will work alongside our custom web server
