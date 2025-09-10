@@ -28,35 +28,63 @@ export function StatusBar({ status, schedule, onUpdate }: StatusBarProps) {
 
   return (
     <div className="status-bar">
-      {/* Time and astronomical info */}
+      {/* Time, astronomical info, and sensors */}
       <div className="status-bar-info">
-        <div className="status-item">
-          <strong>Time:</strong> {status.time_formatted || '--:--'}
+        <div className="status-grid">
+          <div className="status-item">
+            <strong>Time:</strong> {status.time_formatted || '--:--'}
+          </div>
+          {status.sunrise_time && (
+            <div className="status-item">
+              <strong>Sunrise:</strong> {status.sunrise_time}
+            </div>
+          )}
+          {status.sunset_time && (
+            <div className="status-item">
+              <strong>Sunset:</strong> {status.sunset_time}
+            </div>
+          )}
+          {status.moon_phase !== undefined && (
+            <div className="status-item">
+              <strong>Moon:</strong> {(status.moon_phase * 100).toFixed(1)}%
+            </div>
+          )}
+          {(status.voltage !== undefined || status.total_current !== undefined) && (
+            <div className="status-item">
+              {status.voltage !== undefined && (
+                <span><strong>V:</strong> {status.voltage.toFixed(1)}V</span>
+              )}
+              {status.voltage !== undefined && status.total_current !== undefined && (
+                <span style={{ margin: '0 4px' }}>|</span>
+              )}
+              {status.total_current !== undefined && (
+                <span><strong>I:</strong> {status.total_current.toFixed(2)}A</span>
+              )}
+            </div>
+          )}
+          {status.fan_speed !== undefined && (
+            <div className="status-item">
+              <strong>Fan:</strong> {status.fan_on ? `${Math.round(status.fan_speed)}RPM` : 'Off'}
+            </div>
+          )}
+          {status.temperatures && status.temperatures.length > 0 && (
+            <div className="status-item">
+              <strong>Temp:</strong> 
+              {status.temperatures.map((temp, i) => (
+                <span key={i}>
+                  {i > 0 && ', '}
+                  {temp.value.toFixed(1)}°C{temp.name ? ` (${temp.name})` : ''}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
-        <div className="status-item">
-          <strong>Points:</strong> {status.schedule_points}
-        </div>
-        {status.sunrise_time && (
-          <div className="status-item">
-            <strong>Sunrise:</strong> {status.sunrise_time}
-          </div>
-        )}
-        {status.sunset_time && (
-          <div className="status-item">
-            <strong>Sunset:</strong> {status.sunset_time}
-          </div>
-        )}
-        {status.moon_phase !== undefined && (
-          <div className="status-item">
-            <strong>Moon:</strong> {(status.moon_phase * 100).toFixed(1)}%
-          </div>
-        )}
       </div>
       
       {/* LED Channels - wraps first on smaller screens */}
       {status.channels && status.channels.length > 0 && (
         <div className="status-bar-channels">
-          <div className="current-values">
+          <div className="channels-grid">
             {status.channels.map((channel, index) => {
               const color = schedule?.channel_configs?.[index]?.rgb_hex || 
                             DEFAULT_CHANNEL_COLORS[index % DEFAULT_CHANNEL_COLORS.length];
@@ -83,40 +111,6 @@ export function StatusBar({ status, schedule, onUpdate }: StatusBarProps) {
           </div>
         </div>
       )}
-      
-      {/* Sensors section */}
-      <div className="status-bar-sensors">
-        {(status.voltage !== undefined || status.total_current !== undefined) && (
-          <div className="status-item sensor">
-            {status.voltage !== undefined && (
-              <span><strong>V:</strong> {status.voltage.toFixed(1)}V</span>
-            )}
-            {status.voltage !== undefined && status.total_current !== undefined && (
-              <span style={{ margin: '0 4px' }}>|</span>
-            )}
-            {status.total_current !== undefined && (
-              <span><strong>I:</strong> {status.total_current.toFixed(2)}A</span>
-            )}
-          </div>
-        )}
-        {status.fan_speed !== undefined && (
-          <div className="status-item sensor">
-            <span><strong>Fan:</strong> {status.fan_on ? `${status.fan_speed}%` : 'Off'}</span>
-          </div>
-        )}
-        {status.temperatures && status.temperatures.length > 0 && (
-          <div className="status-item sensor">
-            <strong>Temp:</strong> 
-            {status.temperatures.map((temp, i) => (
-              <span key={i}>
-                {i > 0 && ', '}
-                {temp.value.toFixed(1)}°C{temp.name ? ` (${temp.name})` : ''}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-      
       {/* Controls */}
       <div className="status-bar-controls">
         <StatusBarControls
