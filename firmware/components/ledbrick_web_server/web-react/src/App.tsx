@@ -140,14 +140,14 @@ export function App() {
         {isDebugModalOpen && (
           <ScheduleDebug onClose={() => setIsDebugModalOpen(false)} />
         )}
-        
-        <SettingsModal
-          isOpen={isSettingsModalOpen}
-          onClose={() => setIsSettingsModalOpen(false)}
-          schedule={schedule}
-          onUpdate={loadData}
-        />
       </div>
+      
+      <SettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
+        schedule={schedule}
+        onUpdate={loadData}
+      />
     </div>
   );
 }

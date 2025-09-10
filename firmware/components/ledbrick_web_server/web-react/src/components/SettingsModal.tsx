@@ -37,6 +37,8 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
   const [hasChanges, setHasChanges] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [localSchedule, setLocalSchedule] = useState<Schedule | null>(schedule);
   
   // Location settings
   const [latitude, setLatitude] = useState<string>('');
@@ -47,11 +49,28 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
   const [timeShiftMinutes, setTimeShiftMinutes] = useState<string>('0');
 
   useEffect(() => {
-    if (schedule && isOpen) {
+    if (isOpen && !schedule && !loading) {
+      // Load schedule if not available
+      setLoading(true);
+      api.getSchedule()
+        .then(scheduleData => {
+          setLocalSchedule(scheduleData);
+          setLoading(false);
+        })
+        .catch(err => {
+          setError(err.message || 'Failed to load schedule');
+          setLoading(false);
+        });
+    }
+  }, [isOpen, schedule, loading]);
+
+  useEffect(() => {
+    const currentSchedule = schedule || localSchedule;
+    if (currentSchedule && isOpen) {
       // Initialize channel configs
       const configs: ChannelConfigForm[] = [];
-      for (let i = 0; i < schedule.num_channels; i++) {
-        const config = schedule.channel_configs?.[i];
+      for (let i = 0; i < currentSchedule.num_channels; i++) {
+        const config = currentSchedule.channel_configs?.[i];
         configs.push({
           name: config?.name || `Channel ${i + 1}`,
           rgb_hex: config?.rgb_hex || DEFAULT_CHANNEL_COLORS[i % DEFAULT_CHANNEL_COLORS.length],
@@ -61,19 +80,19 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
       setChannelConfigs(configs);
       
       // Initialize location settings
-      setLatitude(schedule.latitude?.toString() || '37.7749');
-      setLongitude(schedule.longitude?.toString() || '-122.4194');
-      setTimezoneOffset(schedule.timezone_offset_hours?.toString() || '0');
-      setAstronomicalProjection(schedule.astronomical_projection || false);
-      setTimeShiftHours(schedule.time_shift_hours?.toString() || '0');
-      setTimeShiftMinutes(schedule.time_shift_minutes?.toString() || '0');
+      setLatitude(currentSchedule.latitude?.toString() || '37.7749');
+      setLongitude(currentSchedule.longitude?.toString() || '-122.4194');
+      setTimezoneOffset(currentSchedule.timezone_offset_hours?.toString() || '0');
+      setAstronomicalProjection(currentSchedule.astronomical_projection || false);
+      setTimeShiftHours(currentSchedule.time_shift_hours?.toString() || '0');
+      setTimeShiftMinutes(currentSchedule.time_shift_minutes?.toString() || '0');
       
       setHasChanges(false);
       setError(null);
     }
-  }, [schedule, isOpen]);
+  }, [schedule, localSchedule, isOpen]);
 
-  if (!isOpen || !schedule) return null;
+  if (!isOpen) return null;
 
   const handleChannelConfigChange = (index: number, field: keyof ChannelConfigForm, value: string | number) => {
     const newConfigs = [...channelConfigs];
@@ -124,15 +143,20 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
   };
 
   return (
-    <>
-      <div className="modal-overlay" onClick={onClose} />
-      <div className="modal-dialog modal-large">
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-dialog modal-large" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>Settings</h2>
           <button className="modal-close" onClick={onClose}>&times;</button>
         </div>
         
         <div className="modal-body">
+          {loading ? (
+            <div style={{ padding: '60px', textAlign: 'center' }}>
+              <div className="loading">Loading settings...</div>
+            </div>
+          ) : (
+          <>
           <div className="preset-buttons" style={{ marginBottom: '20px' }}>
             <button
               className={`preset-button ${activeTab === 'channels' ? 'active' : ''}`}
@@ -162,7 +186,11 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
 
           {activeTab === 'channels' ? (
             <div className="dual-channel-grid">
-              {channelConfigs.map((config, index) => (
+              {channelConfigs.length === 0 ? (
+                <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '40px' }}>
+                  <div className="loading">Loading channel configuration...</div>
+                </div>
+              ) : channelConfigs.map((config, index) => (
                 <div key={index} className="channel-dual-input">
                   <div className="channel-header" style={{ color: config.rgb_hex }}>
                     Channel {index + 1}
@@ -322,6 +350,8 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
               </div>
             </>
           )}
+          </>
+          )}
         </div>
         
         <div className="modal-footer">
@@ -337,6 +367,6 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
           </button>
         </div>
       </div>
-    </>
+    </div>
   );
 }

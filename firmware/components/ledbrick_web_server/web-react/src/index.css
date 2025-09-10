@@ -224,10 +224,11 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 9999;
 }
 
 .modal-dialog {
+  position: relative;
   background: #2a2a2a;
   border-radius: 8px;
   max-width: 800px;
@@ -235,6 +236,7 @@ body {
   max-height: 90vh;
   overflow-y: auto;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  z-index: 10000;
 }
 
 .modal-header {
