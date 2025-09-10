@@ -227,8 +227,14 @@ InterpolationResult LEDBrickScheduler::get_actual_channel_values() const {
     if (light_it != lights_.end() && light_it->second) {
       // Get actual current state (not the call values)
       auto remote_values = light_it->second->remote_values;
-      // Get brightness as percentage (0-100)
-      result.pwm_values[channel] = remote_values.get_brightness() * 100.0f;
+      // Check if light is on - if off, report 0% regardless of brightness setting
+      if (remote_values.is_on()) {
+        // Get brightness as percentage (0-100)
+        result.pwm_values[channel] = remote_values.get_brightness() * 100.0f;
+      } else {
+        // Light is off, report 0%
+        result.pwm_values[channel] = 0.0f;
+      }
     }
     
     // Get current value from current control
@@ -1008,8 +1014,10 @@ void LEDBrickScheduler::update_astronomical_times_for_scheduler() {
   astro_times.astronomical_dawn_minutes = civil_dawn > 60 ? civil_dawn - 60 : 0;
   astro_times.astronomical_dusk_minutes = civil_dusk < 1380 ? civil_dusk + 60 : 1439;
   
-  // Get moon data
-  auto moon_times = astro_calc_.get_moon_rise_set_times(dt);
+  // Get moon data (with projection if enabled)
+  auto moon_times = astronomical_projection_ ?
+    astro_calc_.get_projected_moon_rise_set_times(dt) :
+    astro_calc_.get_moon_rise_set_times(dt);
   float moon_phase = astro_calc_.get_moon_phase(dt);
   
   astro_times.moonrise_minutes = moon_times.rise_valid ? moon_times.rise_minutes : 0;
@@ -1108,9 +1116,16 @@ void LEDBrickScheduler::set_channel_manual_control(uint8_t channel, float pwm, f
   // Set light brightness (PWM)
   auto light_it = lights_.find(channel);
   if (light_it != lights_.end() && light_it->second) {
-    auto call = light_it->second->turn_on();
-    call.set_brightness(pwm / 100.0f);  // Convert percentage to 0-1
-    call.perform();
+    if (pwm <= 0.001f) {
+      // Turn off light when PWM is 0
+      auto call = light_it->second->turn_off();
+      call.perform();
+    } else {
+      // Turn on and set brightness
+      auto call = light_it->second->turn_on();
+      call.set_brightness(pwm / 100.0f);  // Convert percentage to 0-1
+      call.perform();
+    }
   }
   
   // Set current control
