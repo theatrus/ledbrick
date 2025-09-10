@@ -565,14 +565,17 @@ void LEDBrickScheduler::export_schedule_json(std::string &json_output) const {
     projected_times.astronomical_dusk_minutes = civil_dusk < 1380 ? civil_dusk + 60 : 1439;
     projected_times.valid = true;
     
+    // Get current astronomical times before modification
+    LEDScheduler::AstronomicalTimes original_times = scheduler_.get_astronomical_times();
+    
     // Temporarily set projected times for export
     const_cast<LEDScheduler&>(scheduler_).set_astronomical_times(projected_times);
     
     // Export with projected times
     json_output = scheduler_.export_json();
     
-    // Restore actual astronomical times (if needed for normal operation)
-    // Note: This is safe because the next update cycle will recalculate
+    // Restore original astronomical times to prevent moon simulation corruption
+    const_cast<LEDScheduler&>(scheduler_).set_astronomical_times(original_times);
   } else {
     // Use normal export without projection
     json_output = scheduler_.export_json();
