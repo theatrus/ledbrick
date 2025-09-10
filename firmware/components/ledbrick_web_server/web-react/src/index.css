@@ -132,15 +132,114 @@ body {
   justify-content: space-between;
   border-top: 1px solid #555;
   flex-wrap: wrap;
+  min-height: 50px;
+}
+
+/* Status bar sections for responsive layout */
+.status-bar-section {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.status-bar-info {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  flex-wrap: wrap;
+  flex: 0 1 auto;
+}
+
+.status-bar-channels {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  flex-wrap: wrap;
+  flex: 1 1 auto;
+  justify-content: center;
+}
+
+.status-bar-sensors {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  flex-wrap: wrap;
+  flex: 0 1 auto;
+}
+
+.status-bar-controls {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  flex: 0 1 auto;
+}
+
+/* Responsive breakpoints */
+@media (max-width: 1200px) {
+  .status-bar {
+    justify-content: center;
+  }
+  
+  .status-bar-channels {
+    flex-basis: 100%;
+    order: 1;
+  }
+  
+  .status-bar-info {
+    order: 2;
+  }
+  
+  .status-bar-sensors {
+    order: 3;
+  }
+  
+  .status-bar-controls {
+    order: 4;
+  }
+}
+
+@media (max-width: 768px) {
+  .status-bar {
+    padding: 8px 15px;
+    gap: 10px;
+  }
+  
+  .status-bar-section {
+    gap: 10px;
+  }
+  
+  .status-item {
+    font-size: 12px;
+  }
+  
+  .current-values {
+    gap: 10px;
+  }
+  
+  .channel-current {
+    font-size: 12px;
+  }
 }
 
 .status-item {
   display: flex;
   gap: 5px;
+  white-space: nowrap;
 }
 
 .status-item strong {
   color: #4a9eff;
+}
+
+/* Sensor status items */
+.status-item.sensor {
+  font-size: 11px;
+  color: #999;
+}
+
+.status-item.sensor strong {
+  color: #8bb9ff;
 }
 
 /* Table */
@@ -503,7 +602,6 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 15px;
-  margin-left: auto;
 }
 
 .channel-current {

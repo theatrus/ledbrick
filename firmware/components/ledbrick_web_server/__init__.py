@@ -15,6 +15,18 @@ LEDBrickWebServer = ledbrick_web_server_ns.class_("LEDBrickWebServer", cg.Compon
 CONF_SCHEDULER_ID = "scheduler_id"
 CONF_VOLTAGE_SENSOR_ID = "voltage_sensor_id"
 CONF_CURRENT_SENSOR_ID = "current_sensor_id"
+CONF_FAN_SPEED_SENSOR_ID = "fan_speed_sensor_id"
+CONF_FAN_STATE_SENSOR_ID = "fan_state_sensor_id"
+CONF_TEMPERATURE_SENSORS = "temperature_sensors"
+CONF_SENSOR_ID = "sensor_id"
+CONF_NAME = "name"
+
+TEMPERATURE_SENSOR_SCHEMA = cv.Schema(
+    {
+        cv.GenerateID(CONF_SENSOR_ID): cv.use_id(sensor.Sensor),
+        cv.Optional(CONF_NAME, default=""): cv.string,
+    }
+)
 
 CONFIG_SCHEMA = cv.All(
     cv.Schema(
@@ -26,6 +38,9 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_PASSWORD): cv.string,
             cv.Optional(CONF_VOLTAGE_SENSOR_ID): cv.use_id(sensor.Sensor),
             cv.Optional(CONF_CURRENT_SENSOR_ID): cv.use_id(sensor.Sensor),
+            cv.Optional(CONF_FAN_SPEED_SENSOR_ID): cv.use_id(sensor.Sensor),
+            cv.Optional(CONF_FAN_STATE_SENSOR_ID): cv.use_id(sensor.Sensor),
+            cv.Optional(CONF_TEMPERATURE_SENSORS, default=[]): cv.ensure_list(TEMPERATURE_SENSOR_SCHEMA),
         }
     ),
     cv.only_with_esp_idf,
@@ -55,6 +70,17 @@ async def to_code(config):
     if CONF_CURRENT_SENSOR_ID in config:
         current_sensor = await cg.get_variable(config[CONF_CURRENT_SENSOR_ID])
         cg.add(var.set_current_sensor(current_sensor))
+    if CONF_FAN_SPEED_SENSOR_ID in config:
+        fan_speed_sensor = await cg.get_variable(config[CONF_FAN_SPEED_SENSOR_ID])
+        cg.add(var.set_fan_speed_sensor(fan_speed_sensor))
+    if CONF_FAN_STATE_SENSOR_ID in config:
+        fan_state_sensor = await cg.get_variable(config[CONF_FAN_STATE_SENSOR_ID])
+        cg.add(var.set_fan_state_sensor(fan_state_sensor))
+    
+    # Wire temperature sensors
+    for temp_config in config[CONF_TEMPERATURE_SENSORS]:
+        temp_sensor = await cg.get_variable(temp_config[CONF_SENSOR_ID])
+        cg.add(var.add_temperature_sensor(temp_sensor, temp_config[CONF_NAME]))
     
     # Add defines
     cg.add_define("USE_LEDBRICK_WEB_SERVER")

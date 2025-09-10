@@ -31,6 +31,15 @@ class LEDBrickWebServer : public Component {
   void set_voltage_sensor(sensor::Sensor *sensor) { this->voltage_sensor_ = sensor; }
   void set_current_sensor(sensor::Sensor *sensor) { this->current_sensor_ = sensor; }
   
+  // Fan sensor setters
+  void set_fan_speed_sensor(sensor::Sensor *sensor) { this->fan_speed_sensor_ = sensor; }
+  void set_fan_state_sensor(sensor::Sensor *sensor) { this->fan_state_sensor_ = sensor; }
+  
+  // Temperature sensor setters (supports multiple sensors)
+  void add_temperature_sensor(sensor::Sensor *sensor, const std::string &name = "") {
+    this->temperature_sensors_.push_back({sensor, name});
+  }
+  
  protected:
   ledbrick_scheduler::LEDBrickScheduler *scheduler_;
   httpd_handle_t server_{nullptr};
@@ -79,6 +88,17 @@ class LEDBrickWebServer : public Component {
   // INA280 sensor references
   sensor::Sensor *voltage_sensor_{nullptr};
   sensor::Sensor *current_sensor_{nullptr};
+  
+  // Fan sensor references
+  sensor::Sensor *fan_speed_sensor_{nullptr};
+  sensor::Sensor *fan_state_sensor_{nullptr};
+  
+  // Temperature sensor references (can have multiple)
+  struct TemperatureSensorInfo {
+    sensor::Sensor *sensor;
+    std::string name;
+  };
+  std::vector<TemperatureSensorInfo> temperature_sensors_;
 };
 
 }  // namespace ledbrick_web_server

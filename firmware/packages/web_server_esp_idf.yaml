@@ -20,6 +20,13 @@ ledbrick_web_server:
   # Wire INA228 sensors if available
   voltage_sensor_id: ina228_bus_voltage
   current_sensor_id: ina228_current
+  # Wire fan sensors
+  fan_speed_sensor_id: fan_speed
+  fan_state_sensor_id: fan_speed  # Use fan speed as state (>0 = on, 0 = off)
+  # Wire temperature sensors
+  temperature_sensors:
+    - sensor_id: temperature_sensor
+      name: "Board"
 
 # Also provide some basic ESPHome web controls
 # These will work alongside our custom web server

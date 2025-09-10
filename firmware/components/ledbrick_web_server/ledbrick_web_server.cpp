@@ -491,12 +491,50 @@ esp_err_t LEDBrickWebServer::handle_api_status_get(httpd_req_t *req) {
   snprintf(time_str, sizeof(time_str), "%02d:%02d", time_min / 60, time_min % 60);
   doc["time_formatted"] = time_str;
   
+  // Add astronomical times
+  auto astro = self->scheduler_->get_astronomical_times();
+  if (astro.rise_valid) {
+    char sunrise_str[6];
+    snprintf(sunrise_str, sizeof(sunrise_str), "%02d:%02d", astro.rise_minutes / 60, astro.rise_minutes % 60);
+    doc["sunrise_time"] = sunrise_str;
+  }
+  if (astro.set_valid) {
+    char sunset_str[6];
+    snprintf(sunset_str, sizeof(sunset_str), "%02d:%02d", astro.set_minutes / 60, astro.set_minutes % 60);
+    doc["sunset_time"] = sunset_str;
+  }
+  
+  // Add moon phase
+  doc["moon_phase"] = self->scheduler_->get_moon_phase();
+  
   // Add INA280 sensor values if available
   if (self->voltage_sensor_ && self->voltage_sensor_->has_state()) {
     doc["voltage"] = self->voltage_sensor_->state;
   }
   if (self->current_sensor_ && self->current_sensor_->has_state()) {
     doc["total_current"] = self->current_sensor_->state;
+  }
+  
+  // Add fan sensor values if available
+  if (self->fan_speed_sensor_ && self->fan_speed_sensor_->has_state()) {
+    doc["fan_speed"] = self->fan_speed_sensor_->state;
+  }
+  if (self->fan_state_sensor_ && self->fan_state_sensor_->has_state()) {
+    doc["fan_on"] = self->fan_state_sensor_->state > 0.5f;  // Convert to boolean
+  }
+  
+  // Add temperature sensors if available
+  if (!self->temperature_sensors_.empty()) {
+    JsonArray temps = doc["temperatures"].to<JsonArray>();
+    for (const auto &temp_info : self->temperature_sensors_) {
+      if (temp_info.sensor && temp_info.sensor->has_state()) {
+        JsonObject temp = temps.add<JsonObject>();
+        temp["value"] = temp_info.sensor->state;
+        if (!temp_info.name.empty()) {
+          temp["name"] = temp_info.name;
+        }
+      }
+    }
   }
   
   self->send_json_response(req, 200, doc);

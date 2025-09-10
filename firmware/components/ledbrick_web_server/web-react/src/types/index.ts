@@ -41,6 +41,11 @@ export interface Channel {
   current: number;
 }
 
+export interface TemperatureSensor {
+  name?: string;
+  value: number;
+}
+
 export interface Status {
   enabled: boolean;
   time_formatted: string;
@@ -60,6 +65,9 @@ export interface Status {
   channels?: Channel[];
   voltage?: number;
   total_current?: number;
+  fan_speed?: number;
+  fan_on?: boolean;
+  temperatures?: TemperatureSensor[];
 }
 
 export interface InterpolationResult {
