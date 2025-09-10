@@ -20,15 +20,30 @@ const DEFAULT_CHANNEL_COLORS = [
   '#FF0000', '#FF00FF', '#FFFF00', '#FF8000'
 ];
 
-const COMMON_LOCATIONS = [
-  { name: 'San Francisco, CA', lat: 37.7749, lon: -122.4194 },
-  { name: 'Los Angeles, CA', lat: 34.0522, lon: -118.2437 },
-  { name: 'New York, NY', lat: 40.7128, lon: -74.0060 },
-  { name: 'Seattle, WA', lat: 47.6062, lon: -122.3321 },
-  { name: 'Miami, FL', lat: 25.7617, lon: -80.1918 },
-  { name: 'Denver, CO', lat: 39.7392, lon: -104.9903 },
-  { name: 'Chicago, IL', lat: 41.8781, lon: -87.6298 },
-  { name: 'Phoenix, AZ', lat: 33.4484, lon: -112.0740 },
+// Tropical reef locations around the world
+const REEF_PRESETS = [
+  // Pacific Ocean
+  { name: 'Great Barrier Reef, Australia', lat: -16.2859, lon: 145.7781 },
+  { name: 'Coral Triangle, Indonesia', lat: -2.5416, lon: 120.7590 },
+  { name: 'Palau Rock Islands', lat: 7.5150, lon: 134.5825 },
+  { name: 'Fiji Coral Reefs', lat: -17.7134, lon: 178.0650 },
+  { name: 'Tubbataha Reefs, Philippines', lat: 8.8575, lon: 119.9200 },
+  { name: 'French Polynesia Atolls', lat: -17.6797, lon: -149.4068 },
+  // Indian Ocean
+  { name: 'Maldives Atolls', lat: 3.2028, lon: 73.2207 },
+  { name: 'Andaman Sea Reefs, Thailand', lat: 9.1537, lon: 98.3366 },
+  { name: 'Seychelles Coral Reefs', lat: -4.6796, lon: 55.4920 },
+  { name: 'Chagos Archipelago', lat: -6.3400, lon: 71.8800 },
+  // Atlantic Ocean
+  { name: 'Caribbean Coral Reef, Puerto Rico', lat: 18.2208, lon: -66.5901 },
+  { name: 'Belize Barrier Reef', lat: 17.1899, lon: -87.9407 },
+  { name: 'Bahamas Banks', lat: 24.0954, lon: -76.0000 },
+  { name: 'Florida Keys Reef', lat: 24.6631, lon: -81.2717 },
+  { name: 'Turks and Caicos', lat: 21.6940, lon: -71.7979 },
+  // Red Sea
+  { name: 'Red Sea Coral Reefs, Egypt', lat: 27.2946, lon: 33.8317 },
+  { name: 'Eilat Coral Beach, Israel', lat: 29.5035, lon: 34.9200 },
+  { name: 'Farasan Islands, Saudi Arabia', lat: 16.7056, lon: 42.0361 },
 ];
 
 export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsModalProps) {
@@ -104,7 +119,7 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
     setHasChanges(true);
   };
 
-  const handleLocationPreset = (preset: typeof COMMON_LOCATIONS[0]) => {
+  const handleLocationPreset = (preset: typeof REEF_PRESETS[0]) => {
     setLatitude(preset.lat.toString());
     setLongitude(preset.lon.toString());
     setHasChanges(true);
@@ -120,13 +135,15 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
         await api.updateChannelConfigs(channelConfigs);
       } else {
         // Save location settings
+        // The backend now accepts timezone_offset_hours in the location endpoint
         await api.updateLocation(
           parseFloat(latitude),
           parseFloat(longitude),
           parseFloat(timezoneOffset)
         );
         
-        await api.updateTimeProjection(
+        // Save time shift settings using the original working endpoint
+        await api.setTimeShift(
           astronomicalProjection,
           parseInt(timeShiftHours) || 0,
           parseInt(timeShiftMinutes) || 0
@@ -290,9 +307,9 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
               </div>
               
               <div className="location-presets">
-                <h3>Common Locations</h3>
-                <div className="preset-buttons" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)' }}>
-                  {COMMON_LOCATIONS.map((location) => (
+                <h3>Reef Locations</h3>
+                <div className="preset-buttons" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', maxHeight: '300px', overflowY: 'auto' }}>
+                  {REEF_PRESETS.map((location) => (
                     <button
                       key={location.name}
                       className="preset-button"
