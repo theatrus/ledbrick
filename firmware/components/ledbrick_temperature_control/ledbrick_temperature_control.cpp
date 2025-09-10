@@ -155,9 +155,9 @@ void LEDBrickTemperatureControl::on_fan_pwm_change_(float pwm) {
             call.perform();
         } else {
             // Turn on fan and set speed
-            ESP_LOGI(TAG, "Turning fan ON with speed %.3f", pwm / 100.0f);
+            ESP_LOGI(TAG, "Turning fan ON with speed %.1f", pwm);
             auto call = fan_->turn_on();
-            call.set_speed(pwm / 100.0f);  // Convert percentage to 0-1
+            call.set_speed(pwm);  // ESPHome fan expects speed in range 0-100
             call.perform();
         }
     } else {

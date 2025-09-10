@@ -96,11 +96,11 @@ void LEDBrickScheduler::update() {
   static uint32_t last_log_time = 0;
   uint32_t current_millis = millis();
   if (current_millis - last_log_time > 10000) {
-    uint16_t current_time = get_current_time_minutes();
-    ESP_LOGD(TAG, "Scheduler active at %02u:%02u - Ch1: PWM=%.1f%%, Current=%.2fA", 
+    ESP_LOGD(TAG, "Scheduler active at %02u:%02u - Ch1: PWM=%.1f%%, Ch2: PWM=%.1f%%, Moon: %s", 
              current_time / 60, current_time % 60,
              values.pwm_values.size() > 0 ? values.pwm_values[0] : 0.0f,
-             values.current_values.size() > 0 ? values.current_values[0] : 0.0f);
+             values.pwm_values.size() > 1 ? values.pwm_values[1] : 0.0f,
+             scheduler_.get_moon_simulation().enabled ? "enabled" : "disabled");
     last_log_time = current_millis;
   }
 }
@@ -313,6 +313,9 @@ void LEDBrickScheduler::apply_values(const InterpolationResult &values) {
       // Only update if value has changed significantly (reduce unnecessary calls)
       if (last_pwm_values_.size() <= channel || 
           abs(brightness - last_pwm_values_[channel]) > 0.001f) {
+        
+        ESP_LOGV(TAG, "Updating light %u: scaled_pwm=%.2f%%, brightness=%.3f", 
+                 channel, scaled_pwm, brightness);
         
         // Create light call to set brightness
         auto call = light_it->second->make_call();

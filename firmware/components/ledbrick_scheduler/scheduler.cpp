@@ -614,6 +614,7 @@ LEDScheduler::InterpolationResult LEDScheduler::apply_moon_simulation(const Inte
     
     // Check if moon should be visible
     if (!is_moon_visible(current_time, astro_times)) {
+        // LOG_DEBUG("Moon not visible at %02d:%02d", current_time / 60, current_time % 60);
         return result; // Moon not visible, return original result
     }
     
