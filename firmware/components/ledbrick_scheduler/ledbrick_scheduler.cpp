@@ -114,6 +114,30 @@ void LEDBrickScheduler::update() {
            values.pwm_values.size(),
            scheduler_.get_schedule_size());
            
+  // Check if moon simulation is active
+  if (scheduler_.get_moon_simulation().enabled && values.valid && values.pwm_values.size() > 0) {
+    // Get moon visibility status
+    auto moon_times = get_moon_rise_set_times();
+    bool moon_visible = (moon_times.rise_minutes < moon_times.set_minutes) ?
+                       (current_time >= moon_times.rise_minutes && current_time <= moon_times.set_minutes) :
+                       (current_time >= moon_times.rise_minutes || current_time <= moon_times.set_minutes);
+    
+    // Check if channels are dark
+    bool all_dark = true;
+    for (size_t i = 0; i < values.pwm_values.size(); i++) {
+      if (values.pwm_values[i] > 0.1f) {
+        all_dark = false;
+        break;
+      }
+    }
+    
+    ESP_LOGD(TAG, "Moon sim status - Enabled: yes, Moon visible: %s, Channels dark: %s, Phase: %.1f%%, Ch1: PWM=%.1f%%, Current=%.3fA", 
+             moon_visible ? "yes" : "no",
+             all_dark ? "yes" : "no",
+             get_moon_phase() * 100.0f,
+             values.pwm_values[0], values.current_values[0]);
+  }
+           
   if (values.valid) {
     apply_values(values);
   } else {
@@ -418,6 +442,14 @@ void LEDBrickScheduler::apply_values(const InterpolationResult &values) {
           last_current_values_.resize(num_channels_, -1.0f);
         }
         last_current_values_[channel] = target_current;
+        
+        // Enhanced logging for channel 1 when values change
+        if (channel == 0) {
+          ESP_LOGD(TAG, "Ch1 current update: %.3fA (input: %.3fA, max limit: %.3fA)", 
+                   target_current, values.current_values[channel],
+                   max_current_it != max_current_controls_.end() && max_current_it->second ? 
+                   max_current_it->second->state : 999.0f);
+        }
         
         ESP_LOGV(TAG, "Updated current %u to %.3fA (limited from %.3fA)", 
                  channel, target_current, values.current_values[channel]);
@@ -895,6 +927,9 @@ void LEDBrickScheduler::set_location(double latitude, double longitude) {
   // Update astronomical calculator
   astro_calc_.set_location(latitude_, longitude_);
   
+  // Force immediate recalculation of astronomical times for dynamic schedule points
+  update_astronomical_times_for_scheduler();
+  
   // Save complete schedule (includes all settings)
   save_schedule_to_flash();
   ESP_LOGI(TAG, "Location updated to %.4f, %.4f and saved", latitude, longitude);
@@ -908,6 +943,9 @@ void LEDBrickScheduler::set_astronomical_projection(bool enabled) {
   
   astronomical_projection_ = enabled;
   astro_calc_.set_projection_settings(astronomical_projection_, time_shift_hours_, time_shift_minutes_);
+  
+  // Force immediate recalculation of astronomical times for dynamic schedule points
+  update_astronomical_times_for_scheduler();
   
   // Save complete schedule (includes all settings)
   save_schedule_to_flash();
@@ -923,6 +961,9 @@ void LEDBrickScheduler::set_time_shift(int hours, int minutes) {
   time_shift_hours_ = hours;
   time_shift_minutes_ = minutes;
   astro_calc_.set_projection_settings(astronomical_projection_, time_shift_hours_, time_shift_minutes_);
+  
+  // Force immediate recalculation of astronomical times for dynamic schedule points
+  update_astronomical_times_for_scheduler();
   
   // Save to persistent storage (scheduler JSON)
   save_schedule_to_flash();
@@ -1050,14 +1091,28 @@ void LEDBrickScheduler::set_moon_simulation(const LEDScheduler::MoonSimulation& 
   auto current_moon = scheduler_.get_moon_simulation();
   if (current_moon.enabled == config.enabled && 
       current_moon.phase_scaling == config.phase_scaling &&
-      current_moon.base_intensity.size() == config.base_intensity.size()) {
+      current_moon.base_intensity.size() == config.base_intensity.size() &&
+      current_moon.base_current.size() == config.base_current.size()) {
     bool changed = false;
+    
+    // Check intensity values
     for (size_t i = 0; i < config.base_intensity.size(); i++) {
       if (abs(current_moon.base_intensity[i] - config.base_intensity[i]) > 0.01f) {
         changed = true;
         break;
       }
     }
+    
+    // Check current values
+    if (!changed) {
+      for (size_t i = 0; i < config.base_current.size(); i++) {
+        if (abs(current_moon.base_current[i] - config.base_current[i]) > 0.001f) {
+          changed = true;
+          break;
+        }
+      }
+    }
+    
     if (!changed) {
       return;  // No change, skip save
     }

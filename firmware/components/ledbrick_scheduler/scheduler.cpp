@@ -614,8 +614,8 @@ LEDScheduler::InterpolationResult LEDScheduler::apply_moon_simulation(const Inte
     
     // Check if moon should be visible
     if (!is_moon_visible(current_time, astro_times)) {
-        // LOG_DEBUG("Moon not visible at %02d:%02d", current_time / 60, current_time % 60);
-        return result; // Moon not visible, return original result
+        // Moon not visible, return original result
+        return result;
     }
     
     // Check if all channels are at or near zero
@@ -631,6 +631,7 @@ LEDScheduler::InterpolationResult LEDScheduler::apply_moon_simulation(const Inte
     
     // If main lights are on, don't apply moonlight
     if (!all_channels_dark) {
+        // Main lights are on, moon simulation blocked
         return result;
     }
     
@@ -670,6 +671,15 @@ LEDScheduler::InterpolationResult LEDScheduler::apply_moon_simulation(const Inte
             
             // Apply moonlight current directly
             result.current_values[i] = moon_current;
+        }
+        
+        // Debug logging for channel 1 (index 0)
+        if (i == 0) {
+            // LOG_DEBUG("Moon sim ch1: PWM=%.1f%%, Current=%.3fA (base: PWM=%.1f%%, Current=%.3fA, phase=%.2f, brightness=%.2f)", 
+            //           result.pwm_values[i], result.current_values[i],
+            //           i < moon_simulation_.base_intensity.size() ? moon_simulation_.base_intensity[i] : 0.0f,
+            //           i < moon_simulation_.base_current.size() ? moon_simulation_.base_current[i] : 0.0f,
+            //           astro_times.moon_phase, moon_brightness);
         }
     }
     
