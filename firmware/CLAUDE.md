@@ -82,8 +82,11 @@ The web interface is built with React + TypeScript + Vite:
 - `make test-temperature` - Test temperature control only
 - `make test-clang` - Run tests with clang++ compiler
 - `make web` - Build React web UI and generate C++
+- `make web-debug` - Build React web UI without minification (for debugging)
 - `make dev` - Start React development server with device proxy
+- `make preview` - Serve minified build locally to debug minification issues
 - `make esphome` - Build web UI then compile ESPHome firmware
+- `make esphome-debug` - Build ESPHome with non-minified web UI (for debugging)
 - `make clean` - Clean unit test builds
 - `make clean-all` - Clean everything including ESPHome builds
 - `make help` - Show all available targets
@@ -184,6 +187,9 @@ The project follows a clean separation between core algorithms and ESPHome integ
 - **Channel Colors**: Schedule table uses actual channel colors as background tones
 - **Manual Channel Control**: Click channels in status bar for direct PWM/current control
 - **Debug Mode**: Non-minified builds for easier troubleshooting
+- **Schedule Chart Current View**: Toggle between PWM % and Current (mA) display modes
+- **Temperature Control Improvements**: Fan maintains minimum speed within 10°C below setpoint to prevent oscillation
+- **Minification Fix**: Centralized constants and safer minification settings to prevent runtime errors
 
 ### API Endpoints
 - `GET /api/status` - System status with sensor data
@@ -238,6 +244,8 @@ The project follows a clean separation between core algorithms and ESPHome integ
 - **API testing**: Access endpoints directly at `http://device-ip/api/*`
 - **Serialization issues**: Check channel_configs vector sizing in deserialize()
 - **Build issues**: Run `make clean-all` then `make esphome` for clean rebuild
+- **Minification errors**: Use `make preview` to test minified build locally with source maps
+- **Non-minified build**: Use `make esphome-debug` to build firmware without minification
 
 ## Development Notes
 
@@ -251,3 +259,6 @@ The project follows a clean separation between core algorithms and ESPHome integ
 - Frontend uses React + TypeScript with Vite for modern development experience
 - CSS uses responsive design with flexbox and media queries
 - State management avoids full page refreshes for better UX
+- Constants are centralized in `src/constants/` to prevent minification issues
+- Vite configuration uses safer minification settings to prevent runtime errors
+- Source maps are enabled for production builds to aid debugging

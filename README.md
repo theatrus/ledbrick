@@ -111,7 +111,10 @@ make esphome
 # Individual components
 make test           # Run all unit tests
 make web            # Build React web interface
+make web-debug      # Build non-minified web UI (for debugging)
 make dev            # Start development server (set LEDBRICK_IP=device-ip)
+make preview        # Serve minified build locally (debug minification)
+make esphome-debug  # Build firmware with non-minified web UI
 make clean-all      # Clean all build artifacts
 make help           # Show all available targets
 ```
@@ -133,6 +136,8 @@ make help           # Show all available targets
 - **Schedule Management**: Visual schedule editor with interpolation and presets
 - **Location Settings**: Built-in reef location presets for accurate astronomical timing
 - **Sensor Monitoring**: Display of power consumption, temperature, and fan status
+- **Schedule Chart Modes**: Toggle between PWM % and Current (mA) display views
+- **Debug Support**: Source maps and non-minified builds for troubleshooting
 
 #### Sensor Integration
 - **Power Monitoring**: INA228 current/voltage sensor with real-time display
@@ -146,6 +151,7 @@ make help           # Show all available targets
 - **Emergency Thermal Protection**: Automatic shutdown with configurable thresholds
 - **Fan Curve Management**: Dynamic fan speed based on temperature with customizable curve
 - **Real-time Monitoring**: Temperature status and PID performance metrics in web UI
+- **Anti-Oscillation Logic**: Fan maintains minimum speed within 10°C below setpoint
 
 #### Smart Home Integration
 - **Home Assistant**: Native ESPHome integration with automatic discovery

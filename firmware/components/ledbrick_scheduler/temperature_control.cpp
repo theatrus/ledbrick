@@ -259,8 +259,8 @@ void TemperatureControl::update_fan_control(uint32_t current_time_ms) {
         } else {
             fan_pwm_output = pid_output;
         }
-    } else if (status_.fan_enabled) {
-        // Fan is already on - keep it at minimum to prevent oscillation
+    } else if (status_.fan_enabled && cooling_error > -10.0f) {
+        // Fan is already on AND we're within 10°C of target - keep it at minimum to prevent oscillation
         // This prevents the fan from turning off when slightly below setpoint
         // in systems with continuous heat input
         should_enable_fan = true;
