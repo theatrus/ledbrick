@@ -48,6 +48,61 @@ The **LEDBrick Plus** is a modern, high-performance 8-channel LED driver designe
 - **MQTT Compatible**: Optional MQTT broker support
 - **RESTful API**: HTTP API for custom integrations
 
+### 🌐 Web UI Features
+
+The LEDBrick Plus includes a professional web interface for complete control and monitoring:
+
+#### Schedule Visualization & Control
+<img src="static/ui1.png" alt="LEDBrick Schedule Visualization" width="800">
+
+- **Interactive Schedule Graph**: Visual representation of all 8 channels with real-time updates
+- **PWM % and Current (mA) Views**: Toggle between percentage and milliamp display modes
+- **Moonrise/Moonset Indicators**: Astronomical event markers on the timeline
+- **Schedule Point Editor**: Add, edit, and delete schedule points with precise timing
+- **Channel Legend**: Color-coded channel identification with individual enable/disable
+
+#### Moon Phase Simulation
+<img src="static/ui2.png" alt="Moon Phase Simulation Settings" width="800">
+
+- **Moon Phase Integration**: Automatic moon phase calculation based on location
+- **PWM & Current Scaling**: Scale channel output based on current moon phase
+- **Individual Channel Control**: Manual override sliders for each channel
+- **Real-time Current Display**: Live monitoring of actual current draw per channel
+- **Quick Presets**: All Off, Dim (5%), and Bright (10%) quick access buttons
+
+#### Schedule Import/Export
+<img src="static/ui3.png" alt="Schedule Import/Export" width="800">
+
+- **JSON Format**: Human-readable schedule configuration format
+- **Backup & Restore**: Export current schedule and import saved configurations
+- **Clear Schedule**: Quick reset option for starting fresh
+- **Astronomical Timing**: Includes sunrise/sunset offsets and timing parameters
+
+#### Temperature Control System
+<img src="static/ui4.png" alt="Temperature Control Settings" width="800">
+
+- **PID Controller Configuration**: Adjustable Kp, Ki, Kd parameters
+- **Temperature Thresholds**: Configurable target, emergency, and recovery temperatures
+- **Fan Control Settings**: Min/max PWM limits and update intervals
+- **Advanced Options**: Emergency delay, sensor timeout, and filter parameters
+- **Fan Response Curve**: Visual representation of temperature-to-PWM mapping
+
+#### Channel Configuration
+<img src="static/ui6.png" alt="Channel Configuration" width="800">
+
+- **8 Configurable Channels**: Name, color, and maximum current per channel
+- **Visual Color Selection**: Color picker with hex code support
+- **Current Limiting**: Hardware-enforced maximum current settings (0-2A)
+- **Save/Cancel Options**: Apply changes or revert to previous settings
+
+#### Location & Time Settings
+<img src="static/uit5.png" alt="Location and Time Settings" width="800">
+
+- **Geographic Configuration**: Latitude, longitude, and timezone settings
+- **Reef Location Presets**: Quick selection of popular reef locations worldwide
+- **Astronomical Time Projection**: Simulate lighting from remote reef locations
+- **Time Shift Options**: Hour and minute offsets for schedule adjustment
+
 ### 🎛️ Advanced Control Features
 
 - **Individual Channel Control**: Independent PWM brightness and current limiting

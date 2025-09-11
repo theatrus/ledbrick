@@ -1,0 +1,405 @@
+# LEDBrick Plus Multi-Unit Dashboard
+# Modern dashboard supporting multiple LEDBrick Plus units grouped by tank
+# Uses direct sensor values from ESPHome devices without complex automation
+
+type: vertical-stack
+cards:
+  # === Tank Selection & Overview ===
+  - type: entities
+    title: Tank Control Center
+    show_header_toggle: false
+    entities:
+      - entity: input_select.active_tank
+        name: Select Tank
+        
+      - type: custom:template-entity-row
+        name: Units
+        state: >
+          {% set groups = states('input_text.tank_groups') | from_json %}
+          {% set tank = states('input_select.active_tank') %}
+          {{ groups[tank] | length if tank in groups else 0 }} units
+        secondary: >
+          {% set groups = states('input_text.tank_groups') | from_json %}
+          {% set tank = states('input_select.active_tank') %}
+          {{ groups[tank] | join(', ') if tank in groups else 'No units configured' }}
+        icon: mdi:led-strip-variant
+        
+      - type: custom:template-entity-row
+        name: Total Power
+        state: >
+          {% set groups = states('input_text.tank_groups') | from_json %}
+          {% set tank = states('input_select.active_tank') %}
+          {% set units = groups.get(tank, []) %}
+          {% set ns = namespace(total_current=0, total_voltage=0, count=0) %}
+          {% for unit in units %}
+            {% set current = states('sensor.' + unit + '_ina228_current') | float(0) %}
+            {% set voltage = states('sensor.' + unit + '_ina228_bus_voltage') | float(0) %}
+            {% if current > 0 and voltage > 0 %}
+              {% set ns.total_current = ns.total_current + current %}
+              {% set ns.total_voltage = ns.total_voltage + voltage %}
+              {% set ns.count = ns.count + 1 %}
+            {% endif %}
+          {% endfor %}
+          {% if ns.count > 0 %}
+            {{ (ns.total_current * (ns.total_voltage / ns.count)) | round(1) }}W
+          {% else %}
+            0W
+          {% endif %}
+        icon: mdi:flash
+        
+      - type: custom:template-entity-row
+        name: Schedule Status
+        state: >
+          {% set groups = states('input_text.tank_groups') | from_json %}
+          {% set tank = states('input_select.active_tank') %}
+          {% set units = groups.get(tank, []) %}
+          {% if units | length == 0 %}
+            No units
+          {% else %}
+            {% set scheduled = namespace(count=0) %}
+            {% for unit in units %}
+              {% if is_state('switch.' + unit + '_scheduler_enabled', 'on') %}
+                {% set scheduled.count = scheduled.count + 1 %}
+              {% endif %}
+            {% endfor %}
+            {% if scheduled.count == units | length %}
+              All Scheduled
+            {% elif scheduled.count == 0 %}
+              All Manual
+            {% else %}
+              {{ scheduled.count }}/{{ units | length }} Scheduled
+            {% endif %}
+          {% endif %}
+        icon: mdi:calendar-clock
+
+  # === Quick Controls for Tank Group ===
+  - type: horizontal-stack
+    cards:
+      - type: custom:button-card
+        name: Toggle Scheduler
+        icon: mdi:calendar-clock
+        tap_action:
+          action: call-service
+          service: script.turn_on
+          target:
+            entity_id: script.tank_toggle_scheduler
+        state:
+          - value: 'on'
+            styles:
+              card:
+                - background-color: var(--primary-color)
+                - color: var(--text-primary-color)
+        entity: script.tank_toggle_scheduler
+        show_state: false
+
+      - type: custom:button-card
+        name: All Off
+        icon: mdi:lightbulb-off
+        tap_action:
+          action: call-service
+          service: script.turn_on
+          target:
+            entity_id: script.tank_all_off
+
+      - type: custom:button-card
+        name: Photo Mode
+        icon: mdi:camera
+        tap_action:
+          action: call-service
+          service: script.turn_on
+          target:
+            entity_id: script.tank_photo_mode
+
+  # === Global Tank Controls ===
+  - type: entities
+    title: Tank Settings
+    show_header_toggle: false
+    entities:
+      - entity: input_number.tank_brightness
+        name: Tank Brightness
+        
+      - entity: input_boolean.sync_units
+        name: Sync All Units in Tank
+
+  # === Channel Status Grid (Shows Average/First Unit) ===
+  - type: markdown
+    card_mod:
+      style: |
+        ha-card {
+          padding: 16px;
+        }
+    content: |
+      ### Channel Status
+      {% set groups = states('input_text.tank_groups') | from_json %}
+      {% set tank = states('input_select.active_tank') %}
+      {% set units = groups.get(tank, []) %}
+      {% if units | length > 0 %}
+      {% set unit = units[0] %}
+      | Channel | Color | PWM | Current |
+      |---------|-------|-----|---------|
+      {% for i in range(1, 9) %}
+      | **Ch{{ i }}** | <span style="color: {{ states('text_sensor.' + unit + '_ch' + i|string + '_color').state | default('#FFFFFF') }}">⬤</span> | {{ states('sensor.' + unit + '_scheduler_pwm_channel_' + i|string) | default('--') }}% | {{ states('sensor.' + unit + '_scheduler_current_channel_' + i|string) | default('--') }}A |
+      {% endfor %}
+      {% else %}
+      *No units configured for this tank*
+      {% endif %}
+
+  # === Individual Unit Cards ===
+  - type: conditional
+    conditions:
+      - condition: template
+        value_template: >
+          {% set groups = states('input_text.tank_groups') | from_json %}
+          {% set tank = states('input_select.active_tank') %}
+          {{ groups.get(tank, []) | length > 0 }}
+    card:
+      type: vertical-stack
+      cards:
+        - type: markdown
+          content: "### Individual Unit Status"
+          
+        - type: custom:auto-entities
+          card:
+            type: entities
+            title: ""
+          filter:
+            template: |
+              {% set groups = states('input_text.tank_groups') | from_json %}
+              {% set tank = states('input_select.active_tank') %}
+              {% set units = groups.get(tank, []) %}
+              {% set entities = [] %}
+              {% for unit in units %}
+                {% set entities = entities + [
+                  {
+                    'type': 'custom:multiple-entity-row',
+                    'entity': 'switch.' + unit + '_scheduler_enabled',
+                    'name': unit | replace('_', ' ') | title,
+                    'toggle': true,
+                    'state_header': 'Schedule',
+                    'secondary_info': 'Temp: ' + states('sensor.' + unit + '_dallas_temperature') | default('--') + '°C',
+                    'entities': [
+                      {
+                        'entity': 'sensor.' + unit + '_ina228_current',
+                        'name': 'Current',
+                        'unit': 'A'
+                      },
+                      {
+                        'entity': 'sensor.' + unit + '_fan_speed',
+                        'name': 'Fan',
+                        'unit': 'RPM'
+                      },
+                      {
+                        'entity': 'number.' + unit + '_pwm_scale',
+                        'name': 'Brightness',
+                        'unit': '%'
+                      }
+                    ]
+                  }
+                ] %}
+              {% endfor %}
+              {{ entities }}
+
+  # === Temperature Control Status ===
+  - type: entities
+    title: Temperature Management
+    show_header_toggle: false
+    entities:
+      - type: custom:auto-entities
+        card:
+          type: entities
+        filter:
+          template: |
+            {% set groups = states('input_text.tank_groups') | from_json %}
+            {% set tank = states('input_select.active_tank') %}
+            {% set units = groups.get(tank, []) %}
+            {% set entities = [] %}
+            {% for unit in units %}
+              {% set entities = entities + [
+                {
+                  'entity': 'switch.' + unit + '_temperature_control_enable',
+                  'name': unit | replace('_', ' ') | title + ' Temp Control',
+                  'secondary_info': 'Current: ' + states('sensor.' + unit + '_temperature_control_current') | default('--') + '°C | Target: ' + states('sensor.' + unit + '_temperature_control_target') | default('--') + '°C'
+                }
+              ] %}
+            {% endfor %}
+            {{ entities }}
+
+  # === Presets & Actions ===
+  - type: entities
+    title: Schedule Management
+    show_header_toggle: false
+    entities:
+      - type: custom:button-entity-row
+        buttons:
+          - name: Dynamic
+            icon: mdi:auto-fix
+            tap_action:
+              action: call-service
+              service: script.turn_on
+              target:
+                entity_id: script.tank_load_preset
+              data:
+                variables:
+                  preset: "dynamic_sunrise_sunset"
+                
+          - name: Full
+            icon: mdi:white-balance-sunny
+            tap_action:
+              action: call-service
+              service: script.turn_on
+              target:
+                entity_id: script.tank_load_preset
+              data:
+                variables:
+                  preset: "full_spectrum"
+                
+          - name: Simple
+            icon: mdi:lightbulb
+            tap_action:
+              action: call-service
+              service: script.turn_on
+              target:
+                entity_id: script.tank_load_preset
+              data:
+                variables:
+                  preset: "simple"
+                
+          - name: Clear
+            icon: mdi:delete
+            tap_action:
+              action: call-service
+              service: script.turn_on
+              target:
+                entity_id: script.tank_clear_schedule
+              confirmation:
+                text: Clear schedule for all units in this tank?
+
+# === Required Scripts ===
+# Add these scripts to your configuration.yaml or scripts.yaml:
+
+script:
+  tank_toggle_scheduler:
+    alias: "Toggle Tank Scheduler"
+    sequence:
+      - variables:
+          groups: "{{ states('input_text.tank_groups') | from_json }}"
+          tank: "{{ states('input_select.active_tank') }}"
+          units: "{{ groups.get(tank, []) }}"
+      - repeat:
+          for_each: "{{ units }}"
+          sequence:
+            - service: switch.toggle
+              target:
+                entity_id: "switch.{{ repeat.item }}_scheduler_enabled"
+
+  tank_all_off:
+    alias: "Tank All Off"
+    sequence:
+      - variables:
+          groups: "{{ states('input_text.tank_groups') | from_json }}"
+          tank: "{{ states('input_select.active_tank') }}"
+          units: "{{ groups.get(tank, []) }}"
+      - repeat:
+          for_each: "{{ units }}"
+          sequence:
+            - service: number.set_value
+              target:
+                entity_id: "number.{{ repeat.item }}_pwm_scale"
+              data:
+                value: 0
+
+  tank_photo_mode:
+    alias: "Tank Photo Mode"
+    sequence:
+      - variables:
+          groups: "{{ states('input_text.tank_groups') | from_json }}"
+          tank: "{{ states('input_select.active_tank') }}"
+          units: "{{ groups.get(tank, []) }}"
+      - repeat:
+          for_each: "{{ units }}"
+          sequence:
+            - service: number.set_value
+              target:
+                entity_id: "number.{{ repeat.item }}_pwm_scale"
+              data:
+                value: 85
+
+  tank_load_preset:
+    alias: "Load Preset for Tank"
+    fields:
+      preset:
+        description: "Preset name to load"
+        example: "dynamic_sunrise_sunset"
+    sequence:
+      - variables:
+          groups: "{{ states('input_text.tank_groups') | from_json }}"
+          tank: "{{ states('input_select.active_tank') }}"
+          units: "{{ groups.get(tank, []) }}"
+      - condition: template
+        value_template: "{{ sync_units }}"
+      - repeat:
+          for_each: "{{ units }}"
+          sequence:
+            - service: "esphome.{{ repeat.item }}_load_preset"
+              data:
+                preset_name: "{{ preset }}"
+
+  tank_clear_schedule:
+    alias: "Clear Tank Schedule"
+    sequence:
+      - variables:
+          groups: "{{ states('input_text.tank_groups') | from_json }}"
+          tank: "{{ states('input_select.active_tank') }}"
+          units: "{{ groups.get(tank, []) }}"
+      - repeat:
+          for_each: "{{ units }}"
+          sequence:
+            - service: "esphome.{{ repeat.item }}_clear_schedule"
+
+# === Required Helpers ===
+# Add these to your configuration.yaml:
+
+input_text:
+  tank_groups:
+    name: "Tank Group Configuration"
+    initial: >
+      {
+        "main_tank": ["ledbrickplus"],
+        "frag_tank": [],
+        "quarantine": []
+      }
+    max: 255
+    mode: text
+
+input_select:
+  active_tank:
+    name: "Active Tank"
+    options:
+      - "main_tank"
+      - "frag_tank" 
+      - "quarantine"
+    initial: "main_tank"
+    icon: mdi:fishbowl
+
+input_number:
+  tank_brightness:
+    name: "Tank Brightness"
+    min: 0
+    max: 100
+    step: 5
+    unit_of_measurement: "%"
+    icon: mdi:brightness-6
+
+input_boolean:
+  sync_units:
+    name: "Sync Units in Tank"
+    icon: mdi:sync
+    initial: on
+
+# === Custom Cards Required ===
+# Install via HACS:
+# - button-card
+# - auto-entities
+# - multiple-entity-row
+# - card-mod
+# - layout-card
