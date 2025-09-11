@@ -82,14 +82,14 @@ cards:
           action: call-service
           service: script.turn_on
           target:
-            entity_id: script.tank_toggle_scheduler
+            entity_id: script.ledbrick_toggle_scheduler
         state:
           - value: 'on'
             styles:
               card:
                 - background-color: var(--primary-color)
                 - color: var(--text-primary-color)
-        entity: script.tank_toggle_scheduler
+        entity: script.ledbrick_toggle_scheduler
         show_state: false
 
       - type: custom:button-card
@@ -99,7 +99,9 @@ cards:
           action: call-service
           service: script.turn_on
           target:
-            entity_id: script.tank_all_off
+            entity_id: script.ledbrick_set_brightness
+          data:
+            brightness: 0
 
       - type: custom:button-card
         name: Photo Mode
@@ -108,7 +110,7 @@ cards:
           action: call-service
           service: script.turn_on
           target:
-            entity_id: script.tank_photo_mode
+            entity_id: script.ledbrick_photo_mode
 
   # === Global Tank Controls ===
   - type: entities
@@ -138,7 +140,7 @@ cards:
       | Channel | Color | PWM | Current |
       |---------|-------|-----|---------|
       {% for i in range(1, 9) %}
-      | **Ch{{ i }}** | <span style="color: {{ states('text_sensor.' + unit + '_ch' + i|string + '_color').state | default('#FFFFFF') }}">⬤</span> | {{ states('sensor.' + unit + '_scheduler_pwm_channel_' + i|string) | default('--') }}% | {{ states('sensor.' + unit + '_scheduler_current_channel_' + i|string) | default('--') }}A |
+      | **Ch{{ i }}** | <span style="color: {{ (states('text_sensor.' + unit + '_ch' + i|string + '_color') and states('text_sensor.' + unit + '_ch' + i|string + '_color').state) | default('#FFFFFF') }}">⬤</span> | {% set light = states('light.' + unit + '_ch' + i|string + '_pwm') %}{{ (light.attributes.brightness / 255 * 100) | round(0) if light and light.attributes.brightness else '--' }}% | {{ states('number.' + unit + '_ch' + i|string + '_current') | float(0) | round(2) }}A |
       {% endfor %}
       {% else %}
       *No units configured for this tank*
@@ -237,10 +239,9 @@ cards:
               action: call-service
               service: script.turn_on
               target:
-                entity_id: script.tank_load_preset
+                entity_id: script.ledbrick_load_preset
               data:
-                variables:
-                  preset: "dynamic_sunrise_sunset"
+                preset: "dynamic_sunrise_sunset"
                 
           - name: Full
             icon: mdi:white-balance-sunny
@@ -248,10 +249,9 @@ cards:
               action: call-service
               service: script.turn_on
               target:
-                entity_id: script.tank_load_preset
+                entity_id: script.ledbrick_load_preset
               data:
-                variables:
-                  preset: "full_spectrum"
+                preset: "full_spectrum"
                 
           - name: Simple
             icon: mdi:lightbulb
@@ -259,10 +259,9 @@ cards:
               action: call-service
               service: script.turn_on
               target:
-                entity_id: script.tank_load_preset
+                entity_id: script.ledbrick_load_preset
               data:
-                variables:
-                  preset: "simple"
+                preset: "simple"
                 
           - name: Clear
             icon: mdi:delete
@@ -270,131 +269,17 @@ cards:
               action: call-service
               service: script.turn_on
               target:
-                entity_id: script.tank_clear_schedule
+                entity_id: script.ledbrick_clear_schedule
               confirmation:
                 text: Clear schedule for all units in this tank?
 
-# === Required Scripts ===
-# Add these scripts to your configuration.yaml or scripts.yaml:
+# === Required Configuration ===
+# Make sure you have installed the ledbrick_simple_package.yaml which includes:
+# - All necessary scripts (ledbrick_load_preset, ledbrick_clear_schedule, etc.)
+# - Input helpers (tank_groups, active_tank, tank_brightness, sync_units)
+# - Template sensors for monitoring
 
-script:
-  tank_toggle_scheduler:
-    alias: "Toggle Tank Scheduler"
-    sequence:
-      - variables:
-          groups: "{{ states('input_text.tank_groups') | from_json }}"
-          tank: "{{ states('input_select.active_tank') }}"
-          units: "{{ groups.get(tank, []) }}"
-      - repeat:
-          for_each: "{{ units }}"
-          sequence:
-            - service: switch.toggle
-              target:
-                entity_id: "switch.{{ repeat.item }}_scheduler_enabled"
-
-  tank_all_off:
-    alias: "Tank All Off"
-    sequence:
-      - variables:
-          groups: "{{ states('input_text.tank_groups') | from_json }}"
-          tank: "{{ states('input_select.active_tank') }}"
-          units: "{{ groups.get(tank, []) }}"
-      - repeat:
-          for_each: "{{ units }}"
-          sequence:
-            - service: number.set_value
-              target:
-                entity_id: "number.{{ repeat.item }}_pwm_scale"
-              data:
-                value: 0
-
-  tank_photo_mode:
-    alias: "Tank Photo Mode"
-    sequence:
-      - variables:
-          groups: "{{ states('input_text.tank_groups') | from_json }}"
-          tank: "{{ states('input_select.active_tank') }}"
-          units: "{{ groups.get(tank, []) }}"
-      - repeat:
-          for_each: "{{ units }}"
-          sequence:
-            - service: number.set_value
-              target:
-                entity_id: "number.{{ repeat.item }}_pwm_scale"
-              data:
-                value: 85
-
-  tank_load_preset:
-    alias: "Load Preset for Tank"
-    fields:
-      preset:
-        description: "Preset name to load"
-        example: "dynamic_sunrise_sunset"
-    sequence:
-      - variables:
-          groups: "{{ states('input_text.tank_groups') | from_json }}"
-          tank: "{{ states('input_select.active_tank') }}"
-          units: "{{ groups.get(tank, []) }}"
-      - condition: template
-        value_template: "{{ sync_units }}"
-      - repeat:
-          for_each: "{{ units }}"
-          sequence:
-            - service: "esphome.{{ repeat.item }}_load_preset"
-              data:
-                preset_name: "{{ preset }}"
-
-  tank_clear_schedule:
-    alias: "Clear Tank Schedule"
-    sequence:
-      - variables:
-          groups: "{{ states('input_text.tank_groups') | from_json }}"
-          tank: "{{ states('input_select.active_tank') }}"
-          units: "{{ groups.get(tank, []) }}"
-      - repeat:
-          for_each: "{{ units }}"
-          sequence:
-            - service: "esphome.{{ repeat.item }}_clear_schedule"
-
-# === Required Helpers ===
-# Add these to your configuration.yaml:
-
-input_text:
-  tank_groups:
-    name: "Tank Group Configuration"
-    initial: >
-      {
-        "main_tank": ["ledbrickplus"],
-        "frag_tank": [],
-        "quarantine": []
-      }
-    max: 255
-    mode: text
-
-input_select:
-  active_tank:
-    name: "Active Tank"
-    options:
-      - "main_tank"
-      - "frag_tank" 
-      - "quarantine"
-    initial: "main_tank"
-    icon: mdi:fishbowl
-
-input_number:
-  tank_brightness:
-    name: "Tank Brightness"
-    min: 0
-    max: 100
-    step: 5
-    unit_of_measurement: "%"
-    icon: mdi:brightness-6
-
-input_boolean:
-  sync_units:
-    name: "Sync Units in Tank"
-    icon: mdi:sync
-    initial: on
+# The scripts and helpers are defined in the package, not here.
 
 # === Custom Cards Required ===
 # Install via HACS:
@@ -402,4 +287,3 @@ input_boolean:
 # - auto-entities
 # - multiple-entity-row
 # - card-mod
-# - layout-card
