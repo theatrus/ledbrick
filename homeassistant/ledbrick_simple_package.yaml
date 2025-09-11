@@ -1,0 +1,360 @@
+# LEDBrick Plus Simple Package
+# Minimal configuration for Home Assistant integration
+# Supports both single and multi-unit setups without complex automation
+
+# === Tank Group Configuration ===
+# For single unit: {"main": ["ledbrickplus"]}  
+# For multiple units: {"main": ["ledbrick1", "ledbrick2"], "frag": ["ledbrick3"]}
+input_text:
+  tank_groups:
+    name: "Tank Group Configuration"
+    initial: >
+      {
+        "main": ["ledbrickplus"]
+      }
+    max: 255
+    mode: text
+    icon: mdi:fishbowl-outline
+
+# === Tank Selection ===
+input_select:
+  active_tank:
+    name: "Active Tank"
+    options:
+      - "main"
+    initial: "main"
+    icon: mdi:fishbowl
+
+# === Quick Controls ===
+input_number:
+  tank_brightness:
+    name: "Tank Brightness"
+    min: 0
+    max: 100
+    step: 5
+    unit_of_measurement: "%"
+    icon: mdi:brightness-6
+    mode: slider
+
+input_boolean:
+  sync_units:
+    name: "Sync All Units"
+    icon: mdi:sync
+    initial: on
+    
+  feeding_mode:
+    name: "Feeding Mode"
+    icon: mdi:fish
+    initial: off
+
+# === Template Sensors ===
+template:
+  - sensor:
+      # Active tank units list
+      - name: "Active Tank Units"
+        state: >
+          {% set groups = states('input_text.tank_groups') | from_json %}
+          {% set tank = states('input_select.active_tank') %}
+          {% set units = groups.get(tank, []) %}
+          {{ units | length }} unit{{ 's' if units | length != 1 else '' }}
+        attributes:
+          units: >
+            {% set groups = states('input_text.tank_groups') | from_json %}
+            {% set tank = states('input_select.active_tank') %}
+            {{ groups.get(tank, []) }}
+          unit_list: >
+            {% set groups = states('input_text.tank_groups') | from_json %}
+            {% set tank = states('input_select.active_tank') %}
+            {{ groups.get(tank, []) | join(', ') }}
+
+      # Total power consumption
+      - name: "Tank Total Power"
+        unit_of_measurement: "W"
+        device_class: power
+        state: >
+          {% set groups = states('input_text.tank_groups') | from_json %}
+          {% set tank = states('input_select.active_tank') %}
+          {% set units = groups.get(tank, []) %}
+          {% set ns = namespace(total=0) %}
+          {% for unit in units %}
+            {% set current = states('sensor.' + unit + '_ina228_current') | float(0) %}
+            {% set voltage = states('sensor.' + unit + '_ina228_bus_voltage') | float(0) %}
+            {% if current > 0 and voltage > 0 %}
+              {% set ns.total = ns.total + (current * voltage) %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.total | round(1) }}
+
+      # Average temperature
+      - name: "Tank Average Temperature"
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state: >
+          {% set groups = states('input_text.tank_groups') | from_json %}
+          {% set tank = states('input_select.active_tank') %}
+          {% set units = groups.get(tank, []) %}
+          {% set temps = namespace(values=[], count=0) %}
+          {% for unit in units %}
+            {% set temp = states('sensor.' + unit + '_dallas_temperature') | float(-999) %}
+            {% if temp > -999 %}
+              {% set temps.values = temps.values + [temp] %}
+              {% set temps.count = temps.count + 1 %}
+            {% endif %}
+          {% endfor %}
+          {% if temps.count > 0 %}
+            {{ (temps.values | sum / temps.count) | round(1) }}
+          {% else %}
+            unknown
+          {% endif %}
+
+      # Schedule sync status
+      - name: "Tank Schedule Status"
+        state: >
+          {% set groups = states('input_text.tank_groups') | from_json %}
+          {% set tank = states('input_select.active_tank') %}
+          {% set units = groups.get(tank, []) %}
+          {% if units | length == 0 %}
+            No units
+          {% else %}
+            {% set scheduled = namespace(count=0) %}
+            {% for unit in units %}
+              {% if is_state('switch.' + unit + '_scheduler_enabled', 'on') %}
+                {% set scheduled.count = scheduled.count + 1 %}
+              {% endif %}
+            {% endfor %}
+            {% if scheduled.count == units | length %}
+              Scheduled
+            {% elif scheduled.count == 0 %}
+              Manual
+            {% else %}
+              Mixed ({{ scheduled.count }}/{{ units | length }})
+            {% endif %}
+          {% endif %}
+        icon: >
+          {% set groups = states('input_text.tank_groups') | from_json %}
+          {% set tank = states('input_select.active_tank') %}
+          {% set units = groups.get(tank, []) %}
+          {% if units | length > 0 %}
+            {% set first_unit = units[0] %}
+            {% if is_state('switch.' + first_unit + '_scheduler_enabled', 'on') %}
+              mdi:calendar-clock
+            {% else %}
+              mdi:tune-variant
+            {% endif %}
+          {% else %}
+            mdi:help-circle-outline
+          {% endif %}
+
+# === Automation ===
+automation:
+  # Sync brightness across tank units
+  - alias: "Sync Tank Brightness"
+    trigger:
+      - platform: state
+        entity_id: input_number.tank_brightness
+    condition:
+      - condition: state
+        entity_id: input_boolean.sync_units
+        state: "on"
+    action:
+      - variables:
+          groups: "{{ states('input_text.tank_groups') | from_json }}"
+          tank: "{{ states('input_select.active_tank') }}"
+          units: "{{ groups.get(tank, []) }}"
+          brightness: "{{ trigger.to_state.state | float }}"
+      - repeat:
+          for_each: "{{ units }}"
+          sequence:
+            - service: number.set_value
+              target:
+                entity_id: "number.{{ repeat.item }}_pwm_scale"
+              data:
+                value: "{{ brightness }}"
+              continue_on_error: true
+
+  # Simple feeding mode
+  - alias: "Feeding Mode"
+    trigger:
+      - platform: state
+        entity_id: input_boolean.feeding_mode
+        to: "on"
+    action:
+      - variables:
+          groups: "{{ states('input_text.tank_groups') | from_json }}"
+          tank: "{{ states('input_select.active_tank') }}"
+          units: "{{ groups.get(tank, []) }}"
+      # Dim to 30%
+      - repeat:
+          for_each: "{{ units }}"
+          sequence:
+            - service: number.set_value
+              target:
+                entity_id: "number.{{ repeat.item }}_pwm_scale"
+              data:
+                value: 30
+              continue_on_error: true
+      # Wait 10 minutes
+      - delay:
+          minutes: 10
+      # Return to 100%
+      - repeat:
+          for_each: "{{ units }}"
+          sequence:
+            - service: number.set_value
+              target:
+                entity_id: "number.{{ repeat.item }}_pwm_scale"
+              data:
+                value: 100
+              continue_on_error: true
+      # Turn off feeding mode
+      - service: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.feeding_mode
+
+# === Scripts ===
+script:
+  # Load preset for all units in tank
+  ledbrick_load_preset:
+    alias: "Load LEDBrick Preset"
+    fields:
+      preset:
+        description: "Preset name"
+        example: "dynamic_sunrise_sunset"
+        selector:
+          select:
+            options:
+              - "dynamic_sunrise_sunset"
+              - "full_spectrum"
+              - "simple"
+    sequence:
+      - variables:
+          groups: "{{ states('input_text.tank_groups') | from_json }}"
+          tank: "{{ states('input_select.active_tank') }}"
+          units: "{{ groups.get(tank, []) }}"
+      - condition: template
+        value_template: "{{ states('input_boolean.sync_units') == 'on' }}"
+      - repeat:
+          for_each: "{{ units }}"
+          sequence:
+            - service: "esphome.{{ repeat.item }}_load_preset"
+              data:
+                preset_name: "{{ preset }}"
+              continue_on_error: true
+
+  # Clear schedule for all units
+  ledbrick_clear_schedule:
+    alias: "Clear LEDBrick Schedule"
+    sequence:
+      - variables:
+          groups: "{{ states('input_text.tank_groups') | from_json }}"
+          tank: "{{ states('input_select.active_tank') }}"
+          units: "{{ groups.get(tank, []) }}"
+      - repeat:
+          for_each: "{{ units }}"
+          sequence:
+            - service: "esphome.{{ repeat.item }}_clear_schedule"
+              continue_on_error: true
+
+  # Toggle scheduler for all units
+  ledbrick_toggle_scheduler:
+    alias: "Toggle LEDBrick Scheduler"
+    sequence:
+      - variables:
+          groups: "{{ states('input_text.tank_groups') | from_json }}"
+          tank: "{{ states('input_select.active_tank') }}"
+          units: "{{ groups.get(tank, []) }}"
+      - repeat:
+          for_each: "{{ units }}"
+          sequence:
+            - service: switch.toggle
+              target:
+                entity_id: "switch.{{ repeat.item }}_scheduler_enabled"
+              continue_on_error: true
+
+  # Set all units to specific brightness
+  ledbrick_set_brightness:
+    alias: "Set LEDBrick Brightness"
+    fields:
+      brightness:
+        description: "Brightness percentage"
+        example: 85
+        selector:
+          number:
+            min: 0
+            max: 100
+            step: 5
+            unit_of_measurement: "%"
+    sequence:
+      - variables:
+          groups: "{{ states('input_text.tank_groups') | from_json }}"
+          tank: "{{ states('input_select.active_tank') }}"
+          units: "{{ groups.get(tank, []) }}"
+      - repeat:
+          for_each: "{{ units }}"
+          sequence:
+            - service: number.set_value
+              target:
+                entity_id: "number.{{ repeat.item }}_pwm_scale"
+              data:
+                value: "{{ brightness }}"
+              continue_on_error: true
+
+  # Emergency off for all units
+  ledbrick_emergency_off:
+    alias: "LEDBrick Emergency Off"
+    sequence:
+      - variables:
+          groups: "{{ states('input_text.tank_groups') | from_json }}"
+          all_units: "{{ groups.values() | sum(start=[]) | unique | list }}"
+      # Turn off all schedulers
+      - repeat:
+          for_each: "{{ all_units }}"
+          sequence:
+            - service: switch.turn_off
+              target:
+                entity_id: "switch.{{ repeat.item }}_scheduler_enabled"
+              continue_on_error: true
+      # Set all to 0% brightness
+      - repeat:
+          for_each: "{{ all_units }}"
+          sequence:
+            - service: number.set_value
+              target:
+                entity_id: "number.{{ repeat.item }}_pwm_scale"
+              data:
+                value: 0
+              continue_on_error: true
+      - service: persistent_notification.create
+        data:
+          title: "LEDBrick Emergency Shutdown"
+          message: "All LEDBrick units have been turned off"
+          notification_id: ledbrick_emergency
+
+# === Simple Dashboard Card ===
+# Copy this to your Lovelace dashboard:
+lovelace:
+  - title: LEDBrick Control
+    cards:
+      - type: entities
+        title: Quick Controls
+        entities:
+          - entity: sensor.tank_schedule_status
+            name: Schedule Status
+          - entity: input_number.tank_brightness
+          - entity: input_boolean.feeding_mode
+          - type: buttons
+            entities:
+              - entity: script.ledbrick_toggle_scheduler
+                name: Schedule
+                icon: mdi:calendar
+              - entity: script.ledbrick_set_brightness
+                name: Photo
+                icon: mdi:camera
+                tap_action:
+                  action: call-service
+                  service: script.ledbrick_set_brightness
+                  data:
+                    brightness: 85
+              - entity: script.ledbrick_emergency_off
+                name: Off
+                icon: mdi:power

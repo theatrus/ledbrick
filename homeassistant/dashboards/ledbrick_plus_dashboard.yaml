@@ -1,0 +1,381 @@
+# LEDBrick Plus Dashboard - Modern Single Unit Control
+# A clean, focused dashboard for controlling one LEDBrick Plus unit
+# Replace 'ledbrickplus' with your actual ESPHome device name
+
+type: vertical-stack
+cards:
+  # === Header with System Status ===
+  - type: markdown
+    card_mod:
+      style: |
+        ha-card {
+          background: var(--ha-card-background);
+          padding: 16px;
+        }
+    content: |
+      # 🐠 LEDBrick Plus Control Center
+      **Device:** {{ device_attr('light.ledbrickplus_ch1_pwm', 'name') | default('LEDBrick Plus') }}
+      **Status:** {% if is_state('switch.ledbrickplus_scheduler_enabled', 'on') %}⏰ Scheduled{% else %}🎛️ Manual{% endif %}
+      **Uptime:** {{ (as_timestamp(now()) - as_timestamp(states('sensor.ledbrickplus_uptime'))) | timestamp_custom('%H:%M:%S', false) | default('Unknown') }}
+
+  # === Quick Controls ===
+  - type: horizontal-stack
+    cards:
+      - type: button
+        entity: switch.ledbrickplus_scheduler_enabled
+        name: Scheduler
+        icon: mdi:calendar-clock
+        tap_action:
+          action: toggle
+        show_state: true
+        card_mod:
+          style: |
+            ha-card {
+              {% if is_state('switch.ledbrickplus_scheduler_enabled', 'on') %}
+                --ha-card-background: var(--primary-color);
+                color: var(--text-primary-color);
+              {% endif %}
+            }
+
+      - type: button
+        name: All Off
+        icon: mdi:lightbulb-off
+        tap_action:
+          action: call-service
+          service: number.set_value
+          target:
+            entity_id: number.ledbrickplus_pwm_scale
+          data:
+            value: 0
+
+      - type: button
+        name: Photo Mode
+        icon: mdi:camera
+        tap_action:
+          action: call-service
+          service: number.set_value
+          target:
+            entity_id: number.ledbrickplus_pwm_scale
+          data:
+            value: 85
+
+  # === Main Controls ===
+  - type: entities
+    title: Lighting Control
+    show_header_toggle: false
+    entities:
+      - entity: number.ledbrickplus_pwm_scale
+        name: Global Brightness
+        
+      - type: divider
+        
+      - entity: number.ledbrickplus_latitude
+        name: Latitude
+        
+      - entity: number.ledbrickplus_longitude
+        name: Longitude
+        
+      - entity: switch.ledbrickplus_astronomical_projection
+        name: Time Projection
+        
+      - entity: switch.ledbrickplus_moon_simulation_enabled
+        name: Moon Simulation
+
+  # === Channel Status Grid ===
+  - type: custom:layout-card
+    layout_type: grid
+    layout:
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr))
+      grid-gap: 8px
+    cards:
+      # Channel 1
+      - type: custom:button-card
+        entity: light.ledbrickplus_ch1_pwm
+        name: "[[[ return states['text_sensor.ledbrickplus_ch1_color'].attributes.friendly_name || 'Channel 1' ]]]"
+        show_state: true
+        show_icon: false
+        styles:
+          card:
+            - background-color: "[[[ return states['text_sensor.ledbrickplus_ch1_color'].state || '#FFFFFF' ]]]"
+            - color: "[[[ return (states['text_sensor.ledbrickplus_ch1_color'].state === '#FFFFFF') ? '#000' : '#FFF' ]]]"
+          name:
+            - font-weight: bold
+        state_display: |
+          [[[
+            const pwm = states['sensor.ledbrickplus_scheduler_pwm_channel_1'];
+            const current = states['sensor.ledbrickplus_scheduler_current_channel_1'];
+            return pwm ? `${pwm.state}% · ${current.state}A` : 'Unknown';
+          ]]]
+        tap_action:
+          action: more-info
+
+      # Channel 2
+      - type: custom:button-card
+        entity: light.ledbrickplus_ch2_pwm
+        name: "[[[ return states['text_sensor.ledbrickplus_ch2_color'].attributes.friendly_name || 'Channel 2' ]]]"
+        show_state: true
+        show_icon: false
+        styles:
+          card:
+            - background-color: "[[[ return states['text_sensor.ledbrickplus_ch2_color'].state || '#002E7A' ]]]"
+            - color: "#FFF"
+          name:
+            - font-weight: bold
+        state_display: |
+          [[[
+            const pwm = states['sensor.ledbrickplus_scheduler_pwm_channel_2'];
+            const current = states['sensor.ledbrickplus_scheduler_current_channel_2'];
+            return pwm ? `${pwm.state}% · ${current.state}A` : 'Unknown';
+          ]]]
+        tap_action:
+          action: more-info
+
+      # Channel 3
+      - type: custom:button-card
+        entity: light.ledbrickplus_ch3_pwm
+        name: "[[[ return states['text_sensor.ledbrickplus_ch3_color'].attributes.friendly_name || 'Channel 3' ]]]"
+        show_state: true
+        show_icon: false
+        styles:
+          card:
+            - background-color: "[[[ return states['text_sensor.ledbrickplus_ch3_color'].state || '#0056D6' ]]]"
+            - color: "#FFF"
+          name:
+            - font-weight: bold
+        state_display: |
+          [[[
+            const pwm = states['sensor.ledbrickplus_scheduler_pwm_channel_3'];
+            const current = states['sensor.ledbrickplus_scheduler_current_channel_3'];
+            return pwm ? `${pwm.state}% · ${current.state}A` : 'Unknown';
+          ]]]
+        tap_action:
+          action: more-info
+
+      # Channel 4
+      - type: custom:button-card
+        entity: light.ledbrickplus_ch4_pwm
+        name: "[[[ return states['text_sensor.ledbrickplus_ch4_color'].attributes.friendly_name || 'Channel 4' ]]]"
+        show_state: true
+        show_icon: false
+        styles:
+          card:
+            - background-color: "[[[ return states['text_sensor.ledbrickplus_ch4_color'].state || '#00FF00' ]]]"
+            - color: "[[[ return (states['text_sensor.ledbrickplus_ch4_color'].state === '#FFFFFF') ? '#000' : '#FFF' ]]]"
+          name:
+            - font-weight: bold
+        state_display: |
+          [[[
+            const pwm = states['sensor.ledbrickplus_scheduler_pwm_channel_4'];
+            const current = states['sensor.ledbrickplus_scheduler_current_channel_4'];
+            return pwm ? `${pwm.state}% · ${current.state}A` : 'Unknown';
+          ]]]
+        tap_action:
+          action: more-info
+
+      # Channel 5
+      - type: custom:button-card
+        entity: light.ledbrickplus_ch5_pwm
+        name: "[[[ return states['text_sensor.ledbrickplus_ch5_color'].attributes.friendly_name || 'Channel 5' ]]]"
+        show_state: true
+        show_icon: false
+        styles:
+          card:
+            - background-color: "[[[ return states['text_sensor.ledbrickplus_ch5_color'].state || '#FF0000' ]]]"
+            - color: "#FFF"
+          name:
+            - font-weight: bold
+        state_display: |
+          [[[
+            const pwm = states['sensor.ledbrickplus_scheduler_pwm_channel_5'];
+            const current = states['sensor.ledbrickplus_scheduler_current_channel_5'];
+            return pwm ? `${pwm.state}% · ${current.state}A` : 'Unknown';
+          ]]]
+        tap_action:
+          action: more-info
+
+      # Channel 6
+      - type: custom:button-card
+        entity: light.ledbrickplus_ch6_pwm
+        name: "[[[ return states['text_sensor.ledbrickplus_ch6_color'].attributes.friendly_name || 'Channel 6' ]]]"
+        show_state: true
+        show_icon: false
+        styles:
+          card:
+            - background-color: "[[[ return states['text_sensor.ledbrickplus_ch6_color'].state || '#FF00FF' ]]]"
+            - color: "#FFF"
+          name:
+            - font-weight: bold
+        state_display: |
+          [[[
+            const pwm = states['sensor.ledbrickplus_scheduler_pwm_channel_6'];
+            const current = states['sensor.ledbrickplus_scheduler_current_channel_6'];
+            return pwm ? `${pwm.state}% · ${current.state}A` : 'Unknown';
+          ]]]
+        tap_action:
+          action: more-info
+
+      # Channel 7
+      - type: custom:button-card
+        entity: light.ledbrickplus_ch7_pwm
+        name: "[[[ return states['text_sensor.ledbrickplus_ch7_color'].attributes.friendly_name || 'Channel 7' ]]]"
+        show_state: true
+        show_icon: false
+        styles:
+          card:
+            - background-color: "[[[ return states['text_sensor.ledbrickplus_ch7_color'].state || '#FFFF00' ]]]"
+            - color: "[[[ return (states['text_sensor.ledbrickplus_ch7_color'].state === '#FFFFFF' || states['text_sensor.ledbrickplus_ch7_color'].state === '#FFFF00') ? '#000' : '#FFF' ]]]"
+          name:
+            - font-weight: bold
+        state_display: |
+          [[[
+            const pwm = states['sensor.ledbrickplus_scheduler_pwm_channel_7'];
+            const current = states['sensor.ledbrickplus_scheduler_current_channel_7'];
+            return pwm ? `${pwm.state}% · ${current.state}A` : 'Unknown';
+          ]]]
+        tap_action:
+          action: more-info
+
+      # Channel 8
+      - type: custom:button-card
+        entity: light.ledbrickplus_ch8_pwm
+        name: "[[[ return states['text_sensor.ledbrickplus_ch8_color'].attributes.friendly_name || 'Channel 8' ]]]"
+        show_state: true
+        show_icon: false
+        styles:
+          card:
+            - background-color: "[[[ return states['text_sensor.ledbrickplus_ch8_color'].state || '#FF8000' ]]]"
+            - color: "#FFF"
+          name:
+            - font-weight: bold
+        state_display: |
+          [[[
+            const pwm = states['sensor.ledbrickplus_scheduler_pwm_channel_8'];
+            const current = states['sensor.ledbrickplus_scheduler_current_channel_8'];
+            return pwm ? `${pwm.state}% · ${current.state}A` : 'Unknown';
+          ]]]
+        tap_action:
+          action: more-info
+
+  # === System Monitoring ===
+  - type: entities
+    title: System Status
+    show_header_toggle: false
+    entities:
+      - type: section
+        label: Power & Thermal
+        
+      - entity: sensor.ledbrickplus_ina228_current
+        name: Total Current Draw
+        icon: mdi:current-dc
+        
+      - entity: sensor.ledbrickplus_ina228_bus_voltage
+        name: Bus Voltage
+        icon: mdi:sine-wave
+        
+      - entity: sensor.ledbrickplus_dallas_temperature
+        name: Heatsink Temperature
+        icon: mdi:thermometer
+        
+      - entity: sensor.ledbrickplus_fan_speed
+        name: Fan Speed
+        icon: mdi:fan
+        
+      - type: section
+        label: Temperature Control
+        
+      - entity: switch.ledbrickplus_temperature_control_enable
+        name: Temperature Control
+        
+      - entity: sensor.ledbrickplus_temperature_control_current
+        name: Current Temperature
+        
+      - entity: sensor.ledbrickplus_temperature_control_target
+        name: Target Temperature
+        
+      - entity: sensor.ledbrickplus_temperature_control_fan_pwm
+        name: Fan PWM
+        
+      - entity: binary_sensor.ledbrickplus_thermal_emergency
+        name: Thermal Emergency
+        
+      - type: section
+        label: Schedule Info
+        
+      - entity: sensor.ledbrickplus_moon_phase
+        name: Moon Phase
+        icon: mdi:moon-waning-crescent
+        
+      - entity: sensor.ledbrickplus_sunrise_time
+        name: Sunrise
+        icon: mdi:weather-sunset-up
+        
+      - entity: sensor.ledbrickplus_sunset_time
+        name: Sunset
+        icon: mdi:weather-sunset-down
+
+  # === Schedule Presets ===
+  - type: entities
+    title: Schedule Presets
+    show_header_toggle: false
+    entities:
+      - type: custom:button-entity-row
+        buttons:
+          - name: Dynamic
+            icon: mdi:auto-fix
+            tap_action:
+              action: call-service
+              service: esphome.ledbrickplus_load_preset
+              data:
+                preset_name: "dynamic_sunrise_sunset"
+                
+          - name: Full Spectrum
+            icon: mdi:white-balance-sunny
+            tap_action:
+              action: call-service
+              service: esphome.ledbrickplus_load_preset
+              data:
+                preset_name: "full_spectrum"
+                
+          - name: Simple
+            icon: mdi:lightbulb-on
+            tap_action:
+              action: call-service
+              service: esphome.ledbrickplus_load_preset
+              data:
+                preset_name: "simple"
+                
+          - name: Clear
+            icon: mdi:delete
+            tap_action:
+              action: call-service
+              service: esphome.ledbrickplus_clear_schedule
+              confirmation:
+                text: Clear all schedule points?
+
+  # === Quick Actions ===
+  - type: horizontal-stack
+    cards:
+      - type: button
+        name: Export Schedule
+        icon: mdi:download
+        tap_action:
+          action: call-service
+          service: esphome.ledbrickplus_get_schedule_json
+          
+      - type: button
+        name: Web UI
+        icon: mdi:web
+        tap_action:
+          action: url
+          url_path: http://ledbrickplus.local
+          
+      - type: button
+        name: Restart
+        icon: mdi:restart
+        tap_action:
+          action: call-service
+          service: button.press
+          target:
+            entity_id: button.ledbrickplus_restart
+          confirmation:
+            text: Restart LEDBrick Plus?
