@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { SchedulePoint, Schedule, DynamicTimeType } from '../types';
+import { DEFAULT_CHANNEL_COLORS } from '../constants/colors';
 
 interface SchedulePointEditorProps {
   isOpen: boolean;
@@ -10,10 +11,6 @@ interface SchedulePointEditorProps {
   schedule: Schedule;
 }
 
-const DEFAULT_CHANNEL_COLORS = [
-  '#FFFFFF', '#0000FF', '#00FFFF', '#00FF00',
-  '#FF0000', '#FF00FF', '#FFFF00', '#FF8000'
-];
 
 const TIME_TYPES: Array<{ value: DynamicTimeType; label: string }> = [
   { value: 'fixed', label: 'Fixed Time' },

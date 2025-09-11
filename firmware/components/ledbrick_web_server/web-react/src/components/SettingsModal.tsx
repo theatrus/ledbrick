@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api/client';
 import type { Schedule, TemperatureConfig, FanCurve } from '../types';
+import { DEFAULT_CHANNEL_COLORS } from '../constants/colors';
 import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -36,10 +37,6 @@ interface ChannelConfigForm {
   max_current: number;
 }
 
-const DEFAULT_CHANNEL_COLORS = [
-  '#FFFFFF', '#0000FF', '#00FFFF', '#00FF00',
-  '#FF0000', '#FF00FF', '#FFFF00', '#FF8000'
-];
 
 // Tropical reef locations around the world
 const REEF_PRESETS = [

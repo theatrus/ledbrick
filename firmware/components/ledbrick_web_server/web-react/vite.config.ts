@@ -21,26 +21,28 @@ export default defineConfig(({ mode }) => ({
   build: {
     target: 'es2020',
     minify: mode === 'debug' ? false : 'terser',
+    sourcemap: mode === 'debug' ? 'inline' : true,  // Enable source maps
     terserOptions: {
       compress: {
         drop_console: true,
         drop_debugger: true,
         pure_funcs: ['console.log', 'console.info', 'console.debug', 'console.warn'],
-        passes: 3,  // Multiple passes for better compression
-        unsafe: true,  // More aggressive optimizations
-        unsafe_comps: true,
-        unsafe_math: true,
-        unsafe_proto: true,
-        unsafe_regexp: true,
-        unsafe_undefined: true,
+        passes: 2,  // Reduced passes
+        // Disable unsafe optimizations that might break array access
+        unsafe: false,
+        unsafe_comps: false,
+        unsafe_math: false,
+        unsafe_proto: false,
+        unsafe_regexp: false,
+        unsafe_undefined: false,
         unused: true,
         dead_code: true,
+        keep_fargs: true,  // Keep function arguments to prevent issues
+        keep_fnames: false,  // But still mangle function names
       },
       mangle: {
-        toplevel: true,  // Mangle top level names
-        properties: {
-          regex: /^_/,  // Mangle properties starting with _
-        },
+        toplevel: false,  // Don't mangle top level to help debugging
+        properties: false,  // Disable property mangling - this can break object access
       },
       format: {
         comments: false,

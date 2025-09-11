@@ -2,16 +2,13 @@ import { useState } from 'react';
 import type { Schedule, SchedulePoint } from '../types';
 import { SchedulePointEditor } from './SchedulePointEditor';
 import { api } from '../api/client';
+import { DEFAULT_CHANNEL_COLORS } from '../constants/colors';
 
 interface ScheduleTableProps {
   schedule: Schedule;
   onUpdate: () => void;
 }
 
-const DEFAULT_CHANNEL_COLORS = [
-  '#FFFFFF', '#0000FF', '#00FFFF', '#00FF00',
-  '#FF0000', '#FF00FF', '#FFFF00', '#FF8000'
-];
 
 // Convert a hex color to a good background tone by adjusting lightness and saturation
 function colorToBackgroundTone(hexColor: string, opacity: number = 0.15): string {

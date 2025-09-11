@@ -14,6 +14,7 @@ import {
 import { Line } from 'react-chartjs-2';
 import annotationPlugin from 'chartjs-plugin-annotation';
 import type { Schedule, SchedulePoint } from '../types';
+import { DEFAULT_CHANNEL_COLORS } from '../constants/colors';
 
 // Register Chart.js components
 ChartJS.register(
@@ -33,17 +34,6 @@ interface ScheduleChartProps {
   moonriseTime?: string;
   moonsetTime?: string;
 }
-
-const DEFAULT_CHANNEL_COLORS = [
-  '#FFFFFF', // White
-  '#0000FF', // Blue  
-  '#00FFFF', // Cyan
-  '#00FF00', // Green
-  '#FF0000', // Red
-  '#FF00FF', // Magenta
-  '#FFFF00', // Yellow
-  '#FF8000'  // Orange
-];
 
 export function ScheduleChart({ schedule, currentTime, moonriseTime, moonsetTime }: ScheduleChartProps) {
   const chartRef = useRef<ChartJS<'line'>>(null);

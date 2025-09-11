@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Status, Schedule } from '../types';
 import { StatusBarControls } from './StatusBarControls';
 import { ChannelControl } from './ChannelControl';
+import { DEFAULT_CHANNEL_COLORS } from '../constants/colors';
 
 interface StatusBarProps {
   status: Status | null;
@@ -9,10 +10,6 @@ interface StatusBarProps {
   onUpdate: () => void;
 }
 
-const DEFAULT_CHANNEL_COLORS = [
-  '#FFFFFF', '#0000FF', '#00FFFF', '#00FF00',
-  '#FF0000', '#FF00FF', '#FFFF00', '#FF8000'
-];
 
 export function StatusBar({ status, schedule, onUpdate }: StatusBarProps) {
   const [selectedChannel, setSelectedChannel] = useState<number | null>(null);

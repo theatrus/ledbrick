@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { MoonSimulation, Schedule } from '../types';
 import { api } from '../api/client';
+import { DEFAULT_CHANNEL_COLORS } from '../constants/colors';
 
 interface MoonSettingsProps {
   moonSimulation: MoonSimulation | undefined;
@@ -8,10 +9,6 @@ interface MoonSettingsProps {
   onUpdate: () => void;
 }
 
-const DEFAULT_CHANNEL_COLORS = [
-  '#FFFFFF', '#0000FF', '#00FFFF', '#00FF00',
-  '#FF0000', '#FF00FF', '#FFFF00', '#FF8000'
-];
 
 export function MoonSettings({ moonSimulation, schedule, onUpdate }: MoonSettingsProps) {
   const numChannels = schedule.num_channels || 8;
