@@ -136,11 +136,10 @@ The `ledbrick_simple_package.yaml` includes:
 ## Custom Card Requirements
 
 Install via HACS for full dashboard functionality:
-- `custom:button-card`
-- `custom:auto-entities` 
-- `custom:multiple-entity-row`
-- `custom:layout-card`
-- `card-mod`
+- `custom:button-card` (Required for channel cards)
+- `custom:auto-entities` (Required for multi-unit dashboard)
+- `custom:multiple-entity-row` (Required for multi-unit dashboard)
+- `card-mod` (Optional for styling)
 
 ## Tips
 
