@@ -25,10 +25,10 @@ static double normalize_degrees(double angle) {
     return angle;
 }
 
-AstronomicalCalculator::AstronomicalCalculator(double latitude, double longitude)
+AstronomicalCalculator::AstronomicalCalculator(double latitude, double longitude, double timezone_offset_hours)
     : latitude_(latitude), longitude_(longitude), 
       projection_enabled_(false), time_shift_hours_(0), time_shift_minutes_(0),
-      timezone_offset_hours_(longitude / 15.0) {  // Default to longitude-based timezone
+      timezone_offset_hours_(timezone_offset_hours) {
 }
 
 void AstronomicalCalculator::set_location(double latitude, double longitude) {
