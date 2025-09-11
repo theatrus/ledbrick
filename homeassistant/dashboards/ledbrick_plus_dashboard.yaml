@@ -14,9 +14,8 @@ cards:
         }
     content: |
       # 🐠 LEDBrick Plus Control Center
-      **Device:** {{ device_attr('light.ledbrickplus_ch1_pwm', 'name') | default('LEDBrick Plus') }}
-      **Status:** {% if is_state('switch.ledbrickplus_scheduler_enabled', 'on') %}⏰ Scheduled{% else %}🎛️ Manual{% endif %}
-      **Uptime:** {{ (as_timestamp(now()) - as_timestamp(states('sensor.ledbrickplus_uptime'))) | timestamp_custom('%H:%M:%S', false) | default('Unknown') }}
+      **Status:** {% if is_state('switch.ledbrickplus_scheduler_enabled', 'on') %}⏰ Scheduled{% else %}🎛️ Manual{% endif %} | **Uptime:** {{ states('text_sensor.ledbrickplus_uptime_human') | default('--') }}
+      **Power:** {{ states('sensor.ledbrickplus_ina228_current') | float(0) | round(2) }}A @ {{ states('sensor.ledbrickplus_ina228_bus_voltage') | float(0) | round(1) }}V | **Temperature:** {{ states('sensor.ledbrickplus_dallas_temperature') | float(0) | round(1) }}°C | **Fan:** {{ states('sensor.ledbrickplus_fan_speed') | int(0) }} RPM
 
   # === Quick Controls ===
   - type: horizontal-stack
@@ -53,11 +52,9 @@ cards:
         icon: mdi:camera
         tap_action:
           action: call-service
-          service: number.set_value
+          service: script.turn_on
           target:
-            entity_id: number.ledbrickplus_pwm_scale
-          data:
-            value: 85
+            entity_id: script.ledbrick_photo_mode
 
   # === Main Controls ===
   - type: entities
@@ -67,14 +64,6 @@ cards:
       - entity: number.ledbrickplus_pwm_scale
         name: Global Brightness
         
-      - type: divider
-        
-      - entity: number.ledbrickplus_latitude
-        name: Latitude
-        
-      - entity: number.ledbrickplus_longitude
-        name: Longitude
-        
       - entity: switch.ledbrickplus_astronomical_projection
         name: Time Projection
         
@@ -82,29 +71,32 @@ cards:
         name: Moon Simulation
 
   # === Channel Status Grid ===
-  - type: custom:layout-card
-    layout_type: grid
-    layout:
-      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr))
-      grid-gap: 8px
+  - type: grid
+    columns: 4
+    square: false
     cards:
       # Channel 1
       - type: custom:button-card
         entity: light.ledbrickplus_ch1_pwm
-        name: "[[[ return states['text_sensor.ledbrickplus_ch1_color'].attributes.friendly_name || 'Channel 1' ]]]"
+        name: "[[[ return (states['text_sensor.ledbrickplus_ch1_color'] && states['text_sensor.ledbrickplus_ch1_color'].attributes.friendly_name) || 'Channel 1' ]]]"
         show_state: true
         show_icon: false
         styles:
           card:
-            - background-color: "[[[ return states['text_sensor.ledbrickplus_ch1_color'].state || '#FFFFFF' ]]]"
-            - color: "[[[ return (states['text_sensor.ledbrickplus_ch1_color'].state === '#FFFFFF') ? '#000' : '#FFF' ]]]"
+            - background-color: "[[[ return (states['text_sensor.ledbrickplus_ch1_color'] && states['text_sensor.ledbrickplus_ch1_color'].state) || '#FFFFFF' ]]]"
+            - color: "[[[ const color = (states['text_sensor.ledbrickplus_ch1_color'] && states['text_sensor.ledbrickplus_ch1_color'].state) || '#FFFFFF'; return (color === '#FFFFFF') ? '#000' : '#FFF' ]]]"
           name:
             - font-weight: bold
         state_display: |
           [[[
-            const pwm = states['sensor.ledbrickplus_scheduler_pwm_channel_1'];
-            const current = states['sensor.ledbrickplus_scheduler_current_channel_1'];
-            return pwm ? `${pwm.state}% · ${current.state}A` : 'Unknown';
+            const light = states['light.ledbrickplus_ch1_pwm'];
+            const current = states['number.ledbrickplus_ch1_current'];
+            if (light && current) {
+              const brightness = light.attributes.brightness ? Math.round((light.attributes.brightness / 255) * 100) : 0;
+              const currentVal = parseFloat(current.state).toFixed(2);
+              return `${brightness}% · ${currentVal}A`;
+            }
+            return '--';
           ]]]
         tap_action:
           action: more-info
@@ -112,20 +104,25 @@ cards:
       # Channel 2
       - type: custom:button-card
         entity: light.ledbrickplus_ch2_pwm
-        name: "[[[ return states['text_sensor.ledbrickplus_ch2_color'].attributes.friendly_name || 'Channel 2' ]]]"
+        name: "[[[ return (states['text_sensor.ledbrickplus_ch2_color'] && states['text_sensor.ledbrickplus_ch2_color'].attributes.friendly_name) || 'Channel 2' ]]]"
         show_state: true
         show_icon: false
         styles:
           card:
-            - background-color: "[[[ return states['text_sensor.ledbrickplus_ch2_color'].state || '#002E7A' ]]]"
+            - background-color: "[[[ return (states['text_sensor.ledbrickplus_ch2_color'] && states['text_sensor.ledbrickplus_ch2_color'].state) || '#002E7A' ]]]"
             - color: "#FFF"
           name:
             - font-weight: bold
         state_display: |
           [[[
-            const pwm = states['sensor.ledbrickplus_scheduler_pwm_channel_2'];
-            const current = states['sensor.ledbrickplus_scheduler_current_channel_2'];
-            return pwm ? `${pwm.state}% · ${current.state}A` : 'Unknown';
+            const light = states['light.ledbrickplus_ch2_pwm'];
+            const current = states['number.ledbrickplus_ch2_current'];
+            if (light && current) {
+              const brightness = light.attributes.brightness ? Math.round((light.attributes.brightness / 255) * 100) : 0;
+              const currentVal = parseFloat(current.state).toFixed(2);
+              return `${brightness}% · ${currentVal}A`;
+            }
+            return '--';
           ]]]
         tap_action:
           action: more-info
@@ -133,20 +130,25 @@ cards:
       # Channel 3
       - type: custom:button-card
         entity: light.ledbrickplus_ch3_pwm
-        name: "[[[ return states['text_sensor.ledbrickplus_ch3_color'].attributes.friendly_name || 'Channel 3' ]]]"
+        name: "[[[ return (states['text_sensor.ledbrickplus_ch3_color'] && states['text_sensor.ledbrickplus_ch3_color'].attributes.friendly_name) || 'Channel 3' ]]]"
         show_state: true
         show_icon: false
         styles:
           card:
-            - background-color: "[[[ return states['text_sensor.ledbrickplus_ch3_color'].state || '#0056D6' ]]]"
+            - background-color: "[[[ return (states['text_sensor.ledbrickplus_ch3_color'] && states['text_sensor.ledbrickplus_ch3_color'].state) || '#0056D6' ]]]"
             - color: "#FFF"
           name:
             - font-weight: bold
         state_display: |
           [[[
-            const pwm = states['sensor.ledbrickplus_scheduler_pwm_channel_3'];
-            const current = states['sensor.ledbrickplus_scheduler_current_channel_3'];
-            return pwm ? `${pwm.state}% · ${current.state}A` : 'Unknown';
+            const light = states['light.ledbrickplus_ch3_pwm'];
+            const current = states['number.ledbrickplus_ch3_current'];
+            if (light && current) {
+              const brightness = light.attributes.brightness ? Math.round((light.attributes.brightness / 255) * 100) : 0;
+              const currentVal = parseFloat(current.state).toFixed(2);
+              return `${brightness}% · ${currentVal}A`;
+            }
+            return '--';
           ]]]
         tap_action:
           action: more-info
@@ -154,20 +156,25 @@ cards:
       # Channel 4
       - type: custom:button-card
         entity: light.ledbrickplus_ch4_pwm
-        name: "[[[ return states['text_sensor.ledbrickplus_ch4_color'].attributes.friendly_name || 'Channel 4' ]]]"
+        name: "[[[ return (states['text_sensor.ledbrickplus_ch4_color'] && states['text_sensor.ledbrickplus_ch4_color'].attributes.friendly_name) || 'Channel 4' ]]]"
         show_state: true
         show_icon: false
         styles:
           card:
-            - background-color: "[[[ return states['text_sensor.ledbrickplus_ch4_color'].state || '#00FF00' ]]]"
-            - color: "[[[ return (states['text_sensor.ledbrickplus_ch4_color'].state === '#FFFFFF') ? '#000' : '#FFF' ]]]"
+            - background-color: "[[[ return (states['text_sensor.ledbrickplus_ch4_color'] && states['text_sensor.ledbrickplus_ch4_color'].state) || '#00FF00' ]]]"
+            - color: "[[[ return ((states['text_sensor.ledbrickplus_ch4_color'] && states['text_sensor.ledbrickplus_ch4_color'].state) === '#FFFFFF') ? '#000' : '#FFF' ]]]"
           name:
             - font-weight: bold
         state_display: |
           [[[
-            const pwm = states['sensor.ledbrickplus_scheduler_pwm_channel_4'];
-            const current = states['sensor.ledbrickplus_scheduler_current_channel_4'];
-            return pwm ? `${pwm.state}% · ${current.state}A` : 'Unknown';
+            const light = states['light.ledbrickplus_ch4_pwm'];
+            const current = states['number.ledbrickplus_ch4_current'];
+            if (light && current) {
+              const brightness = light.attributes.brightness ? Math.round((light.attributes.brightness / 255) * 100) : 0;
+              const currentVal = parseFloat(current.state).toFixed(2);
+              return `${brightness}% · ${currentVal}A`;
+            }
+            return '--';
           ]]]
         tap_action:
           action: more-info
@@ -175,20 +182,25 @@ cards:
       # Channel 5
       - type: custom:button-card
         entity: light.ledbrickplus_ch5_pwm
-        name: "[[[ return states['text_sensor.ledbrickplus_ch5_color'].attributes.friendly_name || 'Channel 5' ]]]"
+        name: "[[[ return (states['text_sensor.ledbrickplus_ch5_color'] && states['text_sensor.ledbrickplus_ch5_color'].attributes.friendly_name) || 'Channel 5' ]]]"
         show_state: true
         show_icon: false
         styles:
           card:
-            - background-color: "[[[ return states['text_sensor.ledbrickplus_ch5_color'].state || '#FF0000' ]]]"
+            - background-color: "[[[ return (states['text_sensor.ledbrickplus_ch5_color'] && states['text_sensor.ledbrickplus_ch5_color'].state) || '#FF0000' ]]]"
             - color: "#FFF"
           name:
             - font-weight: bold
         state_display: |
           [[[
-            const pwm = states['sensor.ledbrickplus_scheduler_pwm_channel_5'];
-            const current = states['sensor.ledbrickplus_scheduler_current_channel_5'];
-            return pwm ? `${pwm.state}% · ${current.state}A` : 'Unknown';
+            const light = states['light.ledbrickplus_ch5_pwm'];
+            const current = states['number.ledbrickplus_ch5_current'];
+            if (light && current) {
+              const brightness = light.attributes.brightness ? Math.round((light.attributes.brightness / 255) * 100) : 0;
+              const currentVal = parseFloat(current.state).toFixed(2);
+              return `${brightness}% · ${currentVal}A`;
+            }
+            return '--';
           ]]]
         tap_action:
           action: more-info
@@ -196,20 +208,25 @@ cards:
       # Channel 6
       - type: custom:button-card
         entity: light.ledbrickplus_ch6_pwm
-        name: "[[[ return states['text_sensor.ledbrickplus_ch6_color'].attributes.friendly_name || 'Channel 6' ]]]"
+        name: "[[[ return (states['text_sensor.ledbrickplus_ch6_color'] && states['text_sensor.ledbrickplus_ch6_color'].attributes.friendly_name) || 'Channel 6' ]]]"
         show_state: true
         show_icon: false
         styles:
           card:
-            - background-color: "[[[ return states['text_sensor.ledbrickplus_ch6_color'].state || '#FF00FF' ]]]"
+            - background-color: "[[[ return (states['text_sensor.ledbrickplus_ch6_color'] && states['text_sensor.ledbrickplus_ch6_color'].state) || '#FF00FF' ]]]"
             - color: "#FFF"
           name:
             - font-weight: bold
         state_display: |
           [[[
-            const pwm = states['sensor.ledbrickplus_scheduler_pwm_channel_6'];
-            const current = states['sensor.ledbrickplus_scheduler_current_channel_6'];
-            return pwm ? `${pwm.state}% · ${current.state}A` : 'Unknown';
+            const light = states['light.ledbrickplus_ch6_pwm'];
+            const current = states['number.ledbrickplus_ch6_current'];
+            if (light && current) {
+              const brightness = light.attributes.brightness ? Math.round((light.attributes.brightness / 255) * 100) : 0;
+              const currentVal = parseFloat(current.state).toFixed(2);
+              return `${brightness}% · ${currentVal}A`;
+            }
+            return '--';
           ]]]
         tap_action:
           action: more-info
@@ -217,20 +234,25 @@ cards:
       # Channel 7
       - type: custom:button-card
         entity: light.ledbrickplus_ch7_pwm
-        name: "[[[ return states['text_sensor.ledbrickplus_ch7_color'].attributes.friendly_name || 'Channel 7' ]]]"
+        name: "[[[ return (states['text_sensor.ledbrickplus_ch7_color'] && states['text_sensor.ledbrickplus_ch7_color'].attributes.friendly_name) || 'Channel 7' ]]]"
         show_state: true
         show_icon: false
         styles:
           card:
-            - background-color: "[[[ return states['text_sensor.ledbrickplus_ch7_color'].state || '#FFFF00' ]]]"
-            - color: "[[[ return (states['text_sensor.ledbrickplus_ch7_color'].state === '#FFFFFF' || states['text_sensor.ledbrickplus_ch7_color'].state === '#FFFF00') ? '#000' : '#FFF' ]]]"
+            - background-color: "[[[ return (states['text_sensor.ledbrickplus_ch7_color'] && states['text_sensor.ledbrickplus_ch7_color'].state) || '#FFFF00' ]]]"
+            - color: "[[[ return ((states['text_sensor.ledbrickplus_ch7_color'] && states['text_sensor.ledbrickplus_ch7_color'].state) === '#FFFFFF' || (states['text_sensor.ledbrickplus_ch7_color'] && states['text_sensor.ledbrickplus_ch7_color'].state) === '#FFFF00') ? '#000' : '#FFF' ]]]"
           name:
             - font-weight: bold
         state_display: |
           [[[
-            const pwm = states['sensor.ledbrickplus_scheduler_pwm_channel_7'];
-            const current = states['sensor.ledbrickplus_scheduler_current_channel_7'];
-            return pwm ? `${pwm.state}% · ${current.state}A` : 'Unknown';
+            const light = states['light.ledbrickplus_ch7_pwm'];
+            const current = states['number.ledbrickplus_ch7_current'];
+            if (light && current) {
+              const brightness = light.attributes.brightness ? Math.round((light.attributes.brightness / 255) * 100) : 0;
+              const currentVal = parseFloat(current.state).toFixed(2);
+              return `${brightness}% · ${currentVal}A`;
+            }
+            return '--';
           ]]]
         tap_action:
           action: more-info
@@ -238,20 +260,25 @@ cards:
       # Channel 8
       - type: custom:button-card
         entity: light.ledbrickplus_ch8_pwm
-        name: "[[[ return states['text_sensor.ledbrickplus_ch8_color'].attributes.friendly_name || 'Channel 8' ]]]"
+        name: "[[[ return (states['text_sensor.ledbrickplus_ch8_color'] && states['text_sensor.ledbrickplus_ch8_color'].attributes.friendly_name) || 'Channel 8' ]]]"
         show_state: true
         show_icon: false
         styles:
           card:
-            - background-color: "[[[ return states['text_sensor.ledbrickplus_ch8_color'].state || '#FF8000' ]]]"
+            - background-color: "[[[ return (states['text_sensor.ledbrickplus_ch8_color'] && states['text_sensor.ledbrickplus_ch8_color'].state) || '#FF8000' ]]]"
             - color: "#FFF"
           name:
             - font-weight: bold
         state_display: |
           [[[
-            const pwm = states['sensor.ledbrickplus_scheduler_pwm_channel_8'];
-            const current = states['sensor.ledbrickplus_scheduler_current_channel_8'];
-            return pwm ? `${pwm.state}% · ${current.state}A` : 'Unknown';
+            const light = states['light.ledbrickplus_ch8_pwm'];
+            const current = states['number.ledbrickplus_ch8_current'];
+            if (light && current) {
+              const brightness = light.attributes.brightness ? Math.round((light.attributes.brightness / 255) * 100) : 0;
+              const currentVal = parseFloat(current.state).toFixed(2);
+              return `${brightness}% · ${currentVal}A`;
+            }
+            return '--';
           ]]]
         tap_action:
           action: more-info
@@ -298,59 +325,22 @@ cards:
       - entity: binary_sensor.ledbrickplus_thermal_emergency
         name: Thermal Emergency
         
-      - type: section
-        label: Schedule Info
+      - type: divider
         
-      - entity: sensor.ledbrickplus_moon_phase
-        name: Moon Phase
-        icon: mdi:moon-waning-crescent
+      - entity: sensor.ledbrickplus_uptime_human
+        name: Uptime
+        
+      - type: divider
         
       - entity: sensor.ledbrickplus_sunrise_time
         name: Sunrise
-        icon: mdi:weather-sunset-up
         
       - entity: sensor.ledbrickplus_sunset_time
         name: Sunset
-        icon: mdi:weather-sunset-down
-
-  # === Schedule Presets ===
-  - type: entities
-    title: Schedule Presets
-    show_header_toggle: false
-    entities:
-      - type: custom:button-entity-row
-        buttons:
-          - name: Dynamic
-            icon: mdi:auto-fix
-            tap_action:
-              action: call-service
-              service: esphome.ledbrickplus_load_preset
-              data:
-                preset_name: "dynamic_sunrise_sunset"
-                
-          - name: Full Spectrum
-            icon: mdi:white-balance-sunny
-            tap_action:
-              action: call-service
-              service: esphome.ledbrickplus_load_preset
-              data:
-                preset_name: "full_spectrum"
-                
-          - name: Simple
-            icon: mdi:lightbulb-on
-            tap_action:
-              action: call-service
-              service: esphome.ledbrickplus_load_preset
-              data:
-                preset_name: "simple"
-                
-          - name: Clear
-            icon: mdi:delete
-            tap_action:
-              action: call-service
-              service: esphome.ledbrickplus_clear_schedule
-              confirmation:
-                text: Clear all schedule points?
+        
+      - entity: sensor.ledbrickplus_moon_phase
+        name: Moon Phase
+        
 
   # === Quick Actions ===
   - type: horizontal-stack

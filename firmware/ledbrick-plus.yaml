@@ -292,6 +292,12 @@ i2c:
   id: bus_a
 
 sensor:
+  # Uptime sensor
+  - platform: uptime
+    name: "Uptime"
+    id: uptime_sensor
+    update_interval: 60s
+    
   - platform: ina2xx_i2c
     id: current_sensor
     model: INA228
@@ -396,6 +402,76 @@ binary_sensor:
     device_class: running
     lambda: |-
       return id(main_scheduler)->get_temperature_status().fan_enabled;
+
+# Text sensors (in addition to channel colors from packages)
+text_sensor:
+  # Human-readable uptime
+  - platform: template
+    name: "Uptime Human"
+    id: uptime_human
+    icon: "mdi:clock-start"
+    update_interval: 60s
+    lambda: |-
+      uint32_t dur = id(uptime_sensor).state;
+      int dys = dur / 86400;
+      dur %= 86400;
+      int hrs = dur / 3600;
+      dur %= 3600;
+      int mnts = dur / 60;
+      dur %= 60;
+      if (dys > 0) {
+        return str_sprintf("%dd %dh %dm", dys, hrs, mnts);
+      } else if (hrs > 0) {
+        return str_sprintf("%dh %dm", hrs, mnts);
+      } else {
+        return str_sprintf("%dm %ds", mnts, dur);
+      }
+      
+  # Sunrise time
+  - platform: template
+    name: "Sunrise Time"
+    id: sunrise_time_text
+    icon: "mdi:weather-sunset-up"
+    update_interval: 300s  # Update every 5 minutes
+    lambda: |-
+      auto astro_times = id(main_scheduler)->get_astronomical_times();
+      int minutes = astro_times.rise_minutes;
+      if (minutes < 0) return std::string("--:--");
+      int hours = minutes / 60;
+      int mins = minutes % 60;
+      return str_sprintf("%02d:%02d", hours, mins);
+      
+  # Sunset time
+  - platform: template
+    name: "Sunset Time"
+    id: sunset_time_text
+    icon: "mdi:weather-sunset-down"
+    update_interval: 300s  # Update every 5 minutes
+    lambda: |-
+      auto astro_times = id(main_scheduler)->get_astronomical_times();
+      int minutes = astro_times.set_minutes;
+      if (minutes < 0) return std::string("--:--");
+      int hours = minutes / 60;
+      int mins = minutes % 60;
+      return str_sprintf("%02d:%02d", hours, mins);
+      
+  # Moon phase
+  - platform: template
+    name: "Moon Phase"
+    id: moon_phase_text
+    icon: "mdi:moon-waning-crescent"
+    update_interval: 3600s  # Update every hour
+    lambda: |-
+      float phase = id(main_scheduler)->get_moon_phase();
+      if (phase < 0.0625) return std::string("New Moon");
+      else if (phase < 0.1875) return std::string("Waxing Crescent");
+      else if (phase < 0.3125) return std::string("First Quarter");
+      else if (phase < 0.4375) return std::string("Waxing Gibbous");
+      else if (phase < 0.5625) return std::string("Full Moon");
+      else if (phase < 0.6875) return std::string("Waning Gibbous");
+      else if (phase < 0.8125) return std::string("Last Quarter");
+      else if (phase < 0.9375) return std::string("Waning Crescent");
+      else return std::string("New Moon");
 
 
 

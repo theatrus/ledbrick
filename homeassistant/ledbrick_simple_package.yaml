@@ -330,6 +330,91 @@ script:
           message: "All LEDBrick units have been turned off"
           notification_id: ledbrick_emergency
 
+  # Photo mode - disable scheduler and set channels for photography
+  ledbrick_photo_mode:
+    alias: "LEDBrick Photo Mode"
+    sequence:
+      - variables:
+          groups: "{{ states('input_text.tank_groups') | from_json }}"
+          tank: "{{ states('input_select.active_tank') }}"
+          units: "{{ groups.get(tank, []) }}"
+      # Turn off scheduler for all units in tank
+      - repeat:
+          for_each: "{{ units }}"
+          sequence:
+            - service: switch.turn_off
+              target:
+                entity_id: "switch.{{ repeat.item }}_scheduler_enabled"
+              continue_on_error: true
+      # Set specific channel values for photography
+      # Adjust these values based on your channel configuration
+      - repeat:
+          for_each: "{{ units }}"
+          sequence:
+            # Set white/blue channels high for photos
+            - service: light.turn_on
+              target:
+                entity_id: "light.{{ repeat.item }}_ch1_pwm"  # Blue
+              data:
+                brightness_pct: 100
+              continue_on_error: true
+            - service: light.turn_on
+              target:
+                entity_id: "light.{{ repeat.item }}_ch2_pwm"  # Royal Blue
+              data:
+                brightness_pct: 90
+              continue_on_error: true
+            - service: light.turn_on
+              target:
+                entity_id: "light.{{ repeat.item }}_ch3_pwm"  # Blue/UV
+              data:
+                brightness_pct: 80
+              continue_on_error: true
+            - service: light.turn_on
+              target:
+                entity_id: "light.{{ repeat.item }}_ch4_pwm"  # White
+              data:
+                brightness_pct: 100
+              continue_on_error: true
+            - service: light.turn_on
+              target:
+                entity_id: "light.{{ repeat.item }}_ch5_pwm"  # Red/Warm
+              data:
+                brightness_pct: 40
+              continue_on_error: true
+            - service: light.turn_on
+              target:
+                entity_id: "light.{{ repeat.item }}_ch6_pwm"  # Other
+              data:
+                brightness_pct: 60
+              continue_on_error: true
+            - service: light.turn_on
+              target:
+                entity_id: "light.{{ repeat.item }}_ch7_pwm"  # Other
+              data:
+                brightness_pct: 50
+              continue_on_error: true
+            - service: light.turn_on
+              target:
+                entity_id: "light.{{ repeat.item }}_ch8_pwm"  # Other
+              data:
+                brightness_pct: 30
+              continue_on_error: true
+      # Ensure PWM scale is at 100%
+      - repeat:
+          for_each: "{{ units }}"
+          sequence:
+            - service: number.set_value
+              target:
+                entity_id: "number.{{ repeat.item }}_pwm_scale"
+              data:
+                value: 100
+              continue_on_error: true
+      - service: notify.persistent_notification
+        data:
+          title: "📸 Photo Mode Active"
+          message: "Scheduler disabled, channels set for photography"
+
 # === Simple Dashboard Card ===
 # Copy this to your Lovelace dashboard:
 lovelace:
