@@ -52,11 +52,9 @@ cards:
         icon: mdi:camera
         tap_action:
           action: call-service
-          service: number.set_value
+          service: script.turn_on
           target:
-            entity_id: number.ledbrickplus_pwm_scale
-          data:
-            value: 85
+            entity_id: script.ledbrick_photo_mode
 
   # === Main Controls ===
   - type: entities
@@ -66,14 +64,6 @@ cards:
       - entity: number.ledbrickplus_pwm_scale
         name: Global Brightness
         
-      - type: divider
-        
-      - entity: number.ledbrickplus_latitude
-        name: Latitude
-        
-      - entity: number.ledbrickplus_longitude
-        name: Longitude
-        
       - entity: switch.ledbrickplus_astronomical_projection
         name: Time Projection
         
@@ -81,11 +71,9 @@ cards:
         name: Moon Simulation
 
   # === Channel Status Grid ===
-  - type: custom:layout-card
-    layout_type: grid
-    layout:
-      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr))
-      grid-gap: 8px
+  - type: grid
+    columns: 4
+    square: false
     cards:
       # Channel 1
       - type: custom:button-card
@@ -101,10 +89,12 @@ cards:
             - font-weight: bold
         state_display: |
           [[[
-            const pwm = states['sensor.ledbrickplus_scheduler_pwm_channel_1'];
-            const current = states['sensor.ledbrickplus_scheduler_current_channel_1'];
-            if (pwm && current) {
-              return `${parseFloat(pwm.state).toFixed(1)}% · ${parseFloat(current.state).toFixed(2)}A`;
+            const light = states['light.ledbrickplus_ch1_pwm'];
+            const current = states['number.ledbrickplus_ch1_current'];
+            if (light && current) {
+              const brightness = light.attributes.brightness ? Math.round((light.attributes.brightness / 255) * 100) : 0;
+              const currentVal = parseFloat(current.state).toFixed(2);
+              return `${brightness}% · ${currentVal}A`;
             }
             return '--';
           ]]]
@@ -125,10 +115,12 @@ cards:
             - font-weight: bold
         state_display: |
           [[[
-            const pwm = states['sensor.ledbrickplus_scheduler_pwm_channel_2'];
-            const current = states['sensor.ledbrickplus_scheduler_current_channel_2'];
-            if (pwm && current) {
-              return `${parseFloat(pwm.state).toFixed(1)}% · ${parseFloat(current.state).toFixed(2)}A`;
+            const light = states['light.ledbrickplus_ch2_pwm'];
+            const current = states['number.ledbrickplus_ch2_current'];
+            if (light && current) {
+              const brightness = light.attributes.brightness ? Math.round((light.attributes.brightness / 255) * 100) : 0;
+              const currentVal = parseFloat(current.state).toFixed(2);
+              return `${brightness}% · ${currentVal}A`;
             }
             return '--';
           ]]]
@@ -149,10 +141,12 @@ cards:
             - font-weight: bold
         state_display: |
           [[[
-            const pwm = states['sensor.ledbrickplus_scheduler_pwm_channel_3'];
-            const current = states['sensor.ledbrickplus_scheduler_current_channel_3'];
-            if (pwm && current) {
-              return `${parseFloat(pwm.state).toFixed(1)}% · ${parseFloat(current.state).toFixed(2)}A`;
+            const light = states['light.ledbrickplus_ch3_pwm'];
+            const current = states['number.ledbrickplus_ch3_current'];
+            if (light && current) {
+              const brightness = light.attributes.brightness ? Math.round((light.attributes.brightness / 255) * 100) : 0;
+              const currentVal = parseFloat(current.state).toFixed(2);
+              return `${brightness}% · ${currentVal}A`;
             }
             return '--';
           ]]]
@@ -173,10 +167,12 @@ cards:
             - font-weight: bold
         state_display: |
           [[[
-            const pwm = states['sensor.ledbrickplus_scheduler_pwm_channel_4'];
-            const current = states['sensor.ledbrickplus_scheduler_current_channel_4'];
-            if (pwm && current) {
-              return `${parseFloat(pwm.state).toFixed(1)}% · ${parseFloat(current.state).toFixed(2)}A`;
+            const light = states['light.ledbrickplus_ch4_pwm'];
+            const current = states['number.ledbrickplus_ch4_current'];
+            if (light && current) {
+              const brightness = light.attributes.brightness ? Math.round((light.attributes.brightness / 255) * 100) : 0;
+              const currentVal = parseFloat(current.state).toFixed(2);
+              return `${brightness}% · ${currentVal}A`;
             }
             return '--';
           ]]]
@@ -197,10 +193,12 @@ cards:
             - font-weight: bold
         state_display: |
           [[[
-            const pwm = states['sensor.ledbrickplus_scheduler_pwm_channel_5'];
-            const current = states['sensor.ledbrickplus_scheduler_current_channel_5'];
-            if (pwm && current) {
-              return `${parseFloat(pwm.state).toFixed(1)}% · ${parseFloat(current.state).toFixed(2)}A`;
+            const light = states['light.ledbrickplus_ch5_pwm'];
+            const current = states['number.ledbrickplus_ch5_current'];
+            if (light && current) {
+              const brightness = light.attributes.brightness ? Math.round((light.attributes.brightness / 255) * 100) : 0;
+              const currentVal = parseFloat(current.state).toFixed(2);
+              return `${brightness}% · ${currentVal}A`;
             }
             return '--';
           ]]]
@@ -221,10 +219,12 @@ cards:
             - font-weight: bold
         state_display: |
           [[[
-            const pwm = states['sensor.ledbrickplus_scheduler_pwm_channel_6'];
-            const current = states['sensor.ledbrickplus_scheduler_current_channel_6'];
-            if (pwm && current) {
-              return `${parseFloat(pwm.state).toFixed(1)}% · ${parseFloat(current.state).toFixed(2)}A`;
+            const light = states['light.ledbrickplus_ch6_pwm'];
+            const current = states['number.ledbrickplus_ch6_current'];
+            if (light && current) {
+              const brightness = light.attributes.brightness ? Math.round((light.attributes.brightness / 255) * 100) : 0;
+              const currentVal = parseFloat(current.state).toFixed(2);
+              return `${brightness}% · ${currentVal}A`;
             }
             return '--';
           ]]]
@@ -245,10 +245,12 @@ cards:
             - font-weight: bold
         state_display: |
           [[[
-            const pwm = states['sensor.ledbrickplus_scheduler_pwm_channel_7'];
-            const current = states['sensor.ledbrickplus_scheduler_current_channel_7'];
-            if (pwm && current) {
-              return `${parseFloat(pwm.state).toFixed(1)}% · ${parseFloat(current.state).toFixed(2)}A`;
+            const light = states['light.ledbrickplus_ch7_pwm'];
+            const current = states['number.ledbrickplus_ch7_current'];
+            if (light && current) {
+              const brightness = light.attributes.brightness ? Math.round((light.attributes.brightness / 255) * 100) : 0;
+              const currentVal = parseFloat(current.state).toFixed(2);
+              return `${brightness}% · ${currentVal}A`;
             }
             return '--';
           ]]]
@@ -269,10 +271,12 @@ cards:
             - font-weight: bold
         state_display: |
           [[[
-            const pwm = states['sensor.ledbrickplus_scheduler_pwm_channel_8'];
-            const current = states['sensor.ledbrickplus_scheduler_current_channel_8'];
-            if (pwm && current) {
-              return `${parseFloat(pwm.state).toFixed(1)}% · ${parseFloat(current.state).toFixed(2)}A`;
+            const light = states['light.ledbrickplus_ch8_pwm'];
+            const current = states['number.ledbrickplus_ch8_current'];
+            if (light && current) {
+              const brightness = light.attributes.brightness ? Math.round((light.attributes.brightness / 255) * 100) : 0;
+              const currentVal = parseFloat(current.state).toFixed(2);
+              return `${brightness}% · ${currentVal}A`;
             }
             return '--';
           ]]]
@@ -322,58 +326,23 @@ cards:
         name: Thermal Emergency
         
       - type: section
-        label: Schedule Info
+        label: System Info
         
-      - entity: sensor.ledbrickplus_moon_phase
-        name: Moon Phase
-        icon: mdi:moon-waning-crescent
+      - entity: text_sensor.ledbrickplus_uptime_human
+        name: Uptime
         
-      - entity: sensor.ledbrickplus_sunrise_time
+      - type: section
+        label: Astronomical Info
+        
+      - entity: text_sensor.ledbrickplus_sunrise_time
         name: Sunrise
-        icon: mdi:weather-sunset-up
         
-      - entity: sensor.ledbrickplus_sunset_time
+      - entity: text_sensor.ledbrickplus_sunset_time
         name: Sunset
-        icon: mdi:weather-sunset-down
-
-  # === Schedule Presets ===
-  - type: entities
-    title: Schedule Presets
-    show_header_toggle: false
-    entities:
-      - type: custom:button-entity-row
-        buttons:
-          - name: Dynamic
-            icon: mdi:auto-fix
-            tap_action:
-              action: call-service
-              service: esphome.ledbrickplus_load_preset
-              data:
-                preset_name: "dynamic_sunrise_sunset"
-                
-          - name: Full Spectrum
-            icon: mdi:white-balance-sunny
-            tap_action:
-              action: call-service
-              service: esphome.ledbrickplus_load_preset
-              data:
-                preset_name: "full_spectrum"
-                
-          - name: Simple
-            icon: mdi:lightbulb-on
-            tap_action:
-              action: call-service
-              service: esphome.ledbrickplus_load_preset
-              data:
-                preset_name: "simple"
-                
-          - name: Clear
-            icon: mdi:delete
-            tap_action:
-              action: call-service
-              service: esphome.ledbrickplus_clear_schedule
-              confirmation:
-                text: Clear all schedule points?
+        
+      - entity: text_sensor.ledbrickplus_moon_phase
+        name: Moon Phase
+        
 
   # === Quick Actions ===
   - type: horizontal-stack
