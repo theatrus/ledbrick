@@ -650,6 +650,39 @@ body {
   background: #777;
 }
 
+/* Chart control buttons */
+.chart-controls {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.chart-controls button {
+  background: #444;
+  color: white;
+  border: 1px solid #666;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.chart-controls button:hover {
+  background: #555;
+  border-color: #777;
+}
+
+.chart-controls button.active {
+  background: #4a9eff;
+  border-color: #4a9eff;
+}
+
+.chart-controls button.active:hover {
+  background: #357abd;
+  border-color: #357abd;
+}
+
 /* Additional table styles */
 .astronomical-type {
   color: #ff9800;

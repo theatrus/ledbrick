@@ -50,6 +50,7 @@ export function ScheduleChart({ schedule, currentTime, moonriseTime, moonsetTime
   const [visibleChannels, setVisibleChannels] = useState<boolean[]>(
     new Array(schedule.num_channels).fill(true)
   );
+  const [showCurrent, setShowCurrent] = useState(false);
 
   // Generate time labels for x-axis (every 15 minutes)
   const timeLabels = Array.from({ length: 96 }, (_, i) => {
@@ -60,7 +61,7 @@ export function ScheduleChart({ schedule, currentTime, moonriseTime, moonsetTime
   });
 
   // Interpolate schedule data for smooth chart
-  const interpolateFullDay = (points: SchedulePoint[]): number[][] => {
+  const interpolateFullDay = (points: SchedulePoint[], useCurrentValues: boolean): number[][] => {
     if (!points || points.length === 0) {
       return Array(schedule.num_channels).fill([]).map(() => 
         Array(96).fill(0)
@@ -79,8 +80,14 @@ export function ScheduleChart({ schedule, currentTime, moonriseTime, moonsetTime
       const values = interpolateAtTime(sortedPoints, targetTime);
       
       for (let ch = 0; ch < schedule.num_channels; ch++) {
-        const value = values.pwm_values && values.pwm_values[ch] !== undefined ? values.pwm_values[ch] : 0;
-        interpolatedData[ch].push(value);
+        if (useCurrentValues) {
+          // Current values are in amps, convert to mA
+          const value = values.current_values && values.current_values[ch] !== undefined ? values.current_values[ch] * 1000 : 0;
+          interpolatedData[ch].push(value);
+        } else {
+          const value = values.pwm_values && values.pwm_values[ch] !== undefined ? values.pwm_values[ch] : 0;
+          interpolatedData[ch].push(value);
+        }
       }
     }
 
@@ -88,13 +95,19 @@ export function ScheduleChart({ schedule, currentTime, moonriseTime, moonsetTime
   };
 
   // Interpolate values at a specific time
-  const interpolateAtTime = (points: SchedulePoint[], targetTime: number): { pwm_values: number[] } => {
+  const interpolateAtTime = (points: SchedulePoint[], targetTime: number): { pwm_values: number[], current_values: number[] } => {
     if (points.length === 0) {
-      return { pwm_values: new Array(schedule.num_channels).fill(0) };
+      return { 
+        pwm_values: new Array(schedule.num_channels).fill(0),
+        current_values: new Array(schedule.num_channels).fill(0)
+      };
     }
 
     if (points.length === 1) {
-      return { pwm_values: [...points[0].pwm_values] };
+      return { 
+        pwm_values: [...points[0].pwm_values],
+        current_values: points[0].current_values ? [...points[0].current_values] : new Array(schedule.num_channels).fill(0)
+      };
     }
 
     // Find surrounding points
@@ -120,7 +133,10 @@ export function ScheduleChart({ schedule, currentTime, moonriseTime, moonsetTime
     }
 
     if (!prevPoint || !nextPoint) {
-      return { pwm_values: new Array(schedule.num_channels).fill(0) };
+      return { 
+        pwm_values: new Array(schedule.num_channels).fill(0),
+        current_values: new Array(schedule.num_channels).fill(0)
+      };
     }
 
     // Calculate interpolation
@@ -144,15 +160,20 @@ export function ScheduleChart({ schedule, currentTime, moonriseTime, moonsetTime
       }
     }
 
-    // Interpolate PWM values
+    // Interpolate PWM and current values
     const pwm_values = new Array(schedule.num_channels);
+    const current_values = new Array(schedule.num_channels);
     for (let i = 0; i < schedule.num_channels; i++) {
-      const prevValue = (prevPoint.pwm_values && prevPoint.pwm_values[i] !== undefined) ? prevPoint.pwm_values[i] : 0;
-      const nextValue = (nextPoint.pwm_values && nextPoint.pwm_values[i] !== undefined) ? nextPoint.pwm_values[i] : 0;
-      pwm_values[i] = prevValue + (nextValue - prevValue) * timeRatio;
+      const prevPwmValue = (prevPoint.pwm_values && prevPoint.pwm_values[i] !== undefined) ? prevPoint.pwm_values[i] : 0;
+      const nextPwmValue = (nextPoint.pwm_values && nextPoint.pwm_values[i] !== undefined) ? nextPoint.pwm_values[i] : 0;
+      pwm_values[i] = prevPwmValue + (nextPwmValue - prevPwmValue) * timeRatio;
+      
+      const prevCurrentValue = (prevPoint.current_values && prevPoint.current_values[i] !== undefined) ? prevPoint.current_values[i] : 0;
+      const nextCurrentValue = (nextPoint.current_values && nextPoint.current_values[i] !== undefined) ? nextPoint.current_values[i] : 0;
+      current_values[i] = prevCurrentValue + (nextCurrentValue - prevCurrentValue) * timeRatio;
     }
 
-    return { pwm_values };
+    return { pwm_values, current_values };
   };
 
   // Process schedule data - filter out astronomical points with time_minutes=0
@@ -160,7 +181,7 @@ export function ScheduleChart({ schedule, currentTime, moonriseTime, moonsetTime
     // Keep all fixed points and astronomical points with valid times
     return point.time_type === 'fixed' || point.time_minutes > 0;
   });
-  const interpolatedData = interpolateFullDay(validPoints);
+  const interpolatedData = interpolateFullDay(validPoints, showCurrent);
   
   // Create datasets for each channel
   const datasets = Array.from({ length: schedule.num_channels }, (_, i) => {
@@ -198,6 +219,23 @@ export function ScheduleChart({ schedule, currentTime, moonriseTime, moonsetTime
   const moonrisePosition = timeStringToPosition(moonriseTime);
   const moonsetPosition = timeStringToPosition(moonsetTime);
 
+  // Calculate Y-axis max for current mode
+  // Need to check actual current values in schedule, not just max_current config
+  let yAxisMax = 115; // Default for PWM mode
+  
+  if (showCurrent) {
+    // Find the maximum current value across all schedule points
+    let maxScheduledCurrent = 0;
+    for (const point of schedule.schedule_points) {
+      if (point.current_values) {
+        const pointMax = Math.max(...point.current_values);
+        maxScheduledCurrent = Math.max(maxScheduledCurrent, pointMax);
+      }
+    }
+    // Convert from amps to mA and add 15% padding
+    yAxisMax = Math.max(maxScheduledCurrent * 1000 * 1.15, 1000); // At least 1000mA
+  }
+
   // Chart options
   const options: ChartOptions<'line'> = {
     responsive: true,
@@ -224,7 +262,7 @@ export function ScheduleChart({ schedule, currentTime, moonriseTime, moonsetTime
         callbacks: {
           title: (tooltipItems: TooltipItem<'line'>[]) => `Time: ${tooltipItems[0].label}`,
           label: (context: TooltipItem<'line'>) => 
-            `${context.dataset.label}: ${context.parsed.y.toFixed(1)}%`
+            `${context.dataset.label}: ${context.parsed.y.toFixed(1)}${showCurrent ? 'mA' : '%'}`
         }
       },
       annotation: {
@@ -303,15 +341,18 @@ export function ScheduleChart({ schedule, currentTime, moonriseTime, moonsetTime
       y: {
         title: {
           display: true,
-          text: 'PWM (%)'
+          text: showCurrent ? 'Current (mA)' : 'PWM (%)'
         },
         min: 0,
-        max: 115,  // Extra space for moon labels
+        max: yAxisMax,
         ticks: {
-          stepSize: 10,
+          stepSize: showCurrent ? 100 : 10,
           callback: function(value) {
-            // Only show tick labels up to 100%
-            return value <= 100 ? value : '';
+            if (!showCurrent) {
+              // Only show tick labels up to 100%
+              return value <= 100 ? value : '';
+            }
+            return value;
           }
         },
         grid: {
@@ -328,14 +369,36 @@ export function ScheduleChart({ schedule, currentTime, moonriseTime, moonsetTime
     setVisibleChannels(newVisible);
   };
 
+  // Force chart update when switching modes
+  useEffect(() => {
+    if (chartRef.current) {
+      chartRef.current.update();
+    }
+  }, [showCurrent]);
+
   return (
     <div className="card">
       <h2>Schedule Visualization</h2>
+      <div className="chart-controls">
+        <button 
+          className={!showCurrent ? 'active' : ''}
+          onClick={() => setShowCurrent(false)}
+        >
+          PWM %
+        </button>
+        <button 
+          className={showCurrent ? 'active' : ''}
+          onClick={() => setShowCurrent(true)}
+        >
+          Current (mA)
+        </button>
+      </div>
       <div className="chart-container">
         <Line
           ref={chartRef}
           data={{ labels: timeLabels, datasets }}
           options={options}
+          key={showCurrent ? 'current' : 'pwm'}
         />
       </div>
       <div className="legend">

@@ -259,12 +259,19 @@ void TemperatureControl::update_fan_control(uint32_t current_time_ms) {
         } else {
             fan_pwm_output = pid_output;
         }
-    } else if (cooling_error > -0.1f && status_.fan_enabled) {
-        // In hysteresis band and fan is already on - keep it at minimum
+    } else if (status_.fan_enabled) {
+        // Fan is already on - keep it at minimum to prevent oscillation
+        // This prevents the fan from turning off when slightly below setpoint
+        // in systems with continuous heat input
+        should_enable_fan = true;
+        fan_pwm_output = config_.min_fan_pwm;
+    } else if (cooling_error > -10.0f) {
+        // Temperature is below target but within 10°C - start fan at minimum
+        // to provide baseline cooling for systems with continuous heat input
         should_enable_fan = true;
         fan_pwm_output = config_.min_fan_pwm;
     } else {
-        // Temperature below target - hysteresis, no cooling needed
+        // Temperature is significantly below target (>10°C) - no cooling needed
         should_enable_fan = false;
         fan_pwm_output = 0.0f;
     }
