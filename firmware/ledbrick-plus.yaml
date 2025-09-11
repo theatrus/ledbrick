@@ -292,6 +292,12 @@ i2c:
   id: bus_a
 
 sensor:
+  # Uptime sensor
+  - platform: uptime
+    name: "Uptime"
+    id: uptime_sensor
+    update_interval: 60s
+    
   - platform: ina2xx_i2c
     id: current_sensor
     model: INA228
@@ -396,6 +402,30 @@ binary_sensor:
     device_class: running
     lambda: |-
       return id(main_scheduler)->get_temperature_status().fan_enabled;
+
+# Text sensors (in addition to channel colors from packages)
+text_sensor:
+  # Human-readable uptime
+  - platform: template
+    name: "Uptime Human"
+    id: uptime_human
+    icon: "mdi:clock-start"
+    update_interval: 60s
+    lambda: |-
+      uint32_t dur = id(uptime_sensor).state;
+      int dys = dur / 86400;
+      dur %= 86400;
+      int hrs = dur / 3600;
+      dur %= 3600;
+      int mnts = dur / 60;
+      dur %= 60;
+      if (dys > 0) {
+        return str_sprintf("%dd %dh %dm", dys, hrs, mnts);
+      } else if (hrs > 0) {
+        return str_sprintf("%dh %dm", hrs, mnts);
+      } else {
+        return str_sprintf("%dm %ds", mnts, dur);
+      }
 
 
 
