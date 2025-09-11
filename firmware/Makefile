@@ -116,6 +116,11 @@ esphome: web
 	@echo "🏗️  Compiling ESPHome firmware..."
 	uv run esphome compile ledbrick-plus.yaml
 
+# ESPHome compilation with non-minified web UI (for debugging)
+esphome-debug: web-debug
+	@echo "🐛 Compiling ESPHome firmware (with non-minified web UI)..."
+	uv run esphome compile ledbrick-plus.yaml
+
 # Build React web UI
 web:
 	@echo "🌐 Building React web UI..."
@@ -124,6 +129,15 @@ web:
 		npm run build && \
 		npm run generate-cpp
 	@echo "✅ Web UI built and C++ generated"
+
+# Build React web UI without minification (for debugging)
+web-debug:
+	@echo "🐛 Building React web UI (non-minified for debugging)..."
+	@cd components/ledbrick_web_server/web-react && \
+		npm install --silent && \
+		npm run build:debug && \
+		npm run generate-cpp
+	@echo "✅ Web UI built (debug mode) and C++ generated"
 
 # Development server for React UI
 dev:
@@ -168,8 +182,10 @@ help:
 	@echo "  test-clang      - Run tests with clang++ compiler"
 	@echo "  test-verbose    - Run tests with verbose output"
 	@echo "  web             - Build React web UI"
+	@echo "  web-debug       - Build React web UI (non-minified for debugging)"
 	@echo "  dev             - Start React development server"
 	@echo "  esphome         - Compile ESPHome firmware (includes web build)"
+	@echo "  esphome-debug   - Compile ESPHome firmware with non-minified web UI"
 	@echo "  setup           - Verify development environment"
 	@echo "  clean           - Clean build artifacts"
 	@echo "  clean-all       - Clean all build artifacts including ESPHome"
@@ -179,4 +195,5 @@ help:
 	@echo "  make            - Run all tests"
 	@echo "  make test-astro - Test astronomical calculator only"
 	@echo "  make esphome    - Build ESPHome firmware"
+	@echo "  make esphome-debug - Build firmware with non-minified web UI"
 	@echo "  make clean test - Clean and run all tests"
