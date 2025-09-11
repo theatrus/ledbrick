@@ -82,4 +82,22 @@ export default defineConfig(({ mode }) => ({
       },
     },
   },
+  
+  preview: {
+    port: 3000,
+    proxy: {
+      '/api': {
+        target: process.env.LEDBRICK_IP ? `http://${process.env.LEDBRICK_IP}` : 'http://192.168.1.196',
+        changeOrigin: true,
+      },
+      '/switch': {
+        target: process.env.LEDBRICK_IP ? `http://${process.env.LEDBRICK_IP}` : 'http://192.168.1.196',
+        changeOrigin: true,
+      },
+      '/number': {
+        target: process.env.LEDBRICK_IP ? `http://${process.env.LEDBRICK_IP}` : 'http://192.168.1.196',
+        changeOrigin: true,
+      },
+    },
+  },
 }));

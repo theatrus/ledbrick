@@ -143,6 +143,14 @@ web-debug:
 dev:
 	@cd components/ledbrick_web_server/web-react && LEDBRICK_IP=$(LEDBRICK_IP) npm run dev:server
 
+# Preview server for minified build (to debug minification issues)
+preview: web
+	@echo "🔍 Starting preview server for minified build..."
+	@echo "   Access at http://localhost:3000"
+	@echo "   This serves the production build to help debug minification issues"
+	@echo "   Using device at: $${LEDBRICK_IP:-192.168.1.196}"
+	@cd components/ledbrick_web_server/web-react && LEDBRICK_IP=$(LEDBRICK_IP) npm run preview
+
 # Setup development environment
 setup:
 	@echo "📋 Setting up LEDBrick development environment..."
@@ -184,6 +192,7 @@ help:
 	@echo "  web             - Build React web UI"
 	@echo "  web-debug       - Build React web UI (non-minified for debugging)"
 	@echo "  dev             - Start React development server"
+	@echo "  preview         - Serve minified build locally (debug minification)"
 	@echo "  esphome         - Compile ESPHome firmware (includes web build)"
 	@echo "  esphome-debug   - Compile ESPHome firmware with non-minified web UI"
 	@echo "  setup           - Verify development environment"
