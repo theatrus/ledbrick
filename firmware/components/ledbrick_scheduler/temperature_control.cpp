@@ -114,11 +114,7 @@ void TemperatureControl::update(uint32_t current_time_ms) {
         return;
     }
     
-    // Calculate time delta
-    uint32_t dt_ms = 0;
-    if (last_update_ms_ != 0) {
-        dt_ms = current_time_ms - last_update_ms_;
-    }
+    // Update timestamp
     last_update_ms_ = current_time_ms;
     
     // Update sensor validity and get average temperature
@@ -353,8 +349,6 @@ bool TemperatureControl::import_config_json(const std::string& json) {
         TemperatureControlConfig new_config = config_;
         
         // Parse each field using simple string searching
-        size_t pos = 0;
-        
         // Helper lambda to extract float value
         auto extract_float = [&json](const std::string& key) -> float {
             size_t key_pos = json.find("\"" + key + "\":");
