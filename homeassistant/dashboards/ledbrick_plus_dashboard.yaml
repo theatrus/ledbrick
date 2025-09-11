@@ -325,22 +325,20 @@ cards:
       - entity: binary_sensor.ledbrickplus_thermal_emergency
         name: Thermal Emergency
         
-      - type: section
-        label: System Info
+      - type: divider
         
-      - entity: text_sensor.ledbrickplus_uptime_human
+      - entity: sensor.ledbrickplus_uptime_human
         name: Uptime
         
-      - type: section
-        label: Astronomical Info
+      - type: divider
         
-      - entity: text_sensor.ledbrickplus_sunrise_time
+      - entity: sensor.ledbrickplus_sunrise_time
         name: Sunrise
         
-      - entity: text_sensor.ledbrickplus_sunset_time
+      - entity: sensor.ledbrickplus_sunset_time
         name: Sunset
         
-      - entity: text_sensor.ledbrickplus_moon_phase
+      - entity: sensor.ledbrickplus_moon_phase
         name: Moon Phase
         
 
