@@ -6,6 +6,18 @@
 #define M_PI 3.14159265358979323846
 #endif
 
+// Astronomical constants for rise/set calculations
+// Standard atmospheric refraction at horizon in degrees
+static const double REFRACTION_AT_HORIZON = 34.0 / 60.0;  // 34 arcminutes
+
+// Solar and lunar semi-diameters in degrees  
+static const double SUN_SEMI_DIAMETER = 16.0 / 60.0;      // 16 arcminutes
+static const double MOON_SEMI_DIAMETER = 15.5 / 60.0;     // 15.5 arcminutes
+
+// Rise/set altitude thresholds (negative because we want upper limb at horizon)
+static const double SUN_RISE_SET_ALTITUDE = -(REFRACTION_AT_HORIZON + SUN_SEMI_DIAMETER);   // -0.833°
+static const double MOON_RISE_SET_ALTITUDE = -(REFRACTION_AT_HORIZON + MOON_SEMI_DIAMETER); // -0.825°
+
 // Helper function to normalize angle to 0-360 degrees
 static double normalize_degrees(double angle) {
     angle = fmod(angle, 360.0);
@@ -420,9 +432,10 @@ AstronomicalCalculator::MoonTimes AstronomicalCalculator::get_moon_rise_set_time
         double altitude = pos.altitude;
         
         if (prev_altitude != -90.0) {
-            // Check for horizon crossings
-            if (prev_altitude < 0.0 && altitude >= 0.0) {
-                // Moon rise detected
+            // Check for horizon crossings at the appropriate altitude for rise/set
+            // This accounts for atmospheric refraction and upper limb detection
+            if (prev_altitude < MOON_RISE_SET_ALTITUDE && altitude >= MOON_RISE_SET_ALTITUDE) {
+                // Moon rise detected - upper limb at horizon with refraction
                 MoonEvent event;
                 event.is_rise = true;
                 event.minutes_from_midnight = minutes;
@@ -436,8 +449,8 @@ AstronomicalCalculator::MoonTimes AstronomicalCalculator::get_moon_rise_set_time
                 
                 all_events.push_back(event);
             }
-            else if (prev_altitude >= 0.0 && altitude < 0.0) {
-                // Moon set detected
+            else if (prev_altitude >= MOON_RISE_SET_ALTITUDE && altitude < MOON_RISE_SET_ALTITUDE) {
+                // Moon set detected - upper limb at horizon with refraction
                 MoonEvent event;
                 event.is_rise = false;
                 event.minutes_from_midnight = minutes;
@@ -542,7 +555,8 @@ AstronomicalCalculator::MoonTimes AstronomicalCalculator::get_moon_rise_set_time
     // Convert selected events to result
     if (best_rise) {
         // Fine-tune the crossing time using linear interpolation
-        double ratio = -best_rise->altitude_before / 
+        // Calculate where altitude crosses MOON_RISE_SET_ALTITUDE
+        double ratio = (MOON_RISE_SET_ALTITUDE - best_rise->altitude_before) / 
                       (best_rise->altitude_after - best_rise->altitude_before);
         int fine_minutes = best_rise->minutes_from_midnight - 5 + static_cast<int>(5 * ratio);
         
@@ -555,8 +569,9 @@ AstronomicalCalculator::MoonTimes AstronomicalCalculator::get_moon_rise_set_time
     }
     
     if (best_set) {
-        // Fine-tune the crossing time
-        double ratio = best_set->altitude_before / 
+        // Fine-tune the crossing time using linear interpolation
+        // Calculate where altitude crosses MOON_RISE_SET_ALTITUDE
+        double ratio = (best_set->altitude_before - MOON_RISE_SET_ALTITUDE) / 
                       (best_set->altitude_before - best_set->altitude_after);
         int fine_minutes = best_set->minutes_from_midnight - 5 + static_cast<int>(5 * ratio);
         
@@ -594,17 +609,17 @@ AstronomicalCalculator::SunTimes AstronomicalCalculator::get_sun_rise_set_times(
         auto pos = calculate_sun_position_at_time(jd);
         double altitude = pos.altitude;
         
-        // Check for horizon crossings (0 degrees altitude)
+        // Check for horizon crossings at the appropriate altitude for rise/set
         if (prev_altitude != -90.0) {  // Skip first iteration
-            if (prev_altitude < 0.0 && altitude >= 0.0 && !found_rise) {
-                // Sun rise detected
+            if (prev_altitude < SUN_RISE_SET_ALTITUDE && altitude >= SUN_RISE_SET_ALTITUDE && !found_rise) {
+                // Sun rise detected - upper limb at horizon with refraction
                 result.rise_minutes = minutes - 7;  // Approximate midpoint of 15-minute interval
                 if (result.rise_minutes < 0) result.rise_minutes += 1440;
                 result.rise_valid = true;
                 found_rise = true;
             }
-            else if (prev_altitude >= 0.0 && altitude < 0.0 && !found_set) {
-                // Sun set detected  
+            else if (prev_altitude >= SUN_RISE_SET_ALTITUDE && altitude < SUN_RISE_SET_ALTITUDE && !found_set) {
+                // Sun set detected - upper limb at horizon with refraction
                 result.set_minutes = minutes - 7;  // Approximate midpoint of 15-minute interval
                 if (result.set_minutes < 0) result.set_minutes += 1440;
                 result.set_valid = true;
