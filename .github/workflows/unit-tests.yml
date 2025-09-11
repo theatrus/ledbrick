@@ -1,18 +1,29 @@
-name: ESPHome Build
+name: Unit Tests
 
 on:
   push:
-    branches: [ master, main ]
-    paths: [ 'firmware/**' ]
+    branches: [ master, main, '*' ]
+    paths: 
+      - 'firmware/components/ledbrick_scheduler/**'
+      - 'firmware/test_*.cpp'
+      - 'firmware/test_framework.h'
+      - 'firmware/Makefile'
+      - '.github/workflows/unit-tests.yml'
   pull_request:
     branches: [ master, main ]
-    paths: [ 'firmware/**' ]
+    paths: 
+      - 'firmware/components/ledbrick_scheduler/**'
+      - 'firmware/test_*.cpp'
+      - 'firmware/test_framework.h'
+      - 'firmware/Makefile'
+      - '.github/workflows/unit-tests.yml'
 
 jobs:
   test:
-    name: Run Unit Tests
+    name: Unit Tests (${{ matrix.os }}, ${{ matrix.compiler }})
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
         compiler: [gcc, clang]
@@ -36,38 +47,26 @@ jobs:
       run: |
         # macOS has clang pre-installed
         echo "Using built-in clang compiler"
+        clang++ --version
     
     - name: Run unit tests
       working-directory: ./firmware
       run: |
         if [ "${{ matrix.compiler }}" = "clang" ]; then
-          echo "Running unit tests with clang++ on ${{ matrix.os }}..."
+          echo "=== Running unit tests with clang++ on ${{ matrix.os }} ==="
+          clang++ --version
           make clean
           make test-clang
         else
-          echo "Running unit tests with g++ on ${{ matrix.os }}..."
+          echo "=== Running unit tests with g++ on ${{ matrix.os }} ==="
+          g++ --version
           make clean
           make test
         fi
-
-  build:
-    runs-on: ubuntu-latest
-    name: Build ESPHome firmware
-    needs: test  # Only build if tests pass
     
-    steps:
-    - name: Checkout source code
-      uses: actions/checkout@v4
-    
-    - name: Build ESPHome Binary
-      uses: esphome/build-action@v6
-      id: esphome-build
+    - name: Upload test results
+      if: failure()
+      uses: actions/upload-artifact@v4
       with:
-        yaml-file: firmware/ledbrick-plus.yaml
-        version: 'latest'
-      env:
-        # Mock secrets for compilation - valid format required for build
-        SECRETS_api_encryption_key: "0InzFsPpuTBIm6B6HVhVupBRBwBTY2oT3fRnc3JATdM="
-        SECRETS_ota_password: "mock_ota_password"
-        SECRETS_wifi_ssid: "MockWiFi"
-        SECRETS_wifi_password: "mock_password"
+        name: test-results-${{ matrix.os }}-${{ matrix.compiler }}
+        path: firmware/build/

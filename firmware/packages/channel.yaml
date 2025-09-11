@@ -1,5 +1,5 @@
 # ESPHome package for LED channel (PWM + Current control pair)
-# Provides PWM light control and current control sliders with limiting
+# Provides PWM light control, current control sliders with limiting, and scheduler integration
 esphome:
   project:
     name: "ledbrick.channel"
@@ -69,3 +69,25 @@ number:
     restore_value: true
     initial_value: 1.0
     entity_category: config
+    on_value:
+      then:
+        - lambda: |-
+            if (id(main_scheduler) != nullptr) {
+              id(main_scheduler)->set_channel_max_current(${channel_number} - 1, x);
+            }
+
+# Channel color configuration
+text_sensor:
+  - platform: template
+    name: "Ch${channel_number} Color"
+    id: ch${channel_number}_color
+    icon: "mdi:palette"
+    lambda: |-
+      return id(main_scheduler).get_channel_color(${channel_number} - 1);
+    update_interval: 300s  # Longer interval since we update via events
+    on_value:
+      then:
+        - lambda: |-
+            ESP_LOGD("channel", "Ch${channel_number} color updated to: %s", x.c_str());
+
+# Scheduler functionality is handled globally in the main config

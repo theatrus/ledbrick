@@ -1,0 +1,264 @@
+# LEDBrick Firmware - Claude Development Notes
+
+## Important: Line Endings
+**ALWAYS use LF (Unix) line endings, not CRLF (Windows) line endings for all files.**
+
+## Building the Project
+
+To build and test the LEDBrick firmware:
+
+1. Enter the firmware directory:
+   ```bash
+   cd firmware
+   ```
+
+2. Run all tests (default):
+   ```bash
+   make
+   # or
+   make test
+   ```
+
+3. Individual test suites:
+   ```bash
+   make test-astro      # Test astronomical calculator only
+   make test-scheduler  # Test LED scheduler only
+   make test-pid        # Test PID controller only
+   make test-temperature # Test temperature control only
+   ```
+
+4. Cross-compiler testing:
+   ```bash
+   make test-clang      # Test with clang++ instead of g++
+   ```
+
+5. Build React web UI:
+   ```bash
+   make web             # Build web UI and generate C++
+   ```
+
+6. ESPHome compilation (includes web build):
+   ```bash
+   make esphome         # Builds web UI then compiles ESPHome
+   ```
+
+7. Upload firmware to device:
+   ```bash
+   uv run esphome run ledbrick-plus.yaml --device=COM3
+   # Replace COM3 with your actual device port
+   ```
+
+8. Clean build artifacts:
+   ```bash
+   make clean           # Clean unit test builds
+   make clean-all       # Clean everything including ESPHome builds
+   ```
+
+## Web Development
+
+### Frontend Development
+The web interface is built with React + TypeScript + Vite:
+
+1. Development server (with device proxy):
+   ```bash
+   LEDBRICK_IP=192.168.1.xxx make dev
+   ```
+
+2. Build for production:
+   ```bash
+   make web             # Builds and generates C++ automatically
+   ```
+
+3. Setup development environment:
+   ```bash
+   make setup           # Verify uv, g++, and other dependencies
+   ```
+
+### Makefile Targets
+- `make` or `make test` - Run all unit tests
+- `make test-astro` - Test astronomical calculator only
+- `make test-scheduler` - Test LED scheduler only
+- `make test-pid` - Test PID controller only
+- `make test-temperature` - Test temperature control only
+- `make test-clang` - Run tests with clang++ compiler
+- `make web` - Build React web UI and generate C++
+- `make web-debug` - Build React web UI without minification (for debugging)
+- `make dev` - Start React development server with device proxy
+- `make preview` - Serve minified build locally to debug minification issues
+- `make esphome` - Build web UI then compile ESPHome firmware
+- `make esphome-debug` - Build ESPHome with non-minified web UI (for debugging)
+- `make clean` - Clean unit test builds
+- `make clean-all` - Clean everything including ESPHome builds
+- `make help` - Show all available targets
+
+### Testing Web Interface
+- Set `LEDBRICK_IP` environment variable for development server proxy
+- The web server runs on port 80 by default
+- API endpoints are available at `/api/*`
+- Use browser dev tools for debugging React frontend
+
+## Project Structure
+
+### Standalone Components (No ESPHome Dependencies)
+- `astronomical_calculator.h/cpp` - Standalone C++ astronomical calculator with timezone support
+- `scheduler.h/cpp` - Standalone C++ LED scheduler with interpolation, presets, and serialization
+- `pid_controller.h/cpp` - Standalone C++ PID controller with anti-windup and derivative-on-measurement
+- `temperature_control.h/cpp` - Temperature management system with multi-sensor support and emergency protection
+- `test_astronomical.cpp` - Unit test suite for the astronomical calculator  
+- `test_scheduler.cpp` - Unit test suite for the LED scheduler
+- `test_pid_controller.cpp` - Unit test suite for the PID controller
+- `test_temperature_control.cpp` - Unit test suite for temperature control
+- `test_framework.h` - Common test framework for consistent testing across components
+- `Makefile` - Consolidated build system for all unit tests and cross-compiler testing
+
+### ESPHome Integration
+- `components/ledbrick_scheduler/` - Main ESPHome custom component with integrated temperature control
+- `components/ledbrick_web_server/` - ESP-IDF web server component with React frontend
+- `ledbrick-plus.yaml` - ESPHome configuration file
+- `packages/` - Reusable configuration packages for channels, web server, etc.
+
+## Architecture
+
+The project follows a clean separation between core algorithms and ESPHome integration:
+
+### Standalone Components
+1. **AstronomicalCalculator** - Pure C++ astronomical calculations
+   - Sun/moon position calculations with spherical trigonometry
+   - Sunrise/sunset time calculations with timezone support
+   - Intensity calculations with atmospheric effects
+   - Time projection for timezone mapping
+   - Comprehensive unit tests covering edge cases
+
+2. **LEDScheduler** - Pure C++ scheduling logic
+   - Schedule point management with interpolation
+   - Built-in presets (sunrise/sunset, full spectrum, simple)
+   - Binary serialization for efficient storage
+   - JSON export for debugging and configuration
+   - Dynamic channel count support
+   - Comprehensive unit tests covering all functionality
+
+3. **PIDController** - Pure C++ PID control implementation
+   - Proportional-Integral-Derivative control algorithm
+   - Anti-windup protection for integral term
+   - Derivative-on-measurement to prevent setpoint kick
+   - Configurable output limits and tuning parameters
+   - Reset functionality for state management
+   - 42 comprehensive unit tests
+
+4. **TemperatureControl** - Thermal management system
+   - Multi-sensor support with averaging and validation
+   - Temperature filtering for noise reduction
+   - Emergency thermal protection with configurable thresholds
+   - Fan curve generation based on temperature
+   - PID-based fan speed control
+   - JSON configuration import/export
+   - 49 comprehensive unit tests
+
+### ESPHome Integration Layer
+- **LEDBrickScheduler** - ESPHome component that:
+  - Wraps standalone components including temperature control
+  - Handles ESPHome-specific concerns (GPIO, preferences, logging)
+  - Manages persistent storage in flash including temperature settings
+  - Provides Home Assistant integration
+  - Uses projected astronomical calculations for accurate scheduling
+  - Integrated temperature control with PID fan management
+
+- **LEDBrickWebServer** - ESP-IDF web server component that:
+  - Provides standalone web interface with React frontend
+  - REST API for schedule management and control
+  - Real-time status monitoring with sensor integration
+  - Responsive design for mobile and desktop
+  - Supports manual channel control when scheduler disabled
+
+## Web Interface Features
+
+### Core Functionality
+- **Schedule Management**: Create, edit, and delete schedule points with PWM and current values
+- **Channel Configuration**: Configure channel names, colors, and maximum current limits
+- **Location Settings**: Set latitude/longitude with reef location presets
+- **Time Shift/Projection**: Map remote astronomical times to local timezone
+- **Moon Simulation**: Configure moon phase effects on lighting
+- **Manual Control**: Direct channel control when scheduler is disabled
+
+### Recent Enhancements
+- **Responsive Status Bar**: LED channels wrap first on smaller screens
+- **Sensor Integration**: Real-time display of fan speed, temperature, and power sensors
+- **Modal Improvements**: Settings modal with proper z-index and auto-close functionality
+- **Channel Colors**: Schedule table uses actual channel colors as background tones
+- **Manual Channel Control**: Click channels in status bar for direct PWM/current control
+- **Debug Mode**: Non-minified builds for easier troubleshooting
+- **Schedule Chart Current View**: Toggle between PWM % and Current (mA) display modes
+- **Temperature Control Improvements**: Fan maintains minimum speed within 10°C below setpoint to prevent oscillation
+- **Minification Fix**: Centralized constants and safer minification settings to prevent runtime errors
+
+### API Endpoints
+- `GET /api/status` - System status with sensor data
+- `GET /api/schedule` - Current schedule configuration
+- `POST /api/schedule` - Update schedule configuration
+- `POST /api/schedule/point` - Add/update schedule point
+- `POST /api/location` - Update location settings
+- `POST /api/time_shift` - Update time shift settings (also `/api/time_projection`)
+- `POST /api/moon_simulation` - Update moon simulation settings
+- `POST /switch/web_scheduler_enable/turn_on|turn_off` - Control scheduler state
+- `POST /number/pwm_scale/set` - Set global PWM scaling
+- `POST /api/channel/control` - Manual channel control
+- `POST /api/channel/configs` - Update channel configurations
+- `GET /api/temperature/config` - Get temperature control configuration
+- `POST /api/temperature/config` - Update temperature control settings
+- `GET /api/temperature/status` - Get temperature control status
+- `GET /api/temperature/fan-curve` - Get current fan curve points
+
+## Hardware Integration
+
+### Sensor Support
+- **INA228**: Current/voltage monitoring (I2C address 0x40)
+- **Fan Speed**: RPM monitoring via pulse counter (GPIO35)
+- **Fan Control**: PWM control (GPIO37) with enable switch (GPIO36)
+- **Temperature**: DS18B20 sensors on 1-wire bus (GPIO41)
+
+### Channel Configuration
+- **8 LED Channels**: PWM control with current limiting
+- **Current Control**: Analog outputs for constant current regulation
+- **Status LED**: WS2812 RGB LED for system status indication
+
+## Common Issues and Solutions
+
+### Compilation Issues
+- **Astronomical times error**: Use `rise_minutes`/`set_minutes` instead of `sunrise`/`sunset`
+- **Sensor not found**: Ensure sensor IDs match configuration (use explicit IDs)
+- **Web content missing**: Run `npm run build` and `npm run generate-cpp`
+- **PID controller not found**: Ensure pid_controller.cpp/h are in components/ledbrick_scheduler/
+- **Clean build needed**: Run `make clean-all` if adding new files to components
+- **Temperature control**: Now integrated into scheduler component, no separate component needed
+
+### Runtime Issues
+- **JSON parsing errors**: Check for extra quotes or malformed JSON in API responses
+- **Modal positioning**: Ensure proper z-index and DOM structure
+- **Refresh on control changes**: Remove unnecessary onUpdate() calls
+- **Temperature sensors not reading**: Check 1-wire bus connections and sensor IDs
+- **Emergency recovery bug**: Known issue - emergency_cooldown_ prevents recovery (line 186)
+- **Fan curve rapid refresh loop**: Fixed - API returns null when temperature control unavailable
+
+### Debugging
+- **Frontend errors**: Use `LEDBRICK_IP=device-ip make dev` for development server
+- **API testing**: Access endpoints directly at `http://device-ip/api/*`
+- **Serialization issues**: Check channel_configs vector sizing in deserialize()
+- **Build issues**: Run `make clean-all` then `make esphome` for clean rebuild
+- **Minification errors**: Use `make preview` to test minified build locally with source maps
+- **Non-minified build**: Use `make esphome-debug` to build firmware without minification
+
+## Development Notes
+
+- All core algorithms are standalone C++ with no ESPHome dependencies
+- Unit tests ensure correctness before ESPHome integration
+- Clean separation allows testing and development of algorithms independently
+- ESPHome component acts as a thin integration layer
+- Both astronomical and scheduler components support serialization
+- Timezone handling is proper with PST/UTC conversion for accurate sun calculations
+- Singapore sunrise can be projected to appear at 10 AM Pacific time using time projection
+- Frontend uses React + TypeScript with Vite for modern development experience
+- CSS uses responsive design with flexbox and media queries
+- State management avoids full page refreshes for better UX
+- Constants are centralized in `src/constants/` to prevent minification issues
+- Vite configuration uses safer minification settings to prevent runtime errors
+- Source maps are enabled for production builds to aid debugging
