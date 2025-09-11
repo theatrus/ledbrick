@@ -45,7 +45,7 @@ public:
     };
     
     // Constructor
-    AstronomicalCalculator(double latitude = 37.7749, double longitude = -122.4194);
+    AstronomicalCalculator(double latitude = 37.7749, double longitude = -122.4194, double timezone_offset_hours = 0.0);
     
     // Configuration
     void set_location(double latitude, double longitude);

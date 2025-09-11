@@ -220,7 +220,7 @@ class LEDBrickScheduler : public PollingComponent {
   double timezone_offset_hours_{0.0};    // Timezone offset from UTC in hours
   
   // Standalone components
-  mutable AstronomicalCalculator astro_calc_;  // Astronomical calculations
+  mutable AstronomicalCalculator astro_calc_{0.0, 0.0, 0.0};  // Astronomical calculations (lat, lon, tz)
   LEDScheduler scheduler_;  // Core scheduling logic
   ledbrick::TemperatureControl temp_control_;  // Temperature control system
   

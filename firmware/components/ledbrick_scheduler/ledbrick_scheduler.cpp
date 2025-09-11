@@ -906,6 +906,8 @@ AstronomicalCalculator::DateTime LEDBrickScheduler::esphome_time_to_datetime() c
     return AstronomicalCalculator::DateTime(2025, 1, 8, 12, 0, 0);
   }
   
+  // Return local time - the astronomical calculator will handle it correctly
+  // The calculator returns rise/set times as minutes from midnight in local time
   return AstronomicalCalculator::DateTime(
     time.year, time.month, time.day_of_month, 
     time.hour, time.minute, time.second
