@@ -432,7 +432,8 @@ void LEDBrickScheduler::apply_values(const InterpolationResult &values) {
       if (brightness > 0.001f) {
         call.set_brightness(brightness);
       }
-      call.set_transition_length(0);  // No transition for immediate response
+      // Use 1s transition when not forcing updates, 0 for forced updates
+      call.set_transition_length(force_next_update_ ? 0 : 1000);
       call.perform();
       
       ESP_LOGV(TAG, "Light %u call performed", channel);
