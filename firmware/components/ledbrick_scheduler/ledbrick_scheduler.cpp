@@ -414,42 +414,9 @@ void LEDBrickScheduler::apply_values(const InterpolationResult &values) {
            values.pwm_values.empty() ? 0.0f : values.pwm_values[0]);
   
   for (uint8_t channel = 0; channel < num_channels_; channel++) {
-    // Apply PWM to light entity
-    auto light_it = lights_.find(channel);
-    if (light_it != lights_.end() && light_it->second) {
-      // Apply PWM scale factor before converting to 0-1 range
-      float scaled_pwm = values.pwm_values[channel] * pwm_scale_;
-      float brightness = scaled_pwm / 100.0f; // Convert percentage to 0-1
-      
-      // Always update regardless of whether value has changed
-      ESP_LOGD(TAG, "Updating light %u: scaled_pwm=%.2f%%, brightness=%.3f (was %.3f)", 
-               channel, scaled_pwm, brightness, 
-               (last_pwm_values_.size() > channel) ? last_pwm_values_[channel] : -1.0f);
-      
-      // Create light call to set brightness
-      auto call = light_it->second->make_call();
-      call.set_state(brightness > 0.001f); // Turn on if brightness > 0
-      if (brightness > 0.001f) {
-        call.set_brightness(brightness);
-      }
-      // Use 1s transition when not forcing updates, 0 for forced updates
-      call.set_transition_length(force_next_update_ ? 0 : 1000);
-      call.perform();
-      
-      ESP_LOGV(TAG, "Light %u call performed", channel);
-      
-      if (last_pwm_values_.size() <= channel) {
-        last_pwm_values_.resize(num_channels_, -1.0f);
-      }
-      last_pwm_values_[channel] = brightness;
-      
-      ESP_LOGV(TAG, "Updated light %u brightness to %.3f (%.1f%% * %.2f scale = %.1f%%)", 
-               channel, brightness, values.pwm_values[channel], pwm_scale_, scaled_pwm);
-    } else {
-      ESP_LOGVV(TAG, "No light entity found for channel %u", channel);
-    }
-    
+
     // Apply current control with limiting
+    // We need to do this before applying PWM to ensure LED controller enters the right state
     auto current_it = current_controls_.find(channel);
     auto max_current_it = max_current_controls_.find(channel);
     
@@ -485,6 +452,42 @@ void LEDBrickScheduler::apply_values(const InterpolationResult &values) {
     } else {
       ESP_LOGVV(TAG, "No current control found for channel %u", channel);
     }
+
+    // Apply PWM to light entity
+    auto light_it = lights_.find(channel);
+    if (light_it != lights_.end() && light_it->second) {
+      // Apply PWM scale factor before converting to 0-1 range
+      float scaled_pwm = values.pwm_values[channel] * pwm_scale_;
+      float brightness = scaled_pwm / 100.0f; // Convert percentage to 0-1
+      
+      // Always update regardless of whether value has changed
+      ESP_LOGD(TAG, "Updating light %u: scaled_pwm=%.2f%%, brightness=%.3f (was %.3f)", 
+               channel, scaled_pwm, brightness, 
+               (last_pwm_values_.size() > channel) ? last_pwm_values_[channel] : -1.0f);
+      
+      // Create light call to set brightness
+      auto call = light_it->second->make_call();
+      call.set_state(brightness > 0.001f); // Turn on if brightness > 0
+      if (brightness > 0.001f) {
+        call.set_brightness(brightness);
+      }
+      // Use 1s transition when not forcing updates, 0 for forced updates
+      call.set_transition_length(force_next_update_ ? 0 : 1000);
+      call.perform();
+      
+      ESP_LOGV(TAG, "Light %u call performed", channel);
+      
+      if (last_pwm_values_.size() <= channel) {
+        last_pwm_values_.resize(num_channels_, -1.0f);
+      }
+      last_pwm_values_[channel] = brightness;
+      
+      ESP_LOGV(TAG, "Updated light %u brightness to %.3f (%.1f%% * %.2f scale = %.1f%%)", 
+               channel, brightness, values.pwm_values[channel], pwm_scale_, scaled_pwm);
+    } else {
+      ESP_LOGVV(TAG, "No light entity found for channel %u", channel);
+    }
+    
   }
   
   // Clear force update flag after applying all values
