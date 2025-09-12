@@ -421,35 +421,29 @@ void LEDBrickScheduler::apply_values(const InterpolationResult &values) {
       float scaled_pwm = values.pwm_values[channel] * pwm_scale_;
       float brightness = scaled_pwm / 100.0f; // Convert percentage to 0-1
       
-      // Only update if value has changed significantly (reduce unnecessary calls) or force update
-      bool should_update = force_next_update_ ||
-                          (last_pwm_values_.size() <= channel || 
-                           abs(brightness - last_pwm_values_[channel]) > 0.001f);
+      // Always update regardless of whether value has changed
+      ESP_LOGD(TAG, "Updating light %u: scaled_pwm=%.2f%%, brightness=%.3f (was %.3f)", 
+               channel, scaled_pwm, brightness, 
+               (last_pwm_values_.size() > channel) ? last_pwm_values_[channel] : -1.0f);
       
-      if (should_update) {
-        ESP_LOGD(TAG, "Updating light %u: scaled_pwm=%.2f%%, brightness=%.3f (was %.3f)", 
-                 channel, scaled_pwm, brightness, 
-                 (last_pwm_values_.size() > channel) ? last_pwm_values_[channel] : -1.0f);
-        
-        // Create light call to set brightness
-        auto call = light_it->second->make_call();
-        call.set_state(brightness > 0.001f); // Turn on if brightness > 0
-        if (brightness > 0.001f) {
-          call.set_brightness(brightness);
-        }
-        call.set_transition_length(0);  // No transition for immediate response
-        call.perform();
-        
-        ESP_LOGV(TAG, "Light %u call performed", channel);
-        
-        if (last_pwm_values_.size() <= channel) {
-          last_pwm_values_.resize(num_channels_, -1.0f);
-        }
-        last_pwm_values_[channel] = brightness;
-        
-        ESP_LOGV(TAG, "Updated light %u brightness to %.3f (%.1f%% * %.2f scale = %.1f%%)", 
-                 channel, brightness, values.pwm_values[channel], pwm_scale_, scaled_pwm);
+      // Create light call to set brightness
+      auto call = light_it->second->make_call();
+      call.set_state(brightness > 0.001f); // Turn on if brightness > 0
+      if (brightness > 0.001f) {
+        call.set_brightness(brightness);
       }
+      call.set_transition_length(0);  // No transition for immediate response
+      call.perform();
+      
+      ESP_LOGV(TAG, "Light %u call performed", channel);
+      
+      if (last_pwm_values_.size() <= channel) {
+        last_pwm_values_.resize(num_channels_, -1.0f);
+      }
+      last_pwm_values_[channel] = brightness;
+      
+      ESP_LOGV(TAG, "Updated light %u brightness to %.3f (%.1f%% * %.2f scale = %.1f%%)", 
+               channel, brightness, values.pwm_values[channel], pwm_scale_, scaled_pwm);
     } else {
       ESP_LOGVV(TAG, "No light entity found for channel %u", channel);
     }
@@ -467,32 +461,26 @@ void LEDBrickScheduler::apply_values(const InterpolationResult &values) {
         target_current = std::min(target_current, max_current);
       }
       
-      // Only update if value has changed significantly or force update
-      if (force_next_update_ ||
-          last_current_values_.size() <= channel || 
-          abs(target_current - last_current_values_[channel]) > 0.01f) {
-        
-        // Set the current control value
-        current_it->second->publish_state(target_current);
-        
-        if (last_current_values_.size() <= channel) {
-          last_current_values_.resize(num_channels_, -1.0f);
-        }
-        last_current_values_[channel] = target_current;
-        
-        // Enhanced logging for channel 1 when values change
-        if (channel == 0) {
-          ESP_LOGD(TAG, "Ch1 current update: %.3fA (input: %.3fA, max limit: %.3fA, was: %.3fA, forced: %s)", 
-                   target_current, values.current_values[channel],
-                   max_current_it != max_current_controls_.end() && max_current_it->second ? 
-                   max_current_it->second->state : 999.0f,
-                   last_current_values_.size() > channel ? last_current_values_[channel] : -1.0f,
-                   force_next_update_ ? "yes" : "no");
-        }
-        
-        ESP_LOGV(TAG, "Updated current %u to %.3fA (limited from %.3fA)", 
-                 channel, target_current, values.current_values[channel]);
+      // Always update regardless of whether value has changed
+      // Set the current control value
+      current_it->second->publish_state(target_current);
+      
+      if (last_current_values_.size() <= channel) {
+        last_current_values_.resize(num_channels_, -1.0f);
       }
+      last_current_values_[channel] = target_current;
+      
+      // Enhanced logging for channel 1 when values change
+      if (channel == 0) {
+        ESP_LOGD(TAG, "Ch1 current update: %.3fA (input: %.3fA, max limit: %.3fA, was: %.3fA)", 
+                 target_current, values.current_values[channel],
+                 max_current_it != max_current_controls_.end() && max_current_it->second ? 
+                 max_current_it->second->state : 999.0f,
+                 last_current_values_.size() > channel ? last_current_values_[channel] : -1.0f);
+      }
+      
+      ESP_LOGV(TAG, "Updated current %u to %.3fA (limited from %.3fA)", 
+               channel, target_current, values.current_values[channel]);
     } else {
       ESP_LOGVV(TAG, "No current control found for channel %u", channel);
     }
