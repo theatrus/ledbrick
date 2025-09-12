@@ -37,7 +37,7 @@ CONF_CURRENT_VALUES = "current_values"
 CONF_PRESET_NAME = "preset_name"
 CONF_ENABLED = "enabled"
 
-DEFAULT_UPDATE_INTERVAL = "1s"
+DEFAULT_UPDATE_INTERVAL = "5s"
 
 CONFIG_SCHEMA = cv.Schema({
     cv.GenerateID(): cv.declare_id(LEDBrickScheduler),

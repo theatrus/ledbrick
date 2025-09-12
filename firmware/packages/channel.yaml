@@ -14,11 +14,12 @@ output:
   - platform: mcpwm_unified
     id: pwm_output_${channel_number}
     pin: ${pwm_pin}
-    frequency: 39khz
+    frequency: 1khz
   - platform: mcpwm_unified
     id: pwm_output_ao${channel_number}
     pin: ${current_pin}
-    frequency: 16khz
+    frequency: 39khz
+
 
 light:
   - platform: monochromatic
@@ -26,6 +27,7 @@ light:
     output: pwm_output_${channel_number}
     name: "Ch${channel_number} PWM"
     gamma_correct: 1
+    restore_mode: ALWAYS_OFF
 
 number:
   # Current control slider (0-2A)
