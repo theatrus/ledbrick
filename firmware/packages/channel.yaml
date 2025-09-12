@@ -14,7 +14,7 @@ output:
   - platform: mcpwm_unified
     id: pwm_output_${channel_number}
     pin: ${pwm_pin}
-    frequency: 10khz
+    frequency: 1khz
   - platform: mcpwm_unified
     id: pwm_output_ao${channel_number}
     pin: ${current_pin}
