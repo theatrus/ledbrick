@@ -246,26 +246,34 @@ void TemperatureControl::update_fan_control(uint32_t current_time_ms) {
     bool should_enable_fan = false;
     float fan_pwm_output = 0.0f;
     
-    if (cooling_error > 0.1f) {  // Temperature above target + hysteresis
+    if (cooling_error > -10.0f) {  // Within 10°C of target (above or below)
+        // Let PID controller handle fan speed for smooth temperature control
         should_enable_fan = true;
-        // PID output will be positive when we need cooling (due to negative gains)
-        // Apply minimum fan PWM if PID output is too low
-        if (pid_output < config_.min_fan_pwm) {
-            fan_pwm_output = config_.min_fan_pwm;
+        
+        // Check if we're significantly above setpoint and need maximum cooling
+        if (cooling_error > 10.0f) {
+            // Temperature is 10°C or more above target - run fan at maximum
+            fan_pwm_output = config_.max_fan_pwm;
         } else {
-            fan_pwm_output = pid_output;
+            // PID output will be positive when we need cooling (due to negative gains)
+            // It will naturally decrease as we approach setpoint from above
+            // and become small/negative when below setpoint
+            
+            // Apply minimum fan PWM as a floor, but allow PID to control above that
+            if (pid_output < config_.min_fan_pwm) {
+                fan_pwm_output = config_.min_fan_pwm;
+            } else if (pid_output > config_.max_fan_pwm) {
+                fan_pwm_output = config_.max_fan_pwm;
+            } else {
+                fan_pwm_output = pid_output;
+            }
         }
-    } else if (status_.fan_enabled && cooling_error > -10.0f) {
-        // Fan is already on AND we're within 10°C of target - keep it at minimum to prevent oscillation
-        // This prevents the fan from turning off when slightly below setpoint
-        // in systems with continuous heat input
-        should_enable_fan = true;
-        fan_pwm_output = config_.min_fan_pwm;
-    } else if (cooling_error > -10.0f) {
-        // Temperature is below target but within 10°C - start fan at minimum
-        // to provide baseline cooling for systems with continuous heat input
-        should_enable_fan = true;
-        fan_pwm_output = config_.min_fan_pwm;
+        
+        // If we're significantly below setpoint and PID output is very low, we can turn off
+        if (cooling_error < -5.0f && pid_output < config_.min_fan_pwm * 0.5f) {
+            should_enable_fan = false;
+            fan_pwm_output = 0.0f;
+        }
     } else {
         // Temperature is significantly below target (>10°C) - no cooling needed
         should_enable_fan = false;
