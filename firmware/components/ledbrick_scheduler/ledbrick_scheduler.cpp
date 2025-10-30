@@ -115,6 +115,12 @@ void LEDBrickScheduler::update() {
     // Get current values from standalone scheduler and apply them
     uint16_t current_time = get_current_time_minutes();
     
+    // Check if we have valid time before proceeding
+    if (current_time == 0 && !time_source_) {
+      ESP_LOGW(TAG, "No valid time source available, skipping schedule update");
+      return;
+    }
+    
     // Use astronomical interpolation if we have dynamic points
     auto values = scheduler_.get_values_at_time_with_astro(current_time, scheduler_.get_astronomical_times());
     ESP_LOGD(TAG, "Scheduler values at %02d:%02d - valid: %s, channels: %zu, schedule_points: %zu", 
@@ -1197,6 +1203,18 @@ void LEDBrickScheduler::update_astronomical_times_for_scheduler(bool force) {
     return; // Skip update if less than 5 minutes have passed
   }
   
+  // Check if we have a valid time source
+  if (!time_source_) {
+    ESP_LOGW(TAG, "No time source available for astronomical calculations");
+    return;
+  }
+  
+  auto time = time_source_->now();
+  if (!time.is_valid()) {
+    ESP_LOGW(TAG, "Time not valid for astronomical calculations");
+    return;
+  }
+  
   last_astro_update = current_millis;
   
   // Calculate current astronomical times
@@ -1470,6 +1488,12 @@ void LEDBrickScheduler::update_temperature_sensors() {
   if (temp_sensors_.empty() && (now - last_discovery_check > 10000)) {  // Check every 10 seconds
     last_discovery_check = now;
     ESP_LOGI(TAG, "Searching for temperature sensors...");
+    
+    // Only attempt auto-discovery after boot is complete
+    if (!boot_complete_) {
+      ESP_LOGD(TAG, "Skipping sensor discovery - boot not complete");
+      return;
+    }
     
     // Scan all sensors for temperature sensors (by unit of measurement)
     for (auto* sensor : App.get_sensors()) {
