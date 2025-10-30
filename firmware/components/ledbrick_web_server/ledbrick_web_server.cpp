@@ -483,6 +483,12 @@ esp_err_t LEDBrickWebServer::handle_api_status_get(httpd_req_t *req) {
   auto *self = get_instance(req);
   if (!self->check_auth(req)) return ESP_OK;
   
+  // Check if scheduler is initialized
+  if (!self->scheduler_) {
+    self->send_error(req, 503, "Scheduler not initialized");
+    return ESP_OK;
+  }
+  
   JsonDocument doc;
   doc["enabled"] = self->scheduler_->is_enabled();
   doc["time_minutes"] = self->scheduler_->get_current_time_minutes();
@@ -520,11 +526,15 @@ esp_err_t LEDBrickWebServer::handle_api_status_get(httpd_req_t *req) {
     channel["current"] = values.current_values[i];
   }
   
-  // Add time formatted
+  // Add time formatted (handle invalid time gracefully)
   int time_min = self->scheduler_->get_current_time_minutes();
-  char time_str[6];
-  snprintf(time_str, sizeof(time_str), "%02d:%02d", time_min / 60, time_min % 60);
-  doc["time_formatted"] = time_str;
+  if (time_min >= 0 && time_min < 1440) {
+    char time_str[6];
+    snprintf(time_str, sizeof(time_str), "%02d:%02d", time_min / 60, time_min % 60);
+    doc["time_formatted"] = time_str;
+  } else {
+    doc["time_formatted"] = "--:--";
+  }
   
   // Add astronomical times (use projected times if projection is enabled)
   auto astro = self->scheduler_->get_projected_astronomical_times();
@@ -572,15 +582,18 @@ esp_err_t LEDBrickWebServer::handle_api_status_get(httpd_req_t *req) {
   }
   
   // Add temperature sensors from scheduler (auto-discovered)
-  auto scheduler_temp_sensors = self->scheduler_->get_temperature_sensors();
-  if (!scheduler_temp_sensors.empty()) {
-    JsonArray temps = doc["temperatures"].to<JsonArray>();
-    for (const auto &temp_info : scheduler_temp_sensors) {
-      if (temp_info.sensor && temp_info.sensor->has_state()) {
-        JsonObject temp = temps.add<JsonObject>();
-        temp["value"] = temp_info.sensor->state;
-        if (!temp_info.name.empty()) {
-          temp["name"] = temp_info.name;
+  // Check if scheduler is ready before accessing temperature sensors
+  if (self->scheduler_ && self->scheduler_->is_temperature_control_initialized()) {
+    auto scheduler_temp_sensors = self->scheduler_->get_temperature_sensors();
+    if (!scheduler_temp_sensors.empty()) {
+      JsonArray temps = doc["temperatures"].to<JsonArray>();
+      for (const auto &temp_info : scheduler_temp_sensors) {
+        if (temp_info.sensor && temp_info.sensor->has_state()) {
+          JsonObject temp = temps.add<JsonObject>();
+          temp["value"] = temp_info.sensor->state;
+          if (!temp_info.name.empty()) {
+            temp["name"] = temp_info.name;
+          }
         }
       }
     }
@@ -590,13 +603,15 @@ esp_err_t LEDBrickWebServer::handle_api_status_get(httpd_req_t *req) {
   doc["thermal_emergency"] = self->scheduler_->is_thermal_emergency();
   
   // Add temperature control status from scheduler
-  auto temp_status = self->scheduler_->get_temperature_status();
-  JsonObject temp_control = doc["temperature_control"].to<JsonObject>();
-  temp_control["enabled"] = temp_status.enabled;
-  temp_control["current_temp"] = temp_status.current_temp_c;
-  temp_control["target_temp"] = temp_status.target_temp_c;
-  temp_control["fan_pwm"] = temp_status.fan_pwm_percent;
-  temp_control["thermal_emergency"] = temp_status.thermal_emergency;
+  if (self->scheduler_ && self->scheduler_->is_temperature_control_initialized()) {
+    auto temp_status = self->scheduler_->get_temperature_status();
+    JsonObject temp_control = doc["temperature_control"].to<JsonObject>();
+    temp_control["enabled"] = temp_status.enabled;
+    temp_control["current_temp"] = temp_status.current_temp_c;
+    temp_control["target_temp"] = temp_status.target_temp_c;
+    temp_control["fan_pwm"] = temp_status.fan_pwm_percent;
+    temp_control["thermal_emergency"] = temp_status.thermal_emergency;
+  }
   
   self->send_json_response(req, 200, doc);
   return ESP_OK;
@@ -1367,6 +1382,12 @@ esp_err_t LEDBrickWebServer::handle_not_found(httpd_req_t *req) {
 esp_err_t LEDBrickWebServer::handle_api_temperature_config_get(httpd_req_t *req) {
   auto *self = get_instance(req);
   if (!self->check_auth(req)) return ESP_OK;
+  
+  // Check if scheduler and temperature control are initialized
+  if (!self->scheduler_ || !self->scheduler_->is_temperature_control_initialized()) {
+    self->send_error(req, 503, "Temperature control not initialized");
+    return ESP_OK;
+  }
   
   // Get temperature configuration from scheduler
   std::string config_json = self->scheduler_->get_temperature_config_json();
