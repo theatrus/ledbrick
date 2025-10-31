@@ -50,7 +50,7 @@ export function StatusBar({ status, schedule, onUpdate }: StatusBarProps) {
               <strong>Sunset:</strong> {status.sunset_time}
             </div>
           )}
-          {status.moon_phase !== undefined && (
+          {status.moon_phase !== undefined && status.moon_phase !== null && (
             <div className="status-item">
               <strong>Moon:</strong> {(status.moon_phase * 100).toFixed(1)}%
             </div>
@@ -67,13 +67,13 @@ export function StatusBar({ status, schedule, onUpdate }: StatusBarProps) {
           )}
           {(status.voltage !== undefined || status.total_current !== undefined) && (
             <div className="status-item">
-              {status.voltage !== undefined && (
+              {status.voltage !== undefined && status.voltage !== null && (
                 <span><strong>V:</strong> {status.voltage.toFixed(1)}V</span>
               )}
-              {status.voltage !== undefined && status.total_current !== undefined && (
+              {status.voltage !== undefined && status.voltage !== null && status.total_current !== undefined && status.total_current !== null && (
                 <span style={{ margin: '0 4px' }}>|</span>
               )}
-              {status.total_current !== undefined && (
+              {status.total_current !== undefined && status.total_current !== null && (
                 <span><strong>I:</strong> {status.total_current.toFixed(2)}A</span>
               )}
             </div>
@@ -89,7 +89,7 @@ export function StatusBar({ status, schedule, onUpdate }: StatusBarProps) {
               {status.temperatures.map((temp, i) => (
                 <span key={i}>
                   {i > 0 && ', '}
-                  {temp.value.toFixed(1)}°C{temp.name ? ` (${temp.name})` : ''}
+                  {temp.value?.toFixed(1) ?? '--'}°C{temp.name ? ` (${temp.name})` : ''}
                 </span>
               ))}
             </div>
@@ -98,9 +98,9 @@ export function StatusBar({ status, schedule, onUpdate }: StatusBarProps) {
             <div className="status-item">
               <strong>Temp Control:</strong>
               <span className={status.temperature_control.enabled ? 'active' : 'inactive'}>
-                {status.temperature_control.current_temp.toFixed(1)}°C
-                {status.temperature_control.enabled && 
-                  ` → ${status.temperature_control.target_temp.toFixed(1)}°C`}
+                {status.temperature_control.current_temp?.toFixed(1) ?? '--'}°C
+                {status.temperature_control.enabled &&
+                  ` → ${status.temperature_control.target_temp?.toFixed(1) ?? '--'}°C`}
               </span>
             </div>
           )}
