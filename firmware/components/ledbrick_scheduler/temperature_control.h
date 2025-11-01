@@ -114,6 +114,7 @@ private:
     uint32_t last_fan_update_ms_;
     uint32_t emergency_triggered_ms_;
     uint32_t last_valid_temp_ms_;
+    uint32_t last_pid_compute_temp_ms_;  // Timestamp of temp data used for last PID compute
 
     float filtered_temperature_;
     bool emergency_cooldown_;

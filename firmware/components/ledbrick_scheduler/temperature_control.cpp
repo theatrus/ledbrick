@@ -22,8 +22,9 @@ namespace ledbrick {
 TemperatureControl::TemperatureControl()
     : pid_controller_(2.0f, 0.1f, 0.5f, 0.0f, 100.0f),
       last_update_ms_(0), last_fan_update_ms_(0), emergency_triggered_ms_(0),
-      last_valid_temp_ms_(0), filtered_temperature_(0.0f),
-      emergency_cooldown_(false), ever_had_valid_temp_(false) {
+      last_valid_temp_ms_(0), last_pid_compute_temp_ms_(0),
+      filtered_temperature_(0.0f), emergency_cooldown_(false),
+      ever_had_valid_temp_(false) {
 
     status_.enabled = false;
     status_.thermal_emergency = false;
@@ -140,6 +141,7 @@ float TemperatureControl::get_average_temperature(uint32_t current_time_ms) {
     float temp_sum = 0.0f;
     uint32_t valid_count = 0;
     uint32_t total_count = 0;
+    uint32_t newest_sensor_time = 0;  // Track the most recent sensor reading time
 
     for (auto& sensor : sensors_) {
         total_count++;
@@ -150,6 +152,11 @@ float TemperatureControl::get_average_temperature(uint32_t current_time_ms) {
             sensor.temperature_c > 0.0f) {  // Reject 0°C or lower (catches NaN too)
             temp_sum += sensor.temperature_c;
             valid_count++;
+
+            // Track the newest sensor reading timestamp
+            if (sensor.last_update_ms > newest_sensor_time) {
+                newest_sensor_time = sensor.last_update_ms;
+            }
         } else {
             sensor.valid = false; // Mark as invalid if too old or invalid value
         }
@@ -164,7 +171,8 @@ float TemperatureControl::get_average_temperature(uint32_t current_time_ms) {
     }
 
     // We have at least one valid temperature - update tracking
-    last_valid_temp_ms_ = current_time_ms;
+    // Use the actual sensor reading time (newest sensor), not processing time
+    last_valid_temp_ms_ = newest_sensor_time;
     if (!ever_had_valid_temp_) {
         ever_had_valid_temp_ = true;
         LOG_INFO("First valid temperature reading received: %.1f°C", temp_sum / static_cast<float>(valid_count));
@@ -280,9 +288,28 @@ void TemperatureControl::update_fan_control(uint32_t current_time_ms) {
         return;  // Skip normal PID control in safety mode
     }
 
-    // Calculate PID output
-    uint32_t dt_ms = current_time_ms - (last_fan_update_ms_ - config_.fan_update_interval_ms);
+    // Only compute PID when we have NEW temperature data
+    // This prevents feeding the same temperature to PID multiple times
+    bool have_new_temp_data = (last_valid_temp_ms_ > last_pid_compute_temp_ms_);
+
+    if (!have_new_temp_data) {
+        // No new temperature data - maintain current fan state without recomputing PID
+        // Just reapply the last computed PWM
+        if (status_.fan_enabled && fan_pwm_callback_) {
+            fan_pwm_callback_(status_.fan_pwm_percent);
+        }
+        return;
+    }
+
+    // We have new temperature data - compute PID with proper time delta
+    uint32_t dt_ms = (last_pid_compute_temp_ms_ == 0) ?
+        config_.fan_update_interval_ms :
+        (last_valid_temp_ms_ - last_pid_compute_temp_ms_);
+
     float pid_output = pid_controller_.compute(status_.current_temp_c, dt_ms);
+
+    // Update the timestamp of the temperature data we just used for PID
+    last_pid_compute_temp_ms_ = last_valid_temp_ms_;
 
     status_.pid_error = pid_controller_.get_error();
     status_.pid_output = pid_output;
@@ -291,26 +318,21 @@ void TemperatureControl::update_fan_control(uint32_t current_time_ms) {
     float temp_error = status_.current_temp_c - config_.target_temp_c;
 
     // Control band and hysteresis thresholds
-    const float CONTROL_BAND = 10.0f;      // PID controls within ±10°C of target
-    const float TURN_ON_THRESHOLD = 1.0f;  // Turn fan ON when temp > target + 1°C
-    const float TURN_OFF_THRESHOLD = -2.0f; // Turn fan OFF when temp < target - 2°C
-    const float FAR_BELOW_THRESHOLD = -10.0f; // Definitely no cooling needed
+    const float CONTROL_BAND = 10.0f;        // PID controls within ±10°C of target
+    const float TURN_ON_THRESHOLD = -5.0f;   // Turn fan ON when temp > target - 5°C
+    const float TURN_OFF_THRESHOLD = -10.0f; // Turn fan OFF when temp < target - 10°C
 
     // Determine if we should enable the fan (with hysteresis)
     bool should_enable_fan = status_.fan_enabled; // Start with current state
     float fan_pwm_output = 0.0f;
 
-    if (temp_error < FAR_BELOW_THRESHOLD) {
-        // Far below target (>10°C below) - definitely turn fan off
+    if (temp_error < TURN_OFF_THRESHOLD) {
+        // Below target - 10°C - turn fan off
         should_enable_fan = false;
         fan_pwm_output = 0.0f;
     } else if (temp_error > TURN_ON_THRESHOLD) {
-        // Above target + hysteresis - turn fan on
+        // Above target + 1°C - turn fan on
         should_enable_fan = true;
-    } else if (temp_error < TURN_OFF_THRESHOLD) {
-        // Below target - hysteresis - turn fan off
-        should_enable_fan = false;
-        fan_pwm_output = 0.0f;
     }
     // If between TURN_OFF and TURN_ON, maintain current fan state (hysteresis)
 
