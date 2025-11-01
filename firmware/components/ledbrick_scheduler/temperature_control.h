@@ -113,9 +113,11 @@ private:
     uint32_t last_update_ms_;
     uint32_t last_fan_update_ms_;
     uint32_t emergency_triggered_ms_;
-    
+    uint32_t last_valid_temp_ms_;
+
     float filtered_temperature_;
     bool emergency_cooldown_;
+    bool ever_had_valid_temp_;
     
     // Callbacks
     std::function<void(float)> fan_pwm_callback_;    // Set fan PWM (0-100%)
