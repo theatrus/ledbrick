@@ -231,17 +231,36 @@ void TemperatureControl::update_fan_control(uint32_t current_time_ms) {
         return;
     }
     last_fan_update_ms_ = current_time_ms;
-    
+
+    // SAFETY: If no valid temperature sensors are available, run fan at 100%
+    if (status_.sensors_valid_count == 0) {
+        LOG_WARN("No valid temperature sensors - running fan at 100%% for safety");
+
+        status_.fan_enabled = true;
+        status_.fan_pwm_percent = 100.0f;
+        status_.pid_error = 0.0f;
+        status_.pid_output = 100.0f;
+
+        if (fan_enable_callback_) {
+            fan_enable_callback_(true);
+        }
+        if (fan_pwm_callback_) {
+            fan_pwm_callback_(100.0f);
+        }
+
+        return;  // Skip normal PID control when no sensors available
+    }
+
     // Calculate PID output
     uint32_t dt_ms = current_time_ms - (last_fan_update_ms_ - config_.fan_update_interval_ms);
     float pid_output = pid_controller_.compute(status_.current_temp_c, dt_ms);
-    
+
     status_.pid_error = pid_controller_.get_error();
     status_.pid_output = pid_output;
-    
+
     // For cooling: when current temp > target, we need cooling
     float cooling_error = status_.current_temp_c - config_.target_temp_c;
-    
+
     // Determine if we should enable the fan
     bool should_enable_fan = false;
     float fan_pwm_output = 0.0f;
