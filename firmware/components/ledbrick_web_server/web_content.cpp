@@ -1,5 +1,5 @@
 // Auto-generated web content - DO NOT EDIT
-// Generated from source files with timestamp: 2025-11-17T17:54:08.361Z
+// Generated from source files with timestamp: 2025-11-17T17:54:49.625Z
 // Total size: 126999 bytes compressed
 
 #include "web_content.h"
