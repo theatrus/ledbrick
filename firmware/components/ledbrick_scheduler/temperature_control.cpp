@@ -21,13 +21,12 @@ namespace ledbrick {
 // Temperature Control Implementation
 TemperatureControl::TemperatureControl()
     : pid_controller_(2.0f, 0.1f, 0.5f, 0.0f, 100.0f),
-      last_update_ms_(0), last_fan_update_ms_(0), emergency_triggered_ms_(0),
+      emergency_cooldown_(false), emergency_triggered_ms_(0),
+      last_update_ms_(0), last_fan_update_ms_(0),
       last_valid_temp_ms_(0), last_pid_compute_temp_ms_(0),
-      filtered_temperature_(0.0f), emergency_cooldown_(false),
-      ever_had_valid_temp_(false) {
+      filtered_temperature_(0.0f), ever_had_valid_temp_(false) {
 
     status_.enabled = false;
-    status_.thermal_emergency = false;
     status_.target_temp_c = config_.target_temp_c;
 
     pid_controller_.set_target(config_.target_temp_c);
@@ -99,23 +98,21 @@ void TemperatureControl::enable(bool enabled) {
         // to maintain safety state across enable/disable cycles
     } else {
         LOG_INFO("Temperature control disabled");
-
-        // Turn off fan when disabled
-        if (fan_enable_callback_) {
-            fan_enable_callback_(false);
-        }
-        if (fan_pwm_callback_) {
-            fan_pwm_callback_(0.0f);
-        }
-
-        status_.fan_enabled = false;
-        status_.fan_pwm_percent = 0.0f;
+        // Note: Hardware state updates will be handled by TemperatureHardwareManager
+        // when it receives the disable command
     }
 }
 
-void TemperatureControl::update(uint32_t current_time_ms) {
+TemperatureControlCommand TemperatureControl::compute_control_command(uint32_t current_time_ms) {
+    TemperatureControlCommand command;
+    
     if (!status_.enabled) {
-        return;
+        command.fan_enabled = false;
+        command.fan_pwm_percent = 0.0f;
+        command.emergency_state = false;
+        command.override_normal_control = true;
+        command.reason = "Temperature control disabled";
+        return command;
     }
     
     // Update timestamp
@@ -128,13 +125,27 @@ void TemperatureControl::update(uint32_t current_time_ms) {
     apply_temperature_filter(avg_temp);
     status_.current_temp_c = filtered_temperature_;
     
-    // Update emergency state
-    update_emergency_state(current_time_ms);
-    
-    // Update fan control if not in emergency
-    if (!status_.thermal_emergency) {
-        update_fan_control(current_time_ms);
+    // First check safety conditions
+    TemperatureControlCommand safety_command = evaluate_safety_conditions(
+        config_, status_.current_temp_c, ever_had_valid_temp_, 
+        last_valid_temp_ms_, status_.sensors_valid_count, current_time_ms);
+        
+    if (safety_command.override_normal_control) {
+        return safety_command;
     }
+    
+    // Check emergency state
+    TemperatureControlCommand emergency_command = evaluate_emergency_state(current_time_ms);
+    if (emergency_command.override_normal_control) {
+        return emergency_command;
+    }
+    
+    // Normal PID control
+    return compute_fan_control(current_time_ms);
+}
+
+void TemperatureControl::update_hardware_state(const TemperatureHardwareState& hardware_state) {
+    status_.hardware = hardware_state;
 }
 
 float TemperatureControl::get_average_temperature(uint32_t current_time_ms) {
@@ -181,11 +192,60 @@ float TemperatureControl::get_average_temperature(uint32_t current_time_ms) {
     return temp_sum / static_cast<float>(valid_count);
 }
 
-void TemperatureControl::update_emergency_state(uint32_t current_time_ms) {
+TemperatureControlCommand TemperatureControl::evaluate_safety_conditions(
+    const TemperatureControlConfig& config,
+    float current_temp_c,
+    bool ever_had_valid_temp,
+    uint32_t last_valid_temp_ms,
+    uint32_t sensors_valid_count,
+    uint32_t current_time_ms) {
+    
+    TemperatureControlCommand command;
+    
+    // SAFETY: Run fan at 100% in these conditions:
+    // 1. Never received a valid temperature reading
+    // 2. No valid temperature for more than 60 seconds
+    // 3. No valid sensors currently available
+    
+    if (!ever_had_valid_temp) {
+        command.fan_enabled = true;
+        command.fan_pwm_percent = 100.0f;
+        command.emergency_state = false;
+        command.override_normal_control = true;
+        command.reason = "Never received valid temperature";
+        return command;
+    }
+    
+    if (sensors_valid_count == 0) {
+        command.fan_enabled = true;
+        command.fan_pwm_percent = 100.0f;
+        command.emergency_state = false;
+        command.override_normal_control = true;
+        command.reason = "No valid temperature sensors";
+        return command;
+    }
+    
+    if ((current_time_ms - last_valid_temp_ms) > 60000) {  // 60 seconds
+        command.fan_enabled = true;
+        command.fan_pwm_percent = 100.0f;
+        command.emergency_state = false;
+        command.override_normal_control = true;
+        command.reason = "No valid temperature for >60 seconds";
+        return command;
+    }
+    
+    // No safety override needed
+    command.override_normal_control = false;
+    return command;
+}
+
+TemperatureControlCommand TemperatureControl::evaluate_emergency_state(uint32_t current_time_ms) {
+    TemperatureControlCommand command;
+    
     bool should_trigger_emergency = false;
     bool should_clear_emergency = false;
     
-    if (!status_.thermal_emergency) {
+    if (!status_.hardware.thermal_emergency) {
         // Check for emergency condition
         if (status_.current_temp_c >= config_.emergency_temp_c) {
             if (emergency_triggered_ms_ == 0) {
@@ -206,87 +266,64 @@ void TemperatureControl::update_emergency_state(uint32_t current_time_ms) {
     }
     
     if (should_trigger_emergency) {
-        status_.thermal_emergency = true;
-        status_.emergency_start_ms = current_time_ms;
         emergency_cooldown_ = true;
         
         LOG_ERROR("THERMAL EMERGENCY ACTIVATED - Temperature: %.1f°C", status_.current_temp_c);
         
-        // Turn on fan at maximum speed
-        if (fan_enable_callback_) {
-            fan_enable_callback_(true);
-        }
-        if (fan_pwm_callback_) {
-            fan_pwm_callback_(100.0f);
-        }
-        status_.fan_enabled = true;
-        status_.fan_pwm_percent = 100.0f;
-        
-        // Notify scheduler
-        if (emergency_callback_) {
-            emergency_callback_(true);
-        }
+        command.fan_enabled = true;
+        command.fan_pwm_percent = 100.0f;
+        command.emergency_state = true;
+        command.override_normal_control = true;
+        command.reason = "Thermal emergency triggered";
+        return command;
     }
     
     if (should_clear_emergency) {
-        status_.thermal_emergency = false;
         emergency_cooldown_ = false;
         emergency_triggered_ms_ = 0;
         
         LOG_INFO("Thermal emergency cleared - Temperature: %.1f°C", status_.current_temp_c);
         
-        // Notify scheduler
-        if (emergency_callback_) {
-            emergency_callback_(false);
-        }
-        
         // Reset PID controller
         pid_controller_.reset();
+        
+        command.fan_enabled = false;  // Let normal control take over
+        command.fan_pwm_percent = 0.0f;
+        command.emergency_state = false;
+        command.override_normal_control = false;  // Return to normal control
+        command.reason = "Emergency cleared, returning to normal control";
+        return command;
     }
+    
+    // If we're in emergency but no state change, maintain emergency
+    if (status_.hardware.thermal_emergency) {
+        command.fan_enabled = true;
+        command.fan_pwm_percent = 100.0f;
+        command.emergency_state = true;
+        command.override_normal_control = true;
+        command.reason = "Maintaining emergency state";
+        return command;
+    }
+    
+    // No emergency override needed
+    command.override_normal_control = false;
+    return command;
 }
 
-void TemperatureControl::update_fan_control(uint32_t current_time_ms) {
+TemperatureControlCommand TemperatureControl::compute_fan_control(uint32_t current_time_ms) {
+    TemperatureControlCommand command;
+    
     // Check if it's time to update fan control
     if (current_time_ms - last_fan_update_ms_ < config_.fan_update_interval_ms) {
-        return;
+        // Maintain current state - no update needed yet
+        command.fan_enabled = status_.hardware.fan_enabled;
+        command.fan_pwm_percent = status_.hardware.fan_pwm_percent;
+        command.emergency_state = status_.hardware.thermal_emergency;
+        command.override_normal_control = false;
+        command.reason = "Fan update interval not reached";
+        return command;
     }
     last_fan_update_ms_ = current_time_ms;
-
-    // SAFETY: Run fan at 100% in these conditions:
-    // 1. Never received a valid temperature reading
-    // 2. No valid temperature for more than 60 seconds
-    // 3. No valid sensors currently available
-    bool force_fan_100 = false;
-    const char* safety_reason = nullptr;
-
-    if (!ever_had_valid_temp_) {
-        force_fan_100 = true;
-        safety_reason = "Never received valid temperature";
-    } else if (status_.sensors_valid_count == 0) {
-        force_fan_100 = true;
-        safety_reason = "No valid temperature sensors";
-    } else if ((current_time_ms - last_valid_temp_ms_) > 60000) {  // 60 seconds
-        force_fan_100 = true;
-        safety_reason = "No valid temperature for >60 seconds";
-    }
-
-    if (force_fan_100) {
-        LOG_WARN("SAFETY MODE: %s - running fan at 100%%", safety_reason);
-
-        status_.fan_enabled = true;
-        status_.fan_pwm_percent = 100.0f;
-        status_.pid_error = 0.0f;
-        status_.pid_output = 100.0f;
-
-        if (fan_enable_callback_) {
-            fan_enable_callback_(true);
-        }
-        if (fan_pwm_callback_) {
-            fan_pwm_callback_(100.0f);
-        }
-
-        return;  // Skip normal PID control in safety mode
-    }
 
     // Only compute PID when we have NEW temperature data
     // This prevents feeding the same temperature to PID multiple times
@@ -294,11 +331,12 @@ void TemperatureControl::update_fan_control(uint32_t current_time_ms) {
 
     if (!have_new_temp_data) {
         // No new temperature data - maintain current fan state without recomputing PID
-        // Just reapply the last computed PWM
-        if (status_.fan_enabled && fan_pwm_callback_) {
-            fan_pwm_callback_(status_.fan_pwm_percent);
-        }
-        return;
+        command.fan_enabled = status_.hardware.fan_enabled;
+        command.fan_pwm_percent = status_.hardware.fan_pwm_percent;
+        command.emergency_state = status_.hardware.thermal_emergency;
+        command.override_normal_control = false;
+        command.reason = "No new temperature data";
+        return command;
     }
 
     // We have new temperature data - compute PID with proper time delta
@@ -323,7 +361,7 @@ void TemperatureControl::update_fan_control(uint32_t current_time_ms) {
     const float TURN_OFF_THRESHOLD = -10.0f; // Turn fan OFF when temp < target - 10°C
 
     // Determine if we should enable the fan (with hysteresis)
-    bool should_enable_fan = status_.fan_enabled; // Start with current state
+    bool should_enable_fan = status_.hardware.fan_enabled; // Start with current hardware state
     float fan_pwm_output = 0.0f;
 
     if (temp_error < TURN_OFF_THRESHOLD) {
@@ -353,19 +391,13 @@ void TemperatureControl::update_fan_control(uint32_t current_time_ms) {
         }
     }
     
-    // Update fan enable state
-    if (should_enable_fan != status_.fan_enabled) {
-        status_.fan_enabled = should_enable_fan;
-        if (fan_enable_callback_) {
-            fan_enable_callback_(should_enable_fan);
-        }
-    }
+    command.fan_enabled = should_enable_fan;
+    command.fan_pwm_percent = fan_pwm_output;
+    command.emergency_state = false;  // This is normal control, not emergency
+    command.override_normal_control = false;
+    command.reason = "Normal PID control";
     
-    // Update fan PWM
-    status_.fan_pwm_percent = fan_pwm_output;
-    if (fan_pwm_callback_) {
-        fan_pwm_callback_(fan_pwm_output);
-    }
+    return command;
 }
 
 void TemperatureControl::apply_temperature_filter(float new_temp) {
@@ -387,12 +419,12 @@ std::string TemperatureControl::get_diagnostics() const {
     std::ostringstream oss;
     oss << "Temperature Control Diagnostics:\n";
     oss << "  Enabled: " << (status_.enabled ? "YES" : "NO") << "\n";
-    oss << "  Emergency: " << (status_.thermal_emergency ? "ACTIVE" : "normal") << "\n";
+    oss << "  Emergency: " << (status_.hardware.thermal_emergency ? "ACTIVE" : "normal") << "\n";
     oss << "  Current Temp: " << status_.current_temp_c << "°C\n";
     oss << "  Target Temp: " << status_.target_temp_c << "°C\n";
-    oss << "  Fan Enabled: " << (status_.fan_enabled ? "YES" : "NO") << "\n";
-    oss << "  Fan PWM: " << status_.fan_pwm_percent << "%\n";
-    oss << "  Fan RPM: " << status_.fan_rpm << "\n";
+    oss << "  Fan Enabled: " << (status_.hardware.fan_enabled ? "YES" : "NO") << "\n";
+    oss << "  Fan PWM: " << status_.hardware.fan_pwm_percent << "%\n";
+    oss << "  Fan RPM: " << status_.hardware.fan_rpm << "\n";
     oss << "  PID Error: " << status_.pid_error << "\n";
     oss << "  PID Output: " << status_.pid_output << "\n";
     oss << "  Sensors: " << status_.sensors_valid_count << "/" << status_.sensors_total_count << " valid\n";
@@ -499,6 +531,69 @@ std::vector<TemperatureControl::FanCurvePoint> TemperatureControl::get_fan_curve
     curve.push_back({config_.emergency_temp_c + 5.0f, 100.0f});              // Above emergency
     
     return curve;
+}
+
+// TemperatureHardwareManager Implementation
+TemperatureHardwareManager::TemperatureHardwareManager() {
+    hardware_state_.fan_enabled = false;
+    hardware_state_.fan_pwm_percent = 0.0f;
+    hardware_state_.fan_rpm = 0.0f;
+    hardware_state_.thermal_emergency = false;
+    hardware_state_.emergency_start_ms = 0;
+}
+
+void TemperatureHardwareManager::apply_command(const TemperatureControlCommand& command) {
+    bool state_changed = false;
+    
+    // Update emergency state
+    if (hardware_state_.thermal_emergency != command.emergency_state) {
+        hardware_state_.thermal_emergency = command.emergency_state;
+        if (command.emergency_state) {
+            #ifdef ESP_PLATFORM
+            hardware_state_.emergency_start_ms = millis();
+            #else
+            hardware_state_.emergency_start_ms = 0; // Would need timestamp passed in for non-ESP platforms
+            #endif
+        } else {
+            hardware_state_.emergency_start_ms = 0;
+        }
+        
+        if (emergency_callback_) {
+            emergency_callback_(command.emergency_state);
+        }
+        state_changed = true;
+    }
+    
+    // Update fan enable state
+    if (hardware_state_.fan_enabled != command.fan_enabled) {
+        hardware_state_.fan_enabled = command.fan_enabled;
+        if (fan_enable_callback_) {
+            fan_enable_callback_(command.fan_enabled);
+        }
+        state_changed = true;
+    }
+    
+    // Update fan PWM (always call callback when any fan state changes)
+    bool fan_state_changed = (hardware_state_.fan_pwm_percent != command.fan_pwm_percent || 
+                               hardware_state_.fan_enabled != command.fan_enabled);
+    
+    hardware_state_.fan_pwm_percent = command.fan_pwm_percent;
+    if (fan_state_changed && fan_pwm_callback_) {
+        fan_pwm_callback_(command.fan_pwm_percent);
+    }
+    
+    if (fan_state_changed) {
+        state_changed = true;
+    }
+    
+    // Log significant state changes
+    if (state_changed && command.override_normal_control) {
+        LOG_INFO("Hardware state updated: %s - Fan: %s %.1f%%, Emergency: %s", 
+                command.reason.c_str(),
+                command.fan_enabled ? "ON" : "OFF",
+                command.fan_pwm_percent,
+                command.emergency_state ? "YES" : "NO");
+    }
 }
 
 } // namespace ledbrick

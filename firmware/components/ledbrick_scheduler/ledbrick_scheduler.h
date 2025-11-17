@@ -104,7 +104,8 @@ class LEDBrickScheduler : public PollingComponent {
   
   // Thermal emergency control
   void set_thermal_emergency(bool emergency);
-  bool is_thermal_emergency() const { return thermal_emergency_; }
+  bool is_thermal_emergency() const { return temp_hardware_.get_hardware_state().thermal_emergency; }
+  const ledbrick::TemperatureHardwareState& get_temperature_hardware_state() const { return temp_hardware_.get_hardware_state(); }
   void force_channel_output(uint8_t channel, float pwm, float current);
   size_t get_schedule_size() const { return scheduler_.get_schedule_size(); }
   
@@ -205,7 +206,7 @@ class LEDBrickScheduler : public PollingComponent {
   uint8_t num_channels_{8};
   uint32_t update_interval_{1000}; // 1 second for smooth transitions
   bool enabled_{true};
-  bool thermal_emergency_{false};  // Emergency thermal shutdown flag
+  // thermal_emergency_ removed - now tracked by temp_hardware_.get_hardware_state().thermal_emergency
   bool force_next_update_{false};   // Force update after emergency recovery
   std::string timezone_{"UTC"};
   float pwm_scale_{1.0f};  // Global PWM scaling factor (0.0-1.0)
@@ -224,6 +225,7 @@ class LEDBrickScheduler : public PollingComponent {
   mutable AstronomicalCalculator astro_calc_{0.0, 0.0, 0.0};  // Astronomical calculations (lat, lon, tz)
   LEDScheduler scheduler_;  // Core scheduling logic
   ledbrick::TemperatureControl temp_control_;  // Temperature control system
+  ledbrick::TemperatureHardwareManager temp_hardware_;  // Hardware state manager
   
   time::RealTimeClock *time_source_{nullptr};
   
