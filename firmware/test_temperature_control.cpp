@@ -291,7 +291,6 @@ void test_enable_disable(TestRunner& runner) {
     
     helper.hardware.set_fan_pwm_callback([&](float pwm) {
         fan_pwm = pwm;
-        printf("PWM callback called with value: %.1f\n", pwm);
     });
     
     helper.hardware.set_emergency_callback([&](bool state) {
@@ -307,10 +306,10 @@ void test_enable_disable(TestRunner& runner) {
     status = helper.get_status();
     runner.assert_true(status.enabled, "Enabled after call");
     
-    // Add temperature sensor and trigger fan to turn on first
+    // Add temperature sensor and trigger fan to turn on first  
     helper.controller.add_temperature_sensor("sensor1");
     helper.controller.update_temperature_sensor("sensor1", 50.0f, 1000); // High temp to trigger fan
-    helper.update(1100); // This should trigger some fan activity
+    helper.update(1100); // This should trigger fan activity via safety mode
     
     // Disable - should turn off fan
     helper.controller.enable(false);

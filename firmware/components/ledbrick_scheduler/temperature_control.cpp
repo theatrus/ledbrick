@@ -564,8 +564,13 @@ void TemperatureHardwareManager::apply_command(const TemperatureControlCommand& 
         state_changed = true;
     }
     
+    // Check what's changing before we update state
+    bool enable_changing = (hardware_state_.fan_enabled != command.fan_enabled);
+    bool pwm_changing = (hardware_state_.fan_pwm_percent != command.fan_pwm_percent);
+    bool any_fan_change = enable_changing || pwm_changing;
+    
     // Update fan enable state
-    if (hardware_state_.fan_enabled != command.fan_enabled) {
+    if (enable_changing) {
         hardware_state_.fan_enabled = command.fan_enabled;
         if (fan_enable_callback_) {
             fan_enable_callback_(command.fan_enabled);
@@ -573,16 +578,13 @@ void TemperatureHardwareManager::apply_command(const TemperatureControlCommand& 
         state_changed = true;
     }
     
-    // Update fan PWM (always call callback when any fan state changes)
-    bool fan_state_changed = (hardware_state_.fan_pwm_percent != command.fan_pwm_percent || 
-                               hardware_state_.fan_enabled != command.fan_enabled);
-    
+    // Update fan PWM - always update PWM and call callback if any fan state changed
     hardware_state_.fan_pwm_percent = command.fan_pwm_percent;
-    if (fan_state_changed && fan_pwm_callback_) {
+    if (any_fan_change && fan_pwm_callback_) {
         fan_pwm_callback_(command.fan_pwm_percent);
     }
     
-    if (fan_state_changed) {
+    if (pwm_changing) {
         state_changed = true;
     }
     
