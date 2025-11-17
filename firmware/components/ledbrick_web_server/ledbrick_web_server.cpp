@@ -609,8 +609,8 @@ esp_err_t LEDBrickWebServer::handle_api_status_get(httpd_req_t *req) {
     temp_control["enabled"] = temp_status.enabled;
     temp_control["current_temp"] = temp_status.current_temp_c;
     temp_control["target_temp"] = temp_status.target_temp_c;
-    temp_control["fan_pwm"] = temp_status.fan_pwm_percent;
-    temp_control["thermal_emergency"] = temp_status.thermal_emergency;
+    temp_control["fan_pwm"] = temp_status.hardware.fan_pwm_percent;
+    temp_control["thermal_emergency"] = temp_status.hardware.thermal_emergency;
   }
   
   self->send_json_response(req, 200, doc);
@@ -1427,12 +1427,12 @@ esp_err_t LEDBrickWebServer::handle_api_temperature_status_get(httpd_req_t *req)
   
   JsonDocument doc;
   doc["enabled"] = status.enabled;
-  doc["thermal_emergency"] = status.thermal_emergency;
-  doc["fan_enabled"] = status.fan_enabled;
+  doc["thermal_emergency"] = status.hardware.thermal_emergency;
+  doc["fan_enabled"] = status.hardware.fan_enabled;
   doc["current_temp_c"] = status.current_temp_c;
   doc["target_temp_c"] = status.target_temp_c;
-  doc["fan_pwm_percent"] = status.fan_pwm_percent;
-  doc["fan_rpm"] = status.fan_rpm;
+  doc["fan_pwm_percent"] = status.hardware.fan_pwm_percent;
+  doc["fan_rpm"] = status.hardware.fan_rpm;
   doc["pid_error"] = status.pid_error;
   doc["pid_output"] = status.pid_output;
   doc["sensors_valid_count"] = status.sensors_valid_count;

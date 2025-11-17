@@ -17,7 +17,7 @@ public:
     
     void update(uint32_t current_time_ms) {
         auto command = controller.compute_control_command(current_time_ms);
-        hardware.apply_command(command);
+        hardware.apply_command(command, current_time_ms);
         controller.update_hardware_state(hardware.get_hardware_state());
     }
     

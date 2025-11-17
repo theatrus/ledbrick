@@ -542,18 +542,14 @@ TemperatureHardwareManager::TemperatureHardwareManager() {
     hardware_state_.emergency_start_ms = 0;
 }
 
-void TemperatureHardwareManager::apply_command(const TemperatureControlCommand& command) {
+void TemperatureHardwareManager::apply_command(const TemperatureControlCommand& command, uint32_t current_time_ms) {
     bool state_changed = false;
     
     // Update emergency state
     if (hardware_state_.thermal_emergency != command.emergency_state) {
         hardware_state_.thermal_emergency = command.emergency_state;
         if (command.emergency_state) {
-            #ifdef ESP_PLATFORM
-            hardware_state_.emergency_start_ms = millis();
-            #else
-            hardware_state_.emergency_start_ms = 0; // Would need timestamp passed in for non-ESP platforms
-            #endif
+            hardware_state_.emergency_start_ms = current_time_ms;
         } else {
             hardware_state_.emergency_start_ms = 0;
         }

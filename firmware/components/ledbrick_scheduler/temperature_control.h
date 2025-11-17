@@ -176,7 +176,7 @@ public:
     void update_fan_rpm(float rpm) { hardware_state_.fan_rpm = rpm; }
     
     // Apply controller command to hardware
-    void apply_command(const TemperatureControlCommand& command);
+    void apply_command(const TemperatureControlCommand& command, uint32_t current_time_ms = 0);
     
     // Get current hardware state
     const TemperatureHardwareState& get_hardware_state() const { return hardware_state_; }

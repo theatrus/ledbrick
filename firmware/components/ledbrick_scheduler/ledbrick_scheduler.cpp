@@ -174,7 +174,7 @@ void LEDBrickScheduler::update() {
     
     // Run temperature control update with new command-based interface
     auto command = temp_control_.compute_control_command(current_millis);
-    temp_hardware_.apply_command(command);
+    temp_hardware_.apply_command(command, current_millis);
     temp_control_.update_hardware_state(temp_hardware_.get_hardware_state());
     
     // Publish sensor values periodically (every 5 seconds)
@@ -1574,7 +1574,7 @@ void LEDBrickScheduler::publish_temp_sensor_values() {
   
   // Publish fan PWM
   if (fan_pwm_sensor_) {
-    fan_pwm_sensor_->publish_state(status.fan_pwm_percent);
+    fan_pwm_sensor_->publish_state(status.hardware.fan_pwm_percent);
   }
   
   // Publish PID error
@@ -1589,12 +1589,12 @@ void LEDBrickScheduler::publish_temp_sensor_values() {
   
   // Publish thermal emergency state
   if (thermal_emergency_sensor_) {
-    thermal_emergency_sensor_->publish_state(status.thermal_emergency);
+    thermal_emergency_sensor_->publish_state(status.hardware.thermal_emergency);
   }
   
   // Publish fan enabled state
   if (fan_enabled_sensor_) {
-    fan_enabled_sensor_->publish_state(status.fan_enabled);
+    fan_enabled_sensor_->publish_state(status.hardware.fan_enabled);
   }
   
   // Update target temperature number control if value changed

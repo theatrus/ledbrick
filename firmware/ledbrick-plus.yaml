@@ -364,7 +364,7 @@ sensor:
     unit_of_measurement: "%"
     accuracy_decimals: 1
     lambda: |-
-      return id(main_scheduler)->get_temperature_status().fan_pwm_percent;
+      return id(main_scheduler)->get_temperature_status().hardware.fan_pwm_percent;
     update_interval: 5s
     
   - platform: template
@@ -394,14 +394,14 @@ binary_sensor:
     id: thermal_emergency
     device_class: problem
     lambda: |-
-      return id(main_scheduler)->get_temperature_status().thermal_emergency;
+      return id(main_scheduler)->get_temperature_status().hardware.thermal_emergency;
     
   - platform: template
     name: "Temperature Control Fan Active"
     id: temp_control_fan_active
     device_class: running
     lambda: |-
-      return id(main_scheduler)->get_temperature_status().fan_enabled;
+      return id(main_scheduler)->get_temperature_status().hardware.fan_enabled;
 
 # Text sensors (in addition to channel colors from packages)
 text_sensor:
