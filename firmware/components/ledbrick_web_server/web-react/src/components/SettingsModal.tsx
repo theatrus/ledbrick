@@ -669,13 +669,13 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
 
                 {fanCurve && (
                   <div className="chart-container" style={{ height: '300px', marginTop: '20px' }}>
-                    <Line 
+                    <Line
                       data={{
-                        labels: fanCurve.points.map(p => p.temperature.toFixed(0)),
+                        labels: fanCurve.points.map(p => p.temperature?.toFixed(0) ?? '--'),
                         datasets: [
                           {
                             label: 'Fan PWM %',
-                            data: fanCurve.points.map(p => p.fan_pwm),
+                            data: fanCurve.points.map(p => p.fan_pwm ?? 0),
                             borderColor: 'rgb(74, 158, 255)',
                             backgroundColor: 'rgba(74, 158, 255, 0.1)',
                             tension: 0,
@@ -700,7 +700,7 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
                           tooltip: {
                             callbacks: {
                               label: (context: any) => {
-                                return `${context.parsed.y.toFixed(1)}% at ${context.label}°C`;
+                                return `${context.parsed.y?.toFixed(1) ?? '--'}% at ${context.label}°C`;
                               }
                             }
                           }

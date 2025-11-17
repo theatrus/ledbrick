@@ -144,6 +144,7 @@ class LEDBrickScheduler : public PollingComponent {
   bool set_temperature_config_json(const std::string& json);
   std::vector<ledbrick::TemperatureControl::FanCurvePoint> get_fan_curve() const { return temp_control_.get_fan_curve(); }
   const std::vector<TempSensorMapping>& get_temperature_sensors() const { return temp_sensors_; }
+  bool is_temperature_control_initialized() const { return temp_control_initialized_; }
   
   // Current state
   uint16_t get_current_time_minutes() const;

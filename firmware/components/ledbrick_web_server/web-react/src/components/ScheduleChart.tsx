@@ -251,8 +251,8 @@ export function ScheduleChart({ schedule, currentTime, moonriseTime, moonsetTime
         intersect: false,
         callbacks: {
           title: (tooltipItems: TooltipItem<'line'>[]) => `Time: ${tooltipItems[0].label}`,
-          label: (context: TooltipItem<'line'>) => 
-            `${context.dataset.label}: ${context.parsed.y.toFixed(1)}${showCurrent ? 'mA' : '%'}`
+          label: (context: TooltipItem<'line'>) =>
+            `${context.dataset.label}: ${context.parsed.y?.toFixed(1) ?? '--'}${showCurrent ? 'mA' : '%'}`
         }
       },
       annotation: {

@@ -210,8 +210,8 @@ export function ScheduleTable({ schedule, onUpdate }: ScheduleTableProps) {
                       borderLeft: `2px solid ${channelColor}20`
                     }}
                   >
-                    {pwm.toFixed(1)}%
-                    {point.current_values && point.current_values[i] !== undefined && (
+                    {pwm?.toFixed(1) ?? '--'}%
+                    {point.current_values && point.current_values[i] !== undefined && point.current_values[i] !== null && (
                       <>{'\n'}{point.current_values[i].toFixed(2)}A</>
                     )}
                   </td>
