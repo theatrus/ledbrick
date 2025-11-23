@@ -35,10 +35,10 @@ void LEDBrickScheduler::setup() {
   // Initialize temperature control
   temp_control_.set_config(temp_config_);
   
-  // Set up temperature control callbacks
-  temp_control_.set_fan_pwm_callback([this](float pwm) { this->on_fan_pwm_change(pwm); });
-  temp_control_.set_fan_enable_callback([this](bool enabled) { this->on_fan_enable_change(enabled); });
-  temp_control_.set_emergency_callback([this](bool emergency) { this->on_emergency_change(emergency); });
+  // Set up temperature hardware callbacks (moved from controller to hardware manager)
+  temp_hardware_.set_fan_pwm_callback([this](float pwm) { this->on_fan_pwm_change(pwm); });
+  temp_hardware_.set_fan_enable_callback([this](bool enabled) { this->on_fan_enable_change(enabled); });
+  temp_hardware_.set_emergency_callback([this](bool emergency) { this->on_emergency_change(emergency); });
   
   // Add temperature sensors to the control module
   for (const auto &mapping : temp_sensors_) {
@@ -93,7 +93,7 @@ void LEDBrickScheduler::setup() {
 
 void LEDBrickScheduler::update() {
   // ALWAYS check thermal emergency first, even if scheduler is disabled
-  if (thermal_emergency_) {
+  if (temp_hardware_.get_hardware_state().thermal_emergency) {
     // During thermal emergency, continuously force all outputs to zero
     // This prevents manual control from setting unsafe values
     for (uint8_t channel = 0; channel < num_channels_; channel++) {
@@ -172,8 +172,10 @@ void LEDBrickScheduler::update() {
     // Update fan speed
     update_fan_speed();
     
-    // Run temperature control update
-    temp_control_.update(current_millis);
+    // Run temperature control update with new command-based interface
+    auto command = temp_control_.compute_control_command(current_millis);
+    temp_hardware_.apply_command(command, current_millis);
+    temp_control_.update_hardware_state(temp_hardware_.get_hardware_state());
     
     // Publish sensor values periodically (every 5 seconds)
     if (current_millis - last_sensor_publish_ >= 5000) {
@@ -185,7 +187,7 @@ void LEDBrickScheduler::update() {
   // Log status every 10 seconds (reduce log spam)
   static uint32_t last_log_time = 0;
   if (current_millis - last_log_time > 10000) {
-    if (thermal_emergency_) {
+    if (temp_hardware_.get_hardware_state().thermal_emergency) {
       ESP_LOGD(TAG, "THERMAL EMERGENCY - All outputs forced to zero");
     } else if (!enabled_) {
       ESP_LOGD(TAG, "Scheduler disabled - manual control active");
@@ -201,14 +203,15 @@ void LEDBrickScheduler::update() {
       // Also log if we recently recovered from emergency
       static bool was_emergency = false;
       static uint32_t recovery_time = 0;
-      if (was_emergency && !thermal_emergency_) {
+      bool current_emergency = temp_hardware_.get_hardware_state().thermal_emergency;
+      if (was_emergency && !current_emergency) {
         recovery_time = current_millis;
         ESP_LOGI(TAG, "Recently recovered from thermal emergency");
       }
       if (recovery_time > 0 && current_millis - recovery_time < 30000) {  // Log for 30 seconds after recovery
         ESP_LOGD(TAG, "Post-emergency recovery: %d seconds ago", (current_millis - recovery_time) / 1000);
       }
-      was_emergency = thermal_emergency_;
+      was_emergency = current_emergency;
     }
     last_log_time = current_millis;
   }
@@ -1389,21 +1392,20 @@ void LEDBrickScheduler::set_channel_manual_control(uint8_t channel, float pwm, f
 }
 
 void LEDBrickScheduler::set_thermal_emergency(bool emergency) {
-  if (thermal_emergency_ == emergency) {
-    return; // No change
-  }
-  
-  thermal_emergency_ = emergency;
+  // Note: This method is now mostly deprecated since thermal emergency is managed by 
+  // TemperatureHardwareManager. The actual state should be read from hardware state.
+  ESP_LOGW(TAG, "set_thermal_emergency() called with emergency=%s - prefer using TemperatureControl system", 
+           emergency ? "true" : "false");
   
   if (emergency) {
-    ESP_LOGW(TAG, "THERMAL EMERGENCY ACTIVATED - Forcing all channels to 0%%/0A");
+    ESP_LOGW(TAG, "MANUAL THERMAL EMERGENCY ACTIVATION - Forcing all channels to 0%%/0A");
     
     // Force all channels to zero PWM and current immediately
     for (uint8_t channel = 0; channel < num_channels_; channel++) {
       force_channel_output(channel, 0.0f, 0.0f);
     }
   } else {
-    ESP_LOGI(TAG, "Thermal emergency cleared - Normal operation resumed");
+    ESP_LOGI(TAG, "Manual thermal emergency clear request - Normal operation resumed");
   }
 }
 
@@ -1553,7 +1555,7 @@ void LEDBrickScheduler::update_temperature_sensors() {
 void LEDBrickScheduler::update_fan_speed() {
   if (fan_speed_sensor_ && fan_speed_sensor_->has_state()) {
     float rpm = fan_speed_sensor_->state;
-    temp_control_.update_fan_rpm(rpm);
+    temp_hardware_.update_fan_rpm(rpm);
   }
 }
 
@@ -1572,7 +1574,7 @@ void LEDBrickScheduler::publish_temp_sensor_values() {
   
   // Publish fan PWM
   if (fan_pwm_sensor_) {
-    fan_pwm_sensor_->publish_state(status.fan_pwm_percent);
+    fan_pwm_sensor_->publish_state(status.hardware.fan_pwm_percent);
   }
   
   // Publish PID error
@@ -1587,12 +1589,12 @@ void LEDBrickScheduler::publish_temp_sensor_values() {
   
   // Publish thermal emergency state
   if (thermal_emergency_sensor_) {
-    thermal_emergency_sensor_->publish_state(status.thermal_emergency);
+    thermal_emergency_sensor_->publish_state(status.hardware.thermal_emergency);
   }
   
   // Publish fan enabled state
   if (fan_enabled_sensor_) {
-    fan_enabled_sensor_->publish_state(status.fan_enabled);
+    fan_enabled_sensor_->publish_state(status.hardware.fan_enabled);
   }
   
   // Update target temperature number control if value changed
@@ -1651,17 +1653,12 @@ void LEDBrickScheduler::on_emergency_change(bool emergency) {
   if (emergency) {
     ESP_LOGW(TAG, "THERMAL EMERGENCY ACTIVATED!");
     
-    // Set thermal emergency flag which affects light output
-    thermal_emergency_ = true;
-    
     // Force all channels to zero immediately
     for (uint8_t channel = 0; channel < num_channels_; channel++) {
       force_channel_output(channel, 0.0f, 0.0f);
     }
   } else {
     ESP_LOGI(TAG, "Thermal emergency cleared - restoring normal operation");
-    
-    thermal_emergency_ = false;
     
     // Force the next update to apply all values
     force_next_update_ = true;

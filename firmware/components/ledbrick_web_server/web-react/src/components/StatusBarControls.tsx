@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { api } from '../api/client';
 
 interface StatusBarControlsProps {
@@ -13,6 +13,7 @@ export function StatusBarControls({ enabled, pwmScale, onUpdate }: StatusBarCont
   const [localPwmScale, setLocalPwmScale] = useState(pwmScale);
   const [isSaving, setIsSaving] = useState(false);
   const popoutRef = useRef<HTMLDivElement>(null);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Update local state when props change
   useEffect(() => {
@@ -51,8 +52,8 @@ export function StatusBarControls({ enabled, pwmScale, onUpdate }: StatusBarCont
     }
   };
 
-  const handlePwmScaleChange = async (value: number) => {
-    setLocalPwmScale(value);
+  // Debounced API call for PWM scale changes
+  const debouncedPwmScaleUpdate = useCallback(async (value: number) => {
     setIsSaving(true);
     try {
       await api.setPwmScale(value);
@@ -63,7 +64,31 @@ export function StatusBarControls({ enabled, pwmScale, onUpdate }: StatusBarCont
     } finally {
       setIsSaving(false);
     }
+  }, [pwmScale]);
+
+  const handlePwmScaleChange = (value: number) => {
+    // Update UI immediately for responsive feel
+    setLocalPwmScale(value);
+    
+    // Clear previous debounce timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    
+    // Set new timer to make API call after user stops moving slider
+    debounceTimerRef.current = setTimeout(() => {
+      debouncedPwmScaleUpdate(value);
+    }, 1000); // 1s debounce delay
   };
+
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
 
   return (
     <div style={{ position: 'relative' }}>
