@@ -123,6 +123,15 @@ The LEDBrick Plus includes a professional web interface for complete control and
 
 For detailed forum discussion and community support, see: [Reef2Reef LEDBrick Thread](https://www.reef2reef.com/threads/ledbrick-diy-led-pendant-with-pucks.243746/)
 
+### 📐 Hardware Design Files
+
+Altium Designer sources, release gerbers, pick-and-place, BOM, and DRC reports live under [`hardware/`](hardware/). Two designs are published:
+
+- **[`ledbrick_plus_led`](hardware/ledbrick_plus_led.PrjPcb)** — the LEDBrick Plus board pictured above. 85×85mm, 60V → 12V buck front-end (`dcdc_60v_12v.SchDoc`) feeding 8× TPS922053 channels. Release gerbers in [`ledbrick_plus_led_r0/`](hardware/ledbrick_plus_led_r0/) and [`Project Outputs for ledbrick_plus_led/`](hardware/Project%20Outputs%20for%20ledbrick_plus_led/).
+- **[`rv_ledbrick_8ch`](hardware/rv_ledbrick_8ch.PrjPcb)** — 4-layer 8-channel variant with ESP32-S3-MINI, USB-C input, INA228 + VIN shunt power monitoring, and TPS922053 channel drivers. Release gerbers in [`Project Outputs for rv_ledbrick_8ch/`](hardware/Project%20Outputs%20for%20rv_ledbrick_8ch/).
+
+EDM footprint libraries (`*-EDM/`) contain the Parasolid component models referenced by each project. See [`hardware/.gitignore`](hardware/.gitignore) for the list of Altium-generated files that are intentionally excluded.
+
 ---
 
 ## LEDBrick Classic - Original Design
@@ -135,7 +144,7 @@ The emitter board is a custom metal-core PCBA designed to hold 8 channels of LED
 
 ![Classic PWM Board](ledbrick-classic/pwm/board.png)
 
-[Design files and gerber files](emitter-board/)
+[Design files and gerber files](ledbrick-classic/emitter-board/)
 
 ### Bluetooth Low Energy PWM Board (Legacy)
 
