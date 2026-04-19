@@ -125,10 +125,21 @@ For detailed forum discussion and community support, see: [Reef2Reef LEDBrick Th
 
 ### 📐 Hardware Design Files
 
-Altium Designer sources, release gerbers, pick-and-place, BOM, and DRC reports live under [`hardware/`](hardware/). Two designs are published:
+Altium Designer sources, release gerbers, pick-and-place, BOM, and DRC reports live under [`hardware/`](hardware/). Two boards make up the LEDBrick Plus system:
 
-- **[`ledbrick_plus_led`](hardware/ledbrick_plus_led.PrjPcb)** — the LEDBrick Plus board pictured above. 85×85mm, 60V → 12V buck front-end (`dcdc_60v_12v.SchDoc`) feeding 8× TPS922053 channels. Release gerbers in [`ledbrick_plus_led_r0/`](hardware/ledbrick_plus_led_r0/) and [`Project Outputs for ledbrick_plus_led/`](hardware/Project%20Outputs%20for%20ledbrick_plus_led/).
-- **[`rv_ledbrick_8ch`](hardware/rv_ledbrick_8ch.PrjPcb)** — 4-layer 8-channel variant with ESP32-S3-MINI, USB-C input, INA228 + VIN shunt power monitoring, and TPS922053 channel drivers. Release gerbers in [`Project Outputs for rv_ledbrick_8ch/`](hardware/Project%20Outputs%20for%20rv_ledbrick_8ch/).
+- **[`rv_ledbrick_8ch`](hardware/rv_ledbrick_8ch.PrjPcb)** — the **controller / driver board** pictured above. Four-layer FR4 design (top, GND, PWR, bottom — see `G1`/`G2` inner plane gerbers) driven by a hierarchical schematic (`rv_ledbrick_top`, `rv_ledbrick_logic`, `TPS922053_ch`, `usb_input`, `dcdc_60v_12v`, `vin_shunt`) placing 212 components:
+  - **Controller**: ESP32-S3-MINI-1-N8 (8 MB flash) with BOOT + RST tactile switches and an Amphenol 10155435 USB-C receptacle for programming and native USB.
+  - **Power**: wide-VIN 60V→12V buck front-end (80V 56µF conductive-polymer bulk caps, 68µH main inductor, SS14 Schottky ORing) plus an LMR51610 low-current buck for 3.3V logic.
+  - **Power monitoring**: TI INA228 with a 0.005Ω 5W metal-strip shunt on VIN for current/voltage/energy telemetry over I²C.
+  - **LED channels (×8)**: TPS922053DRRR 65V/2A synchronous buck LED drivers, each with a 10µH IHLP-style composite inductor, PMEG100V100 100V Schottky flywheel, 0.1Ω 3W current-sense shunt, and an AO3400A n-channel FET + RC network for the dimming/enable input.
+  - Release gerbers and pick-and-place in [`Project Outputs for rv_ledbrick_8ch/`](hardware/Project%20Outputs%20for%20rv_ledbrick_8ch/).
+- **[`ledbrick_plus_led`](hardware/ledbrick_plus_led.PrjPcb)** — the **LED emitter / pendant board** the controller drives. Single-layer emitter-side copper (typical for a metal-core LED puck), single-sheet schematic, 91 placed parts split across eight channels of high-power emitters:
+  - **26× Lumileds LUXEON Rubix Royal Blue** (`L1RX-RYL1000000000`, 1.5A / 1635 lm / 3.16 V each) as the blue/royal backbone.
+  - **52× LUXEON C** emitters across many colors: `59`, `39`, PCA, PCB, MNT, VLT (Violet), BLU, RYL, CYN, and DRD bins.
+  - **2× VIOSYS Z5** (CUN8) 8-die ultraviolet emitters.
+  - 3× onboard temperature sensors: one DS18B20 (1-Wire) plus two MCP9808 (I²C, DFN + MSOP variants) for per-zone thermal feedback.
+  - I/O via two Molex Pico-Lock 504050-1091 10-pin connectors and one 6-pin 5040500691 (matches the controller's output headers).
+  - Release gerbers in [`ledbrick_plus_led_r0/`](hardware/ledbrick_plus_led_r0/) and [`Project Outputs for ledbrick_plus_led/`](hardware/Project%20Outputs%20for%20ledbrick_plus_led/).
 
 EDM footprint libraries (`*-EDM/`) contain the Parasolid component models referenced by each project. See [`hardware/.gitignore`](hardware/.gitignore) for the list of Altium-generated files that are intentionally excluded.
 
