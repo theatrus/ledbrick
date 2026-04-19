@@ -1,0 +1,10 @@
+Output: Bill of Materials
+Type  : BOM
+From  : Variant [[No Variations]] of Project [rv_ledbrick_8ch.PrjPcb]
+   Generated File[Bill of Materials-rv_ledbrick_8ch.csv]
+
+
+Files Generated   : 1
+Documents Printed : 0
+
+Finished Output Generation At 6:11:43 PM On 10/6/2024

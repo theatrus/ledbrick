@@ -1,0 +1,22 @@
+----------------------------------------------------------------------------------------------------------------------------------
+NCDrill File Report For: rv_ledbrick_8ch.PcbDoc   10/6/2024  6:11:42 PM
+----------------------------------------------------------------------------------------------------------------------------------
+
+Layer Pair : Top Layer to Bottom Layer
+ASCII RoundHoles File : rv_ledbrick_8ch-RoundHoles.TXT
+ASCII SlotHoles File : rv_ledbrick_8ch-SlotHoles.TXT
+
+Tool       Hole Size               Hole Tolerance               Hole Type       Hole Count   Plated         Tool Travel
+----------------------------------------------------------------------------------------------------------------------------------
+T1      0.3mm (12mil)                                             Round             556       PTH        1350.79mm (53.18inch)
+T2      0.6mm (24mil)                                             Slot              4         PTH        38.14mm (1.50inch)
+T3      1.016mm (40mil)                                           Round             2         PTH        2.54mm (0.10inch)
+T4      1.02mm (40mil)                                            Round             8         PTH        42.52mm (1.67inch)
+T5      0.65mm (26mil)                                            Round             2         NPTH       5.78mm (0.23inch)
+T6      1.02mm (40mil)                                            Round             2         NPTH       9.00mm (0.35inch)
+T7      1.25mm (49mil)                                            Round             1         NPTH       0.00mm (0.00inch)
+T8      3.6mm (142mil)                                            Round             4         NPTH       244.12mm (9.61inch)
+----------------------------------------------------------------------------------------------------------------------------------
+Totals                                                                              579
+
+Total Processing Time (hh:mm:ss) : 00:00:00

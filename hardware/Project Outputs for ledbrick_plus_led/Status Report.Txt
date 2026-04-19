@@ -1,0 +1,10 @@
+Output: Bill of Materials
+Type  : BOM
+From  : Variant [[No Variations]] of Schematic Document [ledbrick_plus_led.SchDoc]
+   Generated File[Bill of Materials-ledbrick_plus_led.csv]
+
+
+Files Generated   : 1
+Documents Printed : 0
+
+Finished Output Generation At 4:54:31 PM On 10/14/2025

@@ -1,0 +1,3 @@
+Layer Pairs Export File for PCB: C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_8ch\rv_ledbrick_8ch\rv_ledbrick_8ch.PcbDoc
+LayersSetName=Top_Bot_Thru_Holes|DrillFile=rv_ledbrick_8ch-roundholes.txt|DrillLayers=gtl,g1,g2,gbl
+LayersSetName=Top_Bot_Slot_Holes|DrillFile=rv_ledbrick_8ch-slotholes.txt|DrillLayers=gtl,g1,g2,gbl

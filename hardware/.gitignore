@@ -1,0 +1,28 @@
+### Altium ###
+# Previews Folders
+**/__Previews/
+
+# History Folders
+**/History/*
+
+# Project Logs
+Project Logs*/
+
+# Auto-conversion notices
+*.PcbDoc.htm
+
+# macOS metadata
+.DS_Store
+
+# Access lock file for dbLib sources
+**/*.ldb
+
+# Document Local Metadata
+*.metadata
+
+# Project hierarchy auto-generated file
+*.PrjPcbStructure
+*.PrjMbdStructure
+
+# Folder to save each comparison results
+CompareHistory/

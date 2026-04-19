@@ -1,0 +1,655 @@
+<html>
+<head>
+<META http-equiv="Content-Type" content="text/html">
+<style type="text/css">
+		h1, h2, h3, h4, h5, h6 {
+			font-family : segoe ui;
+			color : black;
+			background-color : #EDE7D9;
+			padding: 0.3em;
+		}
+
+		h1 {
+			font-size: 1.2em;
+		}		
+
+		h2 {
+			font-size: 1.2em;
+		}
+
+		body {
+			font-family : segoe ui;
+		}
+
+		td, th {
+			padding: 0.5em;
+			text-align : left;
+			width: 10em;
+		}
+		th {
+			background-color : #EEEEEE;
+
+		}
+		th.column1, td.column1 {
+			text-align: left;
+			width : auto;
+		}
+		table {
+			width : 100%;
+			font-size: 0.9em;
+		}
+
+		.DRC_summary_header {
+			padding-bottom : 0.1em;
+			border : 0px solid black;
+			width: 100%;
+			align: left;
+		}
+
+		.DRC_summary_header_col1,
+		.DRC_summary_header_col2, 
+		.DRC_summary_header_col3 {
+			color : black;
+			font-size:100%;
+			padding : 0em;
+			padding-top : 0.2em;
+			padding-bottom 0.2em;
+			border : 0px solid black;
+			vertical-align: top;
+			text-align: left;
+		}
+
+		.DRC_summary_header_col1 {
+			font-weight: bold;
+			width: 9em;
+		}
+
+		.DRC_summary_header_col2 {
+			width: 0.1em;
+		
+		}
+
+		.DRC_summary_header_col3 {
+			width : auto;
+		}
+
+		.header_holder {
+		    Width = 100%;
+		    border = 0px solid green;
+		    padding = 0;
+		}
+
+
+		.front_matter, .front_matter_column1, .front_matter_column2, .front_matter_column3
+		{
+			left : 0;
+			top : 0;
+			padding: 0em;
+			padding-top : 0.1em;
+			border : 0px solid black;
+			width : 100%;
+			vertical-align: top;
+			text-align: left;
+		}
+
+		.front_matter_column1 {
+			width : 8em;
+			font-weight: bold;
+		}
+
+		.front_matter_column2 {
+			width: 0.1em;
+		}
+
+		.front_matter_column3 {
+			width : auto;
+		}
+
+		.total_column1, .total_column {
+			font-weight : bold;
+		}
+		.total_column1 {
+			text-align : left;
+		}
+		.warning, .error {
+			color : red;
+			font-weight : bold;
+		}
+		tr.onmouseout_odd {
+			background-color : #white;
+		}
+		tr.onmouseout_even { 
+			background-color : #FAFAFA;
+		}
+		tr.onmouseover_odd, tr.onmouseover_even { 
+			background-color : #EEEEEE;
+		} 
+		a:link, a:visited, .q a:link,.q a:active,.q {
+			color: #21489e; 
+		}
+		a:link.callback, a:visited.callback { 
+			color: #21489e;
+		}
+		a:link.customize, a:visited.customize {
+			color: #C0C0C0;
+			position: absolute; 
+			right: 10px;
+		}	
+		p.contents_level1 {
+			font-weight : bold;
+			font-size : 110%;
+			margin : 0.5em;
+		}
+		p.contents_level2 {
+			position : relative;
+			left : 20px;
+			margin : 0.5em;
+		}
+	</style><script type="text/javascript">
+		function coordToMils(coord) {
+			var number = coord / 10000;
+			
+			if (number != number.toFixed(3))
+				number = number.toFixed(3);
+
+			return number + 'mil'
+		}
+
+		function coordToMM(coord) {
+			var number = 0.0254 * coord / 10000;
+			
+			if (number != number.toFixed(4))
+				number = number.toFixed(4);
+			
+			return number + 'mm'
+		}
+	
+		function convertCoord(coordNode, units) {
+			for (var i = 0; i < coordNode.childNodes.length; i++) {
+				coordNode.removeChild(coordNode.childNodes[i]);
+			}
+
+			var coord = coordNode.getAttribute('value');
+			if (coord != null) {
+				if (units == 'mm') {
+					textNode = document.createTextNode(coordToMM(coord));
+					coordNode.appendChild(textNode);
+				} else if (units == 'mil') {
+					textNode = document.createTextNode(coordToMils(coord));		
+					coordNode.appendChild(textNode);	
+				}
+			}
+		}
+	
+		function convertUnits(unitNode, units) {
+			for (var i = 0; i < unitNode.childNodes.length; i++) {
+				unitNode.removeChild(unitNode.childNodes[i]);		
+			}
+		
+			textNode = document.createTextNode(units); 
+			unitNode.appendChild(textNode);
+		}
+	
+		function changeUnits(radio_input, units) {
+			if (radio_input.checked) {
+			
+				var elements = document.getElementsByName('coordinate');
+				if (elements) {
+					for (var i = 0; i < elements.length; i++) {
+						convertCoord(elements[i], units);
+					}
+				}
+	
+				var elements = document.getElementsByName('units');
+				if (elements) {
+					for (var i = 0; i < elements.length; i++) {
+						convertUnits(elements[i], units);
+					}
+				}
+			}
+		}
+	</script><title>Design Rule Verification Report</title>
+</head>
+<body onload=""><img ALT="Altium" src="
+			file://C:\Users\Public\Documents\Altium\AD25\Templates\AD_logo.png
+		"><h1>Design Rule Verification Report</h1>
+<table class="header_holder">
+<td class="column1">
+<table class="front_matter">
+<tr class="front_matter">
+<td class="front_matter_column1">Date:</td>
+<td class="front_matter_column2"></td>
+<td class="front_matter_column3">10/14/2025</td>
+</tr>
+<tr class="front_matter">
+<td class="front_matter_column1">Time:</td>
+<td class="front_matter_column2"></td>
+<td class="front_matter_column3">4:56:52 PM</td>
+</tr>
+<tr class="front_matter">
+<td class="front_matter_column1">Elapsed Time:</td>
+<td class="front_matter_column2"></td>
+<td class="front_matter_column3">00:00:00</td>
+</tr>
+<tr class="front_matter">
+<td class="front_matter_column1">Filename:</td>
+<td class="front_matter_column2"></td>
+<td class="front_matter_column3"><a href="file:///C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc" class="file"><acronym title="C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc">C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc</acronym></a></td>
+</tr>
+</table>
+</td>
+<td class="column2">
+<table class="DRC_summary_header">
+<tr>
+<td class="DRC_summary_header_col1">Warnings:</td>
+<td class="DRC_summary_header_col2"></td>
+<td class="DRC_summary_header_col3">0</td></tr>
+<tr>
+<td class="DRC_summary_header_col1">Rule Violations:</td>
+<td class="DRC_summary_header_col2"></td>
+<td class="DRC_summary_header_col3" style="color : red">101</td></tr>
+</table>
+</td>
+</table><a name="IDFKHK4CAFJDMWMUIJYH5FU0G3DFDFO1RHFBH51YJBFG0S0233C4KF"><h2>Summary</h2></a><table>
+<tr>
+<th class="column1">Warnings</th>
+<th class="column2">Count</th>
+</tr>
+<tr>
+<td style="font-weight : bold; text-align : right" class="column1">Total</td>
+<td style="font-weight : bold" class="column2">0</td>
+</tr>
+</table><br><table>
+<tr>
+<th class="column1">Rule Violations</th>
+<th class="column2">Count</th>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="#IDUH1ID433TIQOE3O5EVXGR343WOFOQMHQFETR04MCZBDWX1YV4YKJ">Clearance Constraint (Gap=5mil) (All),(All)</a></td>
+<td class="column2">0</td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="#IDZDAWS50KMCYXDGXFILIHYLEPQI5WWOT2Z5J0R3F4NG0ERSDNTKKE">Short-Circuit Constraint (Allowed=No) (All),(All)</a></td>
+<td class="column2">0</td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="#IDJYHQQDZXQBEMDCXQWFRLZO4UHI2U2WBXCM4YLRKN0XTSSLCYKV4D">Un-Routed Net Constraint ( (All) )</a></td>
+<td class="column2">3</td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="#IDLQ1I2VYF55A1OK52BF1JS0LOHCG3LOZ3XX5OPVIIAMWYDZVEBYEB">Modified Polygon (Allow modified: No), (Allow shelved: No)</a></td>
+<td class="column2">0</td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="#IDDHEXSQGPQRRSGD41ITOIJI1BCHGZE13GCJFAQDF4FNDXE0ZJ5XTC">Width Constraint (Min=10mil) (Max=10mil) (Preferred=10mil) (All)</a></td>
+<td class="column2">0</td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="#IDHY0AEBTLG0J22FJPTPTYIGGDGBIHYQBIPXZOVJMZEZDFYH0XDEK">Routing Topology Rule(Topology=Shortest) (All)</a></td>
+<td class="column2">0</td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="#IDQW5NWRVBVA0AILE4V3212UYFNHRMY5YQR2UPBAFLK44PSWTQFC4I">Power Plane Connect Rule(Relief Connect )(Expansion=20mil) (Conductor Width=10mil) (Air Gap=10mil) (Entries=4) (All)</a></td>
+<td class="column2">0</td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="#IDKHDFOO3BLDOIDBGB1GDC5UE4KHR25OXMXUJ352BRWHQFPCVBG23O">Hole Size Constraint (Min=1mil) (Max=100mil) (All)</a></td>
+<td class="column2">6</td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="#IDRTEHSD0DCGXTKVSSUTEYEMC0TM51YUHDWAQYNIDFXHP0ANL2F3WH">Hole To Hole Clearance (Gap=10mil) (All),(All)</a></td>
+<td class="column2">0</td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="#IDZESPWBKCIK0RBAB1NGBWNYXGIHBRTZ3AGVFBZK2PSS101HEY5JH">Minimum Solder Mask Sliver (Gap=10mil) (All),(All)</a></td>
+<td class="column2">26</td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="#IDVVRYVX2WQCKZNQDPD0BK5NU32PE21ZJL0HL5NS5T5ZK0WCGGPYD">Silk To Solder Mask (Clearance=10mil) (IsPad),(All)</a></td>
+<td class="column2">12</td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="#IDRPVSA0TJ4YMMIR0QEGLIOEXBZCZY25K05XGCW1IGZDARM4MXTN4P">Silk to Silk (Clearance=10mil) (All),(All)</a></td>
+<td class="column2">53</td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="#ID3QWLYRHBU0GWLMMSSZ4QUAIDK5PO4VABWJOGXNAME32SXEWDZSK">Net Antennae (Tolerance=0mil) (All)</a></td>
+<td class="column2">1</td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="#IDXYVYA4J4GT4IH5CS2GI3HS2MTCAU5SNAQSOZUTPBVBK1GZ51BAPF">Height Constraint (Min=0mil) (Max=1000mil) (Prefered=500mil) (All)</a></td>
+<td class="column2">0</td>
+</tr>
+<tr>
+<td style="font-weight : bold; text-align : right" class="column1">Total</td>
+<td style="font-weight : bold" class="column2">101</td>
+</tr>
+</table><br><a name="IDJYHQQDZXQBEMDCXQWFRLZO4UHI2U2WBXCM4YLRKN0XTSSLCYKV4D"><table>
+<tr>
+<th style="text-align : left" colspan="1" class="rule">Un-Routed Net Constraint ( (All) )</th>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=1972.441mil|Location2.X=2240.157mil|Location1.Y=2722.638mil|Location2.Y=2749.803mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=1972.441mil|Location2.X=2240.157mil|Location1.Y=2722.638mil|Location2.Y=2749.803mil|Absolute=True">Un-Routed Net Constraint: Net THERM Between Pad LED15-PAD(984.252mil,1712.598mil) on Top Layer And Pad LED50-PAD(1181.102mil,1712.598mil) on Top Layer </acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6106.299mil|Location2.X=6374.016mil|Location1.Y=2712.795mil|Location2.Y=2749.803mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6106.299mil|Location2.X=6374.016mil|Location1.Y=2712.795mil|Location2.Y=2749.803mil|Absolute=True">Un-Routed Net Constraint: Net THERM Between Pad LED55-PAD(5118.11mil,1702.756mil) on Top Layer And Pad LED22-PAD(5314.961mil,1712.598mil) on Top Layer </acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=2568.835mil|Location2.X=2887.598mil|Location1.Y=2405.512mil|Location2.Y=2549.276mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=2568.835mil|Location2.X=2887.598mil|Location1.Y=2405.512mil|Location2.Y=2549.276mil|Absolute=True">Un-Routed Net Constraint: Net THERM Between Pad LED52-PAD(1574.803mil,1456.693mil) on Top Layer And Pad LED65-PAD(1850.394mil,1417.323mil) on Top Layer </acronym></a><br></td>
+</tr>
+</table></a><hr color="#EEEEEE"><a href="#top" style="font-size: 0.9em">Back to top</a><br><br><a name="IDKHDFOO3BLDOIDBGB1GDC5UE4KHR25OXMXUJ352BRWHQFPCVBG23O"><table>
+<tr>
+<th style="text-align : left" colspan="1" class="rule">Hole Size Constraint (Min=1mil) (Max=100mil) (All)</th>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=4101.737mil|Location2.X=4244.719mil|Location1.Y=3648.981mil|Location2.Y=3791.963mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=4101.737mil|Location2.X=4244.719mil|Location1.Y=3648.981mil|Location2.Y=3791.963mil|Absolute=True">Hole Size Constraint: (141.732mil &gt; 100mil) Pad Free-Hole1(3149.606mil,2696.85mil) on Multi-Layer Actual Hole Size = 141.732mil</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=4101.737mil|Location2.X=4244.719mil|Location1.Y=1680.477mil|Location2.Y=1823.46mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=4101.737mil|Location2.X=4244.719mil|Location1.Y=1680.477mil|Location2.Y=1823.46mil|Absolute=True">Hole Size Constraint: (141.732mil &gt; 100mil) Pad Free-Hole1_2(3149.606mil,728.346mil) on Multi-Layer Actual Hole Size = 141.732mil</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=1739.533mil|Location2.X=1882.515mil|Location1.Y=3648.981mil|Location2.Y=3791.963mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=1739.533mil|Location2.X=1882.515mil|Location1.Y=3648.981mil|Location2.Y=3791.963mil|Absolute=True">Hole Size Constraint: (141.732mil &gt; 100mil) Pad Free-Hole4(787.402mil,2696.85mil) on Multi-Layer Actual Hole Size = 141.732mil</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=1739.533mil|Location2.X=1882.515mil|Location1.Y=1680.477mil|Location2.Y=1823.46mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=1739.533mil|Location2.X=1882.515mil|Location1.Y=1680.477mil|Location2.Y=1823.46mil|Absolute=True">Hole Size Constraint: (141.732mil &gt; 100mil) Pad Free-Hole4_2(787.402mil,728.346mil) on Multi-Layer Actual Hole Size = 141.732mil</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6463.942mil|Location2.X=6606.924mil|Location1.Y=1680.477mil|Location2.Y=1823.46mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6463.942mil|Location2.X=6606.924mil|Location1.Y=1680.477mil|Location2.Y=1823.46mil|Absolute=True">Hole Size Constraint: (141.732mil &gt; 100mil) Pad Free-Hole4_3(5511.811mil,728.346mil) on Multi-Layer Actual Hole Size = 141.732mil</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6463.942mil|Location2.X=6606.924mil|Location1.Y=3648.981mil|Location2.Y=3791.963mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6463.942mil|Location2.X=6606.924mil|Location1.Y=3648.981mil|Location2.Y=3791.963mil|Absolute=True">Hole Size Constraint: (141.732mil &gt; 100mil) Pad Free-Hole4_4(5511.811mil,2696.85mil) on Multi-Layer Actual Hole Size = 141.732mil</acronym></a><br></td>
+</tr>
+</table></a><hr color="#EEEEEE"><a href="#top" style="font-size: 0.9em">Back to top</a><br><br><a name="IDZESPWBKCIK0RBAB1NGBWNYXGIHBRTZ3AGVFBZK2PSS101HEY5JH"><table>
+<tr>
+<th style="text-align : left" colspan="1" class="rule">Minimum Solder Mask Sliver (Gap=10mil) (All),(All)</th>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=2592.8mil|Location2.X=2604.05mil|Location1.Y=3679.414mil|Location2.Y=3690.664mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=2592.8mil|Location2.X=2604.05mil|Location1.Y=3679.414mil|Location2.Y=3690.664mil|Absolute=True">Minimum Solder Mask Sliver Constraint: (9.843mil &lt; 10mil) Between Area Fill (1551.181mil,2614.173mil) (1569.882mil,2661.417mil) on Top Solder And Area Fill (1579.725mil,2614.173mil) (1598.425mil,2661.417mil) on Top Solder [Top Solder] Mask Sliver [9.843mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=2592.803mil|Location2.X=2604.053mil|Location1.Y=3010.126mil|Location2.Y=3021.376mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=2592.803mil|Location2.X=2604.053mil|Location1.Y=3010.126mil|Location2.Y=3021.376mil|Absolute=True">Minimum Solder Mask Sliver Constraint: (9.842mil &lt; 10mil) Between Area Fill (1551.184mil,1944.885mil) (1569.885mil,1992.129mil) on Top Solder And Area Fill (1579.727mil,1944.885mil) (1598.428mil,1992.129mil) on Top Solder [Top Solder] Mask Sliver [9.842mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=2829.021mil|Location2.X=2840.271mil|Location1.Y=2608.548mil|Location2.Y=2619.798mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=2829.021mil|Location2.X=2840.271mil|Location1.Y=2608.548mil|Location2.Y=2619.798mil|Absolute=True">Minimum Solder Mask Sliver Constraint: (9.843mil &lt; 10mil) Between Area Fill (1787.402mil,1590.552mil) (1806.103mil,1637.796mil) on Top Solder And Area Fill (1815.945mil,1590.552mil) (1834.646mil,1637.796mil) on Top Solder [Top Solder] Mask Sliver [9.843mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=3065.242mil|Location2.X=3076.492mil|Location1.Y=3010.123mil|Location2.Y=3021.373mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=3065.242mil|Location2.X=3076.492mil|Location1.Y=3010.123mil|Location2.Y=3021.373mil|Absolute=True">Minimum Solder Mask Sliver Constraint: (9.843mil &lt; 10mil) Between Area Fill (2023.623mil,1944.882mil) (2042.323mil,1992.126mil) on Top Solder And Area Fill (2052.166mil,1944.882mil) (2070.867mil,1992.126mil) on Top Solder [Top Solder] Mask Sliver [9.843mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=3265.044mil|Location2.X=3276.294mil|Location1.Y=2608.548mil|Location2.Y=2619.798mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=3265.044mil|Location2.X=3276.294mil|Location1.Y=2608.548mil|Location2.Y=2619.798mil|Absolute=True">Minimum Solder Mask Sliver Constraint: (9.843mil &lt; 10mil) Between Area Fill (2223.425mil,1590.551mil) (2242.126mil,1637.795mil) on Top Solder And Area Fill (2251.969mil,1590.551mil) (2270.67mil,1637.795mil) on Top Solder [Top Solder] Mask Sliver [9.843mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=3498.312mil|Location2.X=3509.562mil|Location1.Y=3010.123mil|Location2.Y=3021.373mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=3498.312mil|Location2.X=3509.562mil|Location1.Y=3010.123mil|Location2.Y=3021.373mil|Absolute=True">Minimum Solder Mask Sliver Constraint: (9.843mil &lt; 10mil) Between Area Fill (2456.693mil,1944.882mil) (2475.394mil,1992.126mil) on Top Solder And Area Fill (2485.237mil,1944.882mil) (2503.938mil,1992.126mil) on Top Solder [Top Solder] Mask Sliver [9.843mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=3734.533mil|Location2.X=3745.783mil|Location1.Y=2608.548mil|Location2.Y=2619.798mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=3734.533mil|Location2.X=3745.783mil|Location1.Y=2608.548mil|Location2.Y=2619.798mil|Absolute=True">Minimum Solder Mask Sliver Constraint: (9.843mil &lt; 10mil) Between Area Fill (2692.914mil,1590.552mil) (2711.615mil,1637.796mil) on Top Solder And Area Fill (2721.457mil,1590.552mil) (2740.158mil,1637.796mil) on Top Solder [Top Solder] Mask Sliver [9.843mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=4167.604mil|Location2.X=4178.854mil|Location1.Y=3010.123mil|Location2.Y=3021.373mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=4167.604mil|Location2.X=4178.854mil|Location1.Y=3010.123mil|Location2.Y=3021.373mil|Absolute=True">Minimum Solder Mask Sliver Constraint: (9.843mil &lt; 10mil) Between Area Fill (3125.984mil,1944.882mil) (3144.685mil,1992.126mil) on Top Solder And Area Fill (3154.528mil,1944.882mil) (3173.229mil,1992.126mil) on Top Solder [Top Solder] Mask Sliver [9.843mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=4167.603mil|Location2.X=4178.853mil|Location1.Y=3403.824mil|Location2.Y=3415.074mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=4167.603mil|Location2.X=4178.853mil|Location1.Y=3403.824mil|Location2.Y=3415.074mil|Absolute=True">Minimum Solder Mask Sliver Constraint: (9.843mil &lt; 10mil) Between Area Fill (3125.984mil,2338.583mil) (3144.685mil,2385.827mil) on Top Solder And Area Fill (3154.528mil,2338.583mil) (3173.229mil,2385.827mil) on Top Solder [Top Solder] Mask Sliver [9.843mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=4561.305mil|Location2.X=4572.555mil|Location1.Y=2608.548mil|Location2.Y=2619.798mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=4561.305mil|Location2.X=4572.555mil|Location1.Y=2608.548mil|Location2.Y=2619.798mil|Absolute=True">Minimum Solder Mask Sliver Constraint: (9.843mil &lt; 10mil) Between Area Fill (3519.685mil,1590.551mil) (3538.386mil,1637.795mil) on Top Solder And Area Fill (3548.229mil,1590.551mil) (3566.93mil,1637.795mil) on Top Solder [Top Solder] Mask Sliver [9.843mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=4797.525mil|Location2.X=4808.775mil|Location1.Y=3010.123mil|Location2.Y=3021.373mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=4797.525mil|Location2.X=4808.775mil|Location1.Y=3010.123mil|Location2.Y=3021.373mil|Absolute=True">Minimum Solder Mask Sliver Constraint: (9.843mil &lt; 10mil) Between Area Fill (3755.906mil,1944.882mil) (3774.607mil,1992.126mil) on Top Solder And Area Fill (3784.449mil,1944.882mil) (3803.15mil,1992.126mil) on Top Solder [Top Solder] Mask Sliver [9.843mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=5036.698mil|Location2.X=5047.948mil|Location1.Y=2608.548mil|Location2.Y=2619.798mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=5036.698mil|Location2.X=5047.948mil|Location1.Y=2608.548mil|Location2.Y=2619.798mil|Absolute=True">Minimum Solder Mask Sliver Constraint: (9.843mil &lt; 10mil) Between Area Fill (3995.079mil,1590.551mil) (4013.78mil,1637.795mil) on Top Solder And Area Fill (4023.622mil,1590.551mil) (4042.323mil,1637.795mil) on Top Solder [Top Solder] Mask Sliver [9.843mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=5230.596mil|Location2.X=5241.846mil|Location1.Y=3010.123mil|Location2.Y=3021.373mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=5230.596mil|Location2.X=5241.846mil|Location1.Y=3010.123mil|Location2.Y=3021.373mil|Absolute=True">Minimum Solder Mask Sliver Constraint: (9.843mil &lt; 10mil) Between Area Fill (4188.977mil,1944.882mil) (4207.677mil,1992.126mil) on Top Solder And Area Fill (4217.52mil,1944.882mil) (4236.221mil,1992.126mil) on Top Solder [Top Solder] Mask Sliver [9.843mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=5466.816mil|Location2.X=5478.066mil|Location1.Y=2608.548mil|Location2.Y=2619.798mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=5466.816mil|Location2.X=5478.066mil|Location1.Y=2608.548mil|Location2.Y=2619.798mil|Absolute=True">Minimum Solder Mask Sliver Constraint: (9.843mil &lt; 10mil) Between Area Fill (4425.197mil,1590.551mil) (4443.898mil,1637.795mil) on Top Solder And Area Fill (4453.741mil,1590.551mil) (4472.441mil,1637.795mil) on Top Solder [Top Solder] Mask Sliver [9.843mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=5742.407mil|Location2.X=5753.657mil|Location1.Y=3010.123mil|Location2.Y=3021.373mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=5742.407mil|Location2.X=5753.657mil|Location1.Y=3010.123mil|Location2.Y=3021.373mil|Absolute=True">Minimum Solder Mask Sliver Constraint: (9.843mil &lt; 10mil) Between Area Fill (4700.788mil,1944.882mil) (4719.489mil,1992.126mil) on Top Solder And Area Fill (4729.331mil,1944.882mil) (4748.032mil,1992.126mil) on Top Solder [Top Solder] Mask Sliver [9.843mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=5742.407mil|Location2.X=5753.657mil|Location1.Y=3679.414mil|Location2.Y=3690.664mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=5742.407mil|Location2.X=5753.657mil|Location1.Y=3679.414mil|Location2.Y=3690.664mil|Absolute=True">Minimum Solder Mask Sliver Constraint: (9.843mil &lt; 10mil) Between Area Fill (4700.788mil,2614.173mil) (4719.488mil,2661.417mil) on Top Solder And Area Fill (4729.331mil,2614.173mil) (4748.032mil,2661.417mil) on Top Solder [Top Solder] Mask Sliver [9.843mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=1545.555mil|Location2.X=1556.805mil|Location1.Y=2120.361mil|Location2.Y=2131.611mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=1545.555mil|Location2.X=1556.805mil|Location1.Y=2120.361mil|Location2.Y=2131.611mil|Absolute=True">Minimum Solder Mask Sliver Constraint: (9.843mil &lt; 10mil) Between Area Fill (541.83mil,1064.47mil) (560.531mil,1111.714mil) on Top Solder And Area Fill (541.83mil,1093.013mil) (560.531mil,1140.257mil) on Top Solder [Top Solder] Mask Sliver [9.843mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=1545.555mil|Location2.X=1556.805mil|Location1.Y=2438.274mil|Location2.Y=2449.524mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=1545.555mil|Location2.X=1556.805mil|Location1.Y=2438.274mil|Location2.Y=2449.524mil|Absolute=True">Minimum Solder Mask Sliver Constraint: (9.843mil &lt; 10mil) Between Area Fill (541.83mil,1382.383mil) (560.531mil,1429.627mil) on Top Solder And Area Fill (541.83mil,1410.927mil) (560.531mil,1458.171mil) on Top Solder [Top Solder] Mask Sliver [9.843mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=1545.555mil|Location2.X=1556.805mil|Location1.Y=2730.597mil|Location2.Y=2741.847mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=1545.555mil|Location2.X=1556.805mil|Location1.Y=2730.597mil|Location2.Y=2741.847mil|Absolute=True">Minimum Solder Mask Sliver Constraint: (9.843mil &lt; 10mil) Between Area Fill (541.83mil,1674.706mil) (560.53mil,1721.95mil) on Top Solder And Area Fill (541.83mil,1703.249mil) (560.53mil,1750.493mil) on Top Solder [Top Solder] Mask Sliver [9.843mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=1545.555mil|Location2.X=1556.805mil|Location1.Y=2983.549mil|Location2.Y=2994.799mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=1545.555mil|Location2.X=1556.805mil|Location1.Y=2983.549mil|Location2.Y=2994.799mil|Absolute=True">Minimum Solder Mask Sliver Constraint: (9.843mil &lt; 10mil) Between Area Fill (541.83mil,1927.659mil) (560.53mil,1974.903mil) on Top Solder And Area Fill (541.83mil,1956.202mil) (560.53mil,2003.446mil) on Top Solder [Top Solder] Mask Sliver [9.843mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=1545.555mil|Location2.X=1556.805mil|Location1.Y=3304.416mil|Location2.Y=3315.666mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=1545.555mil|Location2.X=1556.805mil|Location1.Y=3304.416mil|Location2.Y=3315.666mil|Absolute=True">Minimum Solder Mask Sliver Constraint: (9.843mil &lt; 10mil) Between Area Fill (541.83mil,2248.525mil) (560.53mil,2295.769mil) on Top Solder And Area Fill (541.83mil,2277.068mil) (560.53mil,2324.312mil) on Top Solder [Top Solder] Mask Sliver [9.843mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6789.65mil|Location2.X=6800.9mil|Location1.Y=2120.357mil|Location2.Y=2131.607mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6789.65mil|Location2.X=6800.9mil|Location1.Y=2120.357mil|Location2.Y=2131.607mil|Absolute=True">Minimum Solder Mask Sliver Constraint: (9.843mil &lt; 10mil) Between Area Fill (5738.681mil,1064.466mil) (5757.382mil,1111.711mil) on Top Solder And Area Fill (5738.681mil,1093.01mil) (5757.382mil,1140.254mil) on Top Solder [Top Solder] Mask Sliver [9.843mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6789.65mil|Location2.X=6800.9mil|Location1.Y=2435.318mil|Location2.Y=2446.568mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6789.65mil|Location2.X=6800.9mil|Location1.Y=2435.318mil|Location2.Y=2446.568mil|Absolute=True">Minimum Solder Mask Sliver Constraint: (9.843mil &lt; 10mil) Between Area Fill (5738.681mil,1379.427mil) (5757.382mil,1426.671mil) on Top Solder And Area Fill (5738.681mil,1407.97mil) (5757.382mil,1455.215mil) on Top Solder [Top Solder] Mask Sliver [9.843mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6789.651mil|Location2.X=6800.901mil|Location1.Y=2730.593mil|Location2.Y=2741.843mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6789.651mil|Location2.X=6800.901mil|Location1.Y=2730.593mil|Location2.Y=2741.843mil|Absolute=True">Minimum Solder Mask Sliver Constraint: (9.843mil &lt; 10mil) Between Area Fill (5738.681mil,1674.703mil) (5757.382mil,1721.947mil) on Top Solder And Area Fill (5738.681mil,1703.246mil) (5757.382mil,1750.49mil) on Top Solder [Top Solder] Mask Sliver [9.843mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6789.65mil|Location2.X=6800.9mil|Location1.Y=2986.499mil|Location2.Y=2997.749mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6789.65mil|Location2.X=6800.9mil|Location1.Y=2986.499mil|Location2.Y=2997.749mil|Absolute=True">Minimum Solder Mask Sliver Constraint: (9.843mil &lt; 10mil) Between Area Fill (5738.681mil,1930.608mil) (5757.382mil,1977.852mil) on Top Solder And Area Fill (5738.681mil,1959.152mil) (5757.382mil,2006.396mil) on Top Solder [Top Solder] Mask Sliver [9.843mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6789.65mil|Location2.X=6800.9mil|Location1.Y=3301.46mil|Location2.Y=3312.71mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6789.65mil|Location2.X=6800.9mil|Location1.Y=3301.46mil|Location2.Y=3312.71mil|Absolute=True">Minimum Solder Mask Sliver Constraint: (9.843mil &lt; 10mil) Between Area Fill (5738.681mil,2245.569mil) (5757.382mil,2292.813mil) on Top Solder And Area Fill (5738.681mil,2274.112mil) (5757.382mil,2321.356mil) on Top Solder [Top Solder] Mask Sliver [9.843mil]</acronym></a><br></td>
+</tr>
+</table></a><hr color="#EEEEEE"><a href="#top" style="font-size: 0.9em">Back to top</a><br><br><a name="IDVVRYVX2WQCKZNQDPD0BK5NU32PE21ZJL0HL5NS5T5ZK0WCGGPYD"><table>
+<tr>
+<th style="text-align : left" colspan="1" class="rule">Silk To Solder Mask (Clearance=10mil) (IsPad),(All)</th>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=4564.847mil|Location2.X=4576.097mil|Location1.Y=1654.513mil|Location2.Y=1665.763mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=4564.847mil|Location2.X=4576.097mil|Location1.Y=1654.513mil|Location2.Y=1665.763mil|Absolute=True">Silk To Solder Mask Clearance Constraint: (0.984mil &lt; 10mil) Between Arc (3543.307mil,633.858mil) on Top Overlay And Pad U1-1(3553.15mil,651.575mil) on Top Layer [Top Overlay] to [Top Solder] clearance [0.984mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=2659.729mil|Location2.X=2670.979mil|Location1.Y=2514.06mil|Location2.Y=2525.31mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=2659.729mil|Location2.X=2670.979mil|Location1.Y=2514.06mil|Location2.Y=2525.31mil|Absolute=True">Silk To Solder Mask Clearance Constraint: (3.937mil &lt; 10mil) Between Pad LED52-C(1629.921mil,1456.693mil) on Top Layer And Track (1649.606mil,1496.063mil)(1649.606mil,1519.685mil) on Top Overlay [Top Overlay] to [Top Solder] clearance [3.937mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=5809.336mil|Location2.X=5820.586mil|Location1.Y=2514.06mil|Location2.Y=2525.31mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=5809.336mil|Location2.X=5820.586mil|Location1.Y=2514.06mil|Location2.Y=2525.31mil|Absolute=True">Silk To Solder Mask Clearance Constraint: (3.937mil &lt; 10mil) Between Pad LED53-C(4779.528mil,1456.693mil) on Top Layer And Track (4799.212mil,1496.063mil)(4799.212mil,1519.685mil) on Top Overlay [Top Overlay] to [Top Solder] clearance [3.937mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6183.433mil|Location2.X=6194.683mil|Location1.Y=1692.955mil|Location2.Y=1704.205mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6183.433mil|Location2.X=6194.683mil|Location1.Y=1692.955mil|Location2.Y=1704.205mil|Absolute=True">Silk To Solder Mask Clearance Constraint: (7.874mil &lt; 10mil) Between Pad R1-1(5140.669mil,708.661mil) on Top Layer And Track (5173.31mil,674.958mil)(5220.391mil,674.958mil) on Top Overlay [Top Overlay] to [Top Solder] clearance [7.874mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6183.433mil|Location2.X=6194.683mil|Location1.Y=1760.362mil|Location2.Y=1771.612mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6183.433mil|Location2.X=6194.683mil|Location1.Y=1760.362mil|Location2.Y=1771.612mil|Absolute=True">Silk To Solder Mask Clearance Constraint: (7.874mil &lt; 10mil) Between Pad R1-1(5140.669mil,708.661mil) on Top Layer And Track (5173.31mil,742.365mil)(5220.391mil,742.365mil) on Top Overlay [Top Overlay] to [Top Solder] clearance [7.874mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6246.262mil|Location2.X=6257.512mil|Location1.Y=1692.955mil|Location2.Y=1704.205mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6246.262mil|Location2.X=6257.512mil|Location1.Y=1692.955mil|Location2.Y=1704.205mil|Absolute=True">Silk To Solder Mask Clearance Constraint: (7.874mil &lt; 10mil) Between Pad R1-2(5253.031mil,708.661mil) on Top Layer And Track (5173.31mil,674.958mil)(5220.391mil,674.958mil) on Top Overlay [Top Overlay] to [Top Solder] clearance [7.874mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6246.262mil|Location2.X=6257.512mil|Location1.Y=1760.362mil|Location2.Y=1771.612mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6246.262mil|Location2.X=6257.512mil|Location1.Y=1760.362mil|Location2.Y=1771.612mil|Absolute=True">Silk To Solder Mask Clearance Constraint: (7.874mil &lt; 10mil) Between Pad R1-2(5253.031mil,708.661mil) on Top Layer And Track (5173.31mil,742.365mil)(5220.391mil,742.365mil) on Top Overlay [Top Overlay] to [Top Solder] clearance [7.874mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6206.892mil|Location2.X=6218.142mil|Location1.Y=1811.065mil|Location2.Y=1822.315mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6206.892mil|Location2.X=6218.142mil|Location1.Y=1811.065mil|Location2.Y=1822.315mil|Absolute=True">Silk To Solder Mask Clearance Constraint: (7.874mil &lt; 10mil) Between Pad R2-1(5213.661mil,826.772mil) on Top Layer And Track (5133.94mil,793.068mil)(5181.021mil,793.068mil) on Top Overlay [Top Overlay] to [Top Solder] clearance [7.874mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6206.892mil|Location2.X=6218.142mil|Location1.Y=1878.472mil|Location2.Y=1889.722mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6206.892mil|Location2.X=6218.142mil|Location1.Y=1878.472mil|Location2.Y=1889.722mil|Absolute=True">Silk To Solder Mask Clearance Constraint: (7.874mil &lt; 10mil) Between Pad R2-1(5213.661mil,826.772mil) on Top Layer And Track (5133.94mil,860.475mil)(5181.021mil,860.475mil) on Top Overlay [Top Overlay] to [Top Solder] clearance [7.874mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6134.829mil|Location2.X=6142.496mil|Location1.Y=1825.117mil|Location2.Y=1832.783mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6134.829mil|Location2.X=6142.496mil|Location1.Y=1825.117mil|Location2.Y=1832.783mil|Absolute=True">Silk To Solder Mask Clearance Constraint: (Collision &lt; 10mil) Between Pad R2-2(5101.299mil,826.772mil) on Top Layer And Text "R1" (5106.378mil,776.378mil) on Top Overlay [Top Overlay] to [Top Solder] clearance [0mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6144.063mil|Location2.X=6155.313mil|Location1.Y=1811.065mil|Location2.Y=1822.315mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6144.063mil|Location2.X=6155.313mil|Location1.Y=1811.065mil|Location2.Y=1822.315mil|Absolute=True">Silk To Solder Mask Clearance Constraint: (7.874mil &lt; 10mil) Between Pad R2-2(5101.299mil,826.772mil) on Top Layer And Track (5133.94mil,793.068mil)(5181.021mil,793.068mil) on Top Overlay [Top Overlay] to [Top Solder] clearance [7.874mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6144.063mil|Location2.X=6155.313mil|Location1.Y=1878.472mil|Location2.Y=1889.722mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6144.063mil|Location2.X=6155.313mil|Location1.Y=1878.472mil|Location2.Y=1889.722mil|Absolute=True">Silk To Solder Mask Clearance Constraint: (7.874mil &lt; 10mil) Between Pad R2-2(5101.299mil,826.772mil) on Top Layer And Track (5133.94mil,860.475mil)(5181.021mil,860.475mil) on Top Overlay [Top Overlay] to [Top Solder] clearance [7.874mil]</acronym></a><br></td>
+</tr>
+</table></a><hr color="#EEEEEE"><a href="#top" style="font-size: 0.9em">Back to top</a><br><br><a name="IDRPVSA0TJ4YMMIR0QEGLIOEXBZCZY25K05XGCW1IGZDARM4MXTN4P"><table>
+<tr>
+<th style="text-align : left" colspan="1" class="rule">Silk to Silk (Clearance=10mil) (All),(All)</th>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=2016.944mil|Location2.X=2028.194mil|Location1.Y=2169.65mil|Location2.Y=2180.9mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=2016.944mil|Location2.X=2028.194mil|Location1.Y=2169.65mil|Location2.Y=2180.9mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (1000.45mil,1173.228mil) on Top Overlay And Track (976.378mil,1149.606mil)(992.126mil,1149.606mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=2016.945mil|Location2.X=2028.195mil|Location1.Y=2779.886mil|Location2.Y=2791.136mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=2016.945mil|Location2.X=2028.195mil|Location1.Y=2779.886mil|Location2.Y=2791.136mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (1000.45mil,1783.464mil) on Top Overlay And Track (976.378mil,1759.842mil)(992.126mil,1759.842mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=2016.945mil|Location2.X=2028.195mil|Location1.Y=3350.752mil|Location2.Y=3362.002mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=2016.945mil|Location2.X=2028.195mil|Location1.Y=3350.752mil|Location2.Y=3362.002mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (1000.45mil,2354.331mil) on Top Overlay And Track (976.378mil,2330.709mil)(992.126mil,2330.709mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=2213.795mil|Location2.X=2225.045mil|Location1.Y=2484.61mil|Location2.Y=2495.86mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=2213.795mil|Location2.X=2225.045mil|Location1.Y=2484.61mil|Location2.Y=2495.86mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (1197.301mil,1488.189mil) on Top Overlay And Track (1173.228mil,1464.567mil)(1188.976mil,1464.567mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=2213.795mil|Location2.X=2225.045mil|Location1.Y=3075.162mil|Location2.Y=3086.412mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=2213.795mil|Location2.X=2225.045mil|Location1.Y=3075.162mil|Location2.Y=3086.412mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (1197.301mil,2078.74mil) on Top Overlay And Track (1173.228mil,2055.118mil)(1188.976mil,2055.118mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=2213.795mil|Location2.X=2225.045mil|Location1.Y=2779.886mil|Location2.Y=2791.136mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=2213.795mil|Location2.X=2225.045mil|Location1.Y=2779.886mil|Location2.Y=2791.136mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (1197.3mil,1783.465mil) on Top Overlay And Track (1173.228mil,1759.843mil)(1188.976mil,1759.843mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=2297.447mil|Location2.X=2308.697mil|Location1.Y=2135.055mil|Location2.Y=2146.305mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=2297.447mil|Location2.X=2308.697mil|Location1.Y=2135.055mil|Location2.Y=2146.305mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (1257.874mil,1118.56mil) on Top Overlay And Track (1281.496mil,1094.488mil)(1281.496mil,1110.236mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=2494.453mil|Location2.X=2505.703mil|Location1.Y=3286.766mil|Location2.Y=3298.016mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=2494.453mil|Location2.X=2505.703mil|Location1.Y=3286.766mil|Location2.Y=3298.016mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (1498.031mil,2267.267mil) on Top Overlay And Track (1474.409mil,2275.59mil)(1474.409mil,2291.339mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=2543.51mil|Location2.X=2554.76mil|Location1.Y=2135.055mil|Location2.Y=2146.305mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=2543.51mil|Location2.X=2554.76mil|Location1.Y=2135.055mil|Location2.Y=2146.305mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (1503.937mil,1118.56mil) on Top Overlay And Track (1527.559mil,1094.488mil)(1527.559mil,1110.236mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=2730.673mil|Location2.X=2741.923mil|Location1.Y=3286.766mil|Location2.Y=3298.016mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=2730.673mil|Location2.X=2741.923mil|Location1.Y=3286.766mil|Location2.Y=3298.016mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (1734.252mil,2267.267mil) on Top Overlay And Track (1710.63mil,2275.59mil)(1710.63mil,2291.339mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=2917.681mil|Location2.X=2928.931mil|Location1.Y=2026.923mil|Location2.Y=2038.173mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=2917.681mil|Location2.X=2928.931mil|Location1.Y=2026.923mil|Location2.Y=2038.173mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (1921.26mil,1007.424mil) on Top Overlay And Track (1897.638mil,1015.748mil)(1897.638mil,1031.496mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=2917.681mil|Location2.X=2928.931mil|Location1.Y=2223.774mil|Location2.Y=2235.024mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=2917.681mil|Location2.X=2928.931mil|Location1.Y=2223.774mil|Location2.Y=2235.024mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (1921.26mil,1204.274mil) on Top Overlay And Track (1897.638mil,1212.598mil)(1897.638mil,1228.346mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=2917.681mil|Location2.X=2928.931mil|Location1.Y=2420.624mil|Location2.Y=2431.874mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=2917.681mil|Location2.X=2928.931mil|Location1.Y=2420.624mil|Location2.Y=2431.874mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (1921.26mil,1401.125mil) on Top Overlay And Track (1897.638mil,1409.449mil)(1897.638mil,1425.197mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=3035.791mil|Location2.X=3047.041mil|Location1.Y=3286.766mil|Location2.Y=3298.016mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=3035.791mil|Location2.X=3047.041mil|Location1.Y=3286.766mil|Location2.Y=3298.016mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (2039.37mil,2267.267mil) on Top Overlay And Track (2015.748mil,2275.59mil)(2015.748mil,2291.339mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=3311.382mil|Location2.X=3322.632mil|Location1.Y=2026.923mil|Location2.Y=2038.173mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=3311.382mil|Location2.X=3322.632mil|Location1.Y=2026.923mil|Location2.Y=2038.173mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (2314.961mil,1007.424mil) on Top Overlay And Track (2291.339mil,1015.748mil)(2291.339mil,1031.496mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=3311.382mil|Location2.X=3322.632mil|Location1.Y=2223.774mil|Location2.Y=2235.024mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=3311.382mil|Location2.X=3322.632mil|Location1.Y=2223.774mil|Location2.Y=2235.024mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (2314.961mil,1204.274mil) on Top Overlay And Track (2291.339mil,1212.598mil)(2291.339mil,1228.346mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=3311.382mil|Location2.X=3322.632mil|Location1.Y=2420.624mil|Location2.Y=2431.874mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=3311.382mil|Location2.X=3322.632mil|Location1.Y=2420.624mil|Location2.Y=2431.874mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (2314.961mil,1401.125mil) on Top Overlay And Track (2291.339mil,1409.449mil)(2291.339mil,1425.197mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=3350.752mil|Location2.X=3362.002mil|Location1.Y=3286.766mil|Location2.Y=3298.016mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=3350.752mil|Location2.X=3362.002mil|Location1.Y=3286.766mil|Location2.Y=3298.016mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (2354.331mil,2267.267mil) on Top Overlay And Track (2330.709mil,2275.59mil)(2330.709mil,2291.339mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=3744.453mil|Location2.X=3755.703mil|Location1.Y=2026.923mil|Location2.Y=2038.173mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=3744.453mil|Location2.X=3755.703mil|Location1.Y=2026.923mil|Location2.Y=2038.173mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (2748.032mil,1007.424mil) on Top Overlay And Track (2724.41mil,1015.748mil)(2724.41mil,1031.496mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=3744.453mil|Location2.X=3755.703mil|Location1.Y=2223.774mil|Location2.Y=2235.024mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=3744.453mil|Location2.X=3755.703mil|Location1.Y=2223.774mil|Location2.Y=2235.024mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (2748.032mil,1204.274mil) on Top Overlay And Track (2724.41mil,1212.598mil)(2724.41mil,1228.346mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=3744.453mil|Location2.X=3755.703mil|Location1.Y=2420.624mil|Location2.Y=2431.874mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=3744.453mil|Location2.X=3755.703mil|Location1.Y=2420.624mil|Location2.Y=2431.874mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (2748.032mil,1401.125mil) on Top Overlay And Track (2724.41mil,1409.449mil)(2724.41mil,1425.197mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=3744.453mil|Location2.X=3755.703mil|Location1.Y=3286.766mil|Location2.Y=3298.016mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=3744.453mil|Location2.X=3755.703mil|Location1.Y=3286.766mil|Location2.Y=3298.016mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (2748.032mil,2267.267mil) on Top Overlay And Track (2724.41mil,2275.59mil)(2724.41mil,2291.339mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=3901.933mil|Location2.X=3913.183mil|Location1.Y=3050.545mil|Location2.Y=3061.795mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=3901.933mil|Location2.X=3913.183mil|Location1.Y=3050.545mil|Location2.Y=3061.795mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (2905.512mil,2031.046mil) on Top Overlay And Track (2881.89mil,2039.37mil)(2881.89mil,2055.118mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=4059.414mil|Location2.X=4070.664mil|Location1.Y=2223.774mil|Location2.Y=2235.024mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=4059.414mil|Location2.X=4070.664mil|Location1.Y=2223.774mil|Location2.Y=2235.024mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (3062.992mil,1204.274mil) on Top Overlay And Track (3039.37mil,1212.598mil)(3039.37mil,1228.346mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=4059.414mil|Location2.X=4070.664mil|Location1.Y=2420.624mil|Location2.Y=2431.874mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=4059.414mil|Location2.X=4070.664mil|Location1.Y=2420.624mil|Location2.Y=2431.874mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (3062.992mil,1401.125mil) on Top Overlay And Track (3039.37mil,1409.449mil)(3039.37mil,1425.197mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=4059.414mil|Location2.X=4070.664mil|Location1.Y=2617.475mil|Location2.Y=2628.725mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=4059.414mil|Location2.X=4070.664mil|Location1.Y=2617.475mil|Location2.Y=2628.725mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (3062.992mil,1597.975mil) on Top Overlay And Track (3039.37mil,1606.299mil)(3039.37mil,1622.047mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=4335.004mil|Location2.X=4346.254mil|Location1.Y=2223.774mil|Location2.Y=2235.024mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=4335.004mil|Location2.X=4346.254mil|Location1.Y=2223.774mil|Location2.Y=2235.024mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (3338.583mil,1204.274mil) on Top Overlay And Track (3314.961mil,1212.598mil)(3314.961mil,1228.346mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=4335.004mil|Location2.X=4346.254mil|Location1.Y=2420.624mil|Location2.Y=2431.874mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=4335.004mil|Location2.X=4346.254mil|Location1.Y=2420.624mil|Location2.Y=2431.874mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (3338.583mil,1401.125mil) on Top Overlay And Track (3314.961mil,1409.449mil)(3314.961mil,1425.197mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=4335.004mil|Location2.X=4346.254mil|Location1.Y=2617.475mil|Location2.Y=2628.725mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=4335.004mil|Location2.X=4346.254mil|Location1.Y=2617.475mil|Location2.Y=2628.725mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (3338.583mil,1597.975mil) on Top Overlay And Track (3314.961mil,1606.299mil)(3314.961mil,1622.047mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=4492.484mil|Location2.X=4503.734mil|Location1.Y=3050.545mil|Location2.Y=3061.795mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=4492.484mil|Location2.X=4503.734mil|Location1.Y=3050.545mil|Location2.Y=3061.795mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (3496.063mil,2031.046mil) on Top Overlay And Track (3472.441mil,2039.37mil)(3472.441mil,2055.118mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=4649.965mil|Location2.X=4661.215mil|Location1.Y=2026.923mil|Location2.Y=2038.173mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=4649.965mil|Location2.X=4661.215mil|Location1.Y=2026.923mil|Location2.Y=2038.173mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (3653.543mil,1007.424mil) on Top Overlay And Track (3629.921mil,1015.748mil)(3629.921mil,1031.496mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=4649.965mil|Location2.X=4661.215mil|Location1.Y=2223.774mil|Location2.Y=2235.024mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=4649.965mil|Location2.X=4661.215mil|Location1.Y=2223.774mil|Location2.Y=2235.024mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (3653.543mil,1204.274mil) on Top Overlay And Track (3629.921mil,1212.598mil)(3629.921mil,1228.346mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=4649.965mil|Location2.X=4661.215mil|Location1.Y=2420.624mil|Location2.Y=2431.874mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=4649.965mil|Location2.X=4661.215mil|Location1.Y=2420.624mil|Location2.Y=2431.874mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (3653.543mil,1401.125mil) on Top Overlay And Track (3629.921mil,1409.449mil)(3629.921mil,1425.197mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=4649.965mil|Location2.X=4661.215mil|Location1.Y=3286.766mil|Location2.Y=3298.016mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=4649.965mil|Location2.X=4661.215mil|Location1.Y=3286.766mil|Location2.Y=3298.016mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (3653.543mil,2267.267mil) on Top Overlay And Track (3629.921mil,2275.59mil)(3629.921mil,2291.339mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=5004.295mil|Location2.X=5015.545mil|Location1.Y=3286.766mil|Location2.Y=3298.016mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=5004.295mil|Location2.X=5015.545mil|Location1.Y=3286.766mil|Location2.Y=3298.016mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (4007.874mil,2267.267mil) on Top Overlay And Track (3984.252mil,2275.59mil)(3984.252mil,2291.339mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=5083.035mil|Location2.X=5094.285mil|Location1.Y=2026.923mil|Location2.Y=2038.173mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=5083.035mil|Location2.X=5094.285mil|Location1.Y=2026.923mil|Location2.Y=2038.173mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (4086.614mil,1007.424mil) on Top Overlay And Track (4062.992mil,1015.748mil)(4062.992mil,1031.496mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=5083.036mil|Location2.X=5094.286mil|Location1.Y=2223.774mil|Location2.Y=2235.024mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=5083.036mil|Location2.X=5094.286mil|Location1.Y=2223.774mil|Location2.Y=2235.024mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (4086.614mil,1204.274mil) on Top Overlay And Track (4062.992mil,1212.598mil)(4062.992mil,1228.346mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=5083.035mil|Location2.X=5094.285mil|Location1.Y=2420.624mil|Location2.Y=2431.874mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=5083.035mil|Location2.X=5094.285mil|Location1.Y=2420.624mil|Location2.Y=2431.874mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (4086.614mil,1401.125mil) on Top Overlay And Track (4062.992mil,1409.449mil)(4062.992mil,1425.197mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=5279.886mil|Location2.X=5291.136mil|Location1.Y=3286.766mil|Location2.Y=3298.016mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=5279.886mil|Location2.X=5291.136mil|Location1.Y=3286.766mil|Location2.Y=3298.016mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (4283.465mil,2267.267mil) on Top Overlay And Track (4259.842mil,2275.59mil)(4259.842mil,2291.339mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=5476.736mil|Location2.X=5487.986mil|Location1.Y=2026.923mil|Location2.Y=2038.173mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=5476.736mil|Location2.X=5487.986mil|Location1.Y=2026.923mil|Location2.Y=2038.173mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (4480.315mil,1007.424mil) on Top Overlay And Track (4456.693mil,1015.748mil)(4456.693mil,1031.496mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=5476.736mil|Location2.X=5487.986mil|Location1.Y=2223.774mil|Location2.Y=2235.024mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=5476.736mil|Location2.X=5487.986mil|Location1.Y=2223.774mil|Location2.Y=2235.024mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (4480.315mil,1204.274mil) on Top Overlay And Track (4456.693mil,1212.598mil)(4456.693mil,1228.346mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=5476.736mil|Location2.X=5487.986mil|Location1.Y=2420.624mil|Location2.Y=2431.874mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=5476.736mil|Location2.X=5487.986mil|Location1.Y=2420.624mil|Location2.Y=2431.874mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (4480.315mil,1401.125mil) on Top Overlay And Track (4456.693mil,1409.449mil)(4456.693mil,1425.197mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=5555.476mil|Location2.X=5566.726mil|Location1.Y=3286.766mil|Location2.Y=3298.016mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=5555.476mil|Location2.X=5566.726mil|Location1.Y=3286.766mil|Location2.Y=3298.016mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (4559.055mil,2267.267mil) on Top Overlay And Track (4535.433mil,2275.59mil)(4535.433mil,2291.339mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=5702.958mil|Location2.X=5714.208mil|Location1.Y=2135.055mil|Location2.Y=2146.305mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=5702.958mil|Location2.X=5714.208mil|Location1.Y=2135.055mil|Location2.Y=2146.305mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (4663.386mil,1118.56mil) on Top Overlay And Track (4687.008mil,1094.488mil)(4687.008mil,1110.236mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=5791.697mil|Location2.X=5802.947mil|Location1.Y=3286.766mil|Location2.Y=3298.016mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=5791.697mil|Location2.X=5802.947mil|Location1.Y=3286.766mil|Location2.Y=3298.016mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (4795.275mil,2267.267mil) on Top Overlay And Track (4771.654mil,2275.59mil)(4771.654mil,2291.339mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=5929.336mil|Location2.X=5940.586mil|Location1.Y=2135.055mil|Location2.Y=2146.305mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=5929.336mil|Location2.X=5940.586mil|Location1.Y=2135.055mil|Location2.Y=2146.305mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (4889.764mil,1118.56mil) on Top Overlay And Track (4913.386mil,1094.488mil)(4913.386mil,1110.236mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6150.803mil|Location2.X=6162.053mil|Location1.Y=2484.61mil|Location2.Y=2495.86mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6150.803mil|Location2.X=6162.053mil|Location1.Y=2484.61mil|Location2.Y=2495.86mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (5134.308mil,1488.189mil) on Top Overlay And Track (5110.236mil,1464.567mil)(5125.984mil,1464.567mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6150.803mil|Location2.X=6162.053mil|Location1.Y=2770.043mil|Location2.Y=2781.293mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6150.803mil|Location2.X=6162.053mil|Location1.Y=2770.043mil|Location2.Y=2781.293mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (5134.308mil,1773.622mil) on Top Overlay And Track (5110.236mil,1750mil)(5125.984mil,1750mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6150.803mil|Location2.X=6162.053mil|Location1.Y=3045.634mil|Location2.Y=3056.884mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6150.803mil|Location2.X=6162.053mil|Location1.Y=3045.634mil|Location2.Y=3056.884mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (5134.308mil,2049.212mil) on Top Overlay And Track (5110.236mil,2025.591mil)(5125.984mil,2025.591mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6318.262mil|Location2.X=6329.512mil|Location1.Y=3252.171mil|Location2.Y=3263.421mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6318.262mil|Location2.X=6329.512mil|Location1.Y=3252.171mil|Location2.Y=3263.421mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (5298.762mil,2212.598mil) on Top Overlay And Track (5307.087mil,2236.22mil)(5322.835mil,2236.22mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6318.262mil|Location2.X=6329.512mil|Location1.Y=2080.911mil|Location2.Y=2092.161mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6318.262mil|Location2.X=6329.512mil|Location1.Y=2080.911mil|Location2.Y=2092.161mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (5298.763mil,1041.339mil) on Top Overlay And Track (5307.087mil,1064.961mil)(5322.835mil,1064.961mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_even" onmouseover="className = 'onmouseover_even'" onmouseout="className = 'onmouseout_even'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6318.262mil|Location2.X=6329.512mil|Location1.Y=2681.305mil|Location2.Y=2692.555mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6318.262mil|Location2.X=6329.512mil|Location1.Y=2681.305mil|Location2.Y=2692.555mil|Absolute=True">Silk To Silk Clearance Constraint: (4.244mil &lt; 10mil) Between Text "C" (5298.763mil,1641.732mil) on Top Overlay And Track (5307.087mil,1665.354mil)(5322.835mil,1665.354mil) on Top Overlay Silk Text to Silk Clearance [4.244mil]</acronym></a><br></td>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6162.879mil|Location2.X=6170.546mil|Location1.Y=1812.857mil|Location2.Y=1820.524mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=6162.879mil|Location2.X=6170.546mil|Location1.Y=1812.857mil|Location2.Y=1820.524mil|Absolute=True">Silk To Silk Clearance Constraint: (Collision &lt; 10mil) Between Text "R1" (5106.378mil,776.378mil) on Top Overlay And Track (5133.94mil,793.068mil)(5181.021mil,793.068mil) on Top Overlay Silk Text to Silk Clearance [0mil]</acronym></a><br></td>
+</tr>
+</table></a><hr color="#EEEEEE"><a href="#top" style="font-size: 0.9em">Back to top</a><br><br><a name="ID3QWLYRHBU0GWLMMSSZ4QUAIDK5PO4VABWJOGXNAME32SXEWDZSK"><table>
+<tr>
+<th style="text-align : left" colspan="1" class="rule">Net Antennae (Tolerance=0mil) (All)</th>
+</tr>
+<tr class="onmouseout_odd" onmouseover="className = 'onmouseover_odd'" onmouseout="className = 'onmouseout_odd'">
+<td class="column1"><a href="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=4451.224mil|Location2.X=4474.813mil|Location1.Y=1780.87mil|Location2.Y=1815.07mil|Absolute=True" class="callback"><acronym title="dxpprocess://PCB:Zoom?document=C:\Users\atrus\Dropbox\elec\pr\blueacro\led\ledbrick_plus_led\ledbrick_plus_led\ledbrick_plus_led.PcbDoc;viewname=PCBEditor;Action=AREA_DYNAMICZOOM|Location1.X=4451.224mil|Location2.X=4474.813mil|Location1.Y=1780.87mil|Location2.Y=1815.07mil|Absolute=True">Net Antennae: Track (3436.102mil,765.748mil)(3513.78mil,765.748mil) on Top Layer </acronym></a><br></td>
+</tr>
+</table></a><hr color="#EEEEEE"><a href="#top" style="font-size: 0.9em">Back to top</a><br><br></body>
+</html>
