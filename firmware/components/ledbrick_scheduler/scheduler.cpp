@@ -447,7 +447,6 @@ LEDScheduler::InterpolationResult LEDScheduler::interpolate_values_with_astro(ui
         return result;
     }
     
-    // Handle single point case
     if (resolved_points.size() == 1) {
         // Safety check - ensure vectors have correct size
         if (resolved_points[0].pwm_values.size() != num_channels_ || 
@@ -456,56 +455,33 @@ LEDScheduler::InterpolationResult LEDScheduler::interpolate_values_with_astro(ui
         }
         result.pwm_values = resolved_points[0].pwm_values;
         result.current_values = resolved_points[0].current_values;
-        // Clamp current values to max current
-        for (size_t i = 0; i < num_channels_; i++) {
-            if (result.current_values[i] > channel_configs_[i].max_current) {
-                result.current_values[i] = channel_configs_[i].max_current;
+        result.valid = true;
+    } else {
+        // Find interpolation points
+        const SchedulePoint* before = nullptr;
+        const SchedulePoint* after = nullptr;
+        
+        // Find the points before and after current time
+        for (size_t i = 0; i < resolved_points.size(); i++) {
+            if (resolved_points[i].time_minutes <= current_time) {
+                before = &resolved_points[i];
+            }
+            if (resolved_points[i].time_minutes >= current_time && !after) {
+                after = &resolved_points[i];
+                break;
             }
         }
-        result.valid = true;
-        return result;
-    }
-    
-    // Find interpolation points
-    const SchedulePoint* before = nullptr;
-    const SchedulePoint* after = nullptr;
-    
-    // Find the points before and after current time
-    for (size_t i = 0; i < resolved_points.size(); i++) {
-        if (resolved_points[i].time_minutes <= current_time) {
-            before = &resolved_points[i];
+        
+        // If current time is before first point, wrap to use last point as 'before'
+        if (!before) {
+            before = &resolved_points.back();
         }
-        if (resolved_points[i].time_minutes >= current_time && !after) {
-            after = &resolved_points[i];
-            break;
+        
+        // If current time is after last point, wrap to use first point as 'after'
+        if (!after) {
+            after = &resolved_points.front();
         }
-    }
-    
-    // If current time is before first point, wrap to use last point as 'before'
-    if (!before && resolved_points.size() >= 2) {
-        before = &resolved_points.back();
-    }
-    
-    // If current time is after last point, wrap to use first point as 'after'
-    if (!after && resolved_points.size() >= 2) {
-        after = &resolved_points.front();
-    }
-    
-    // Handle exact match
-    if (before && after && before->time_minutes == current_time) {
-        // Safety check - ensure vectors have correct size
-        if (before->pwm_values.size() != num_channels_ || 
-            before->current_values.size() != num_channels_) {
-            return result;  // Return zeros if data is invalid
-        }
-        result.pwm_values = before->pwm_values;
-        result.current_values = before->current_values;
-        result.valid = true;
-        return result;
-    }
-    
-    // Interpolate
-    if (before && after) {
+        
         // Safety check - ensure vectors have correct size
         if (before->pwm_values.size() != num_channels_ || 
             before->current_values.size() != num_channels_ ||
@@ -514,6 +490,8 @@ LEDScheduler::InterpolationResult LEDScheduler::interpolate_values_with_astro(ui
             return result;  // Return zeros if data is invalid
         }
         
+        // An exact match on a point gives elapsed = 0, so the same path handles it
+        // and still gets the current clamp and moon simulation below
         uint16_t time_span = after->time_minutes > before->time_minutes ? 
             after->time_minutes - before->time_minutes :
             (1440 - before->time_minutes) + after->time_minutes; // Handle wrap-around
@@ -527,12 +505,15 @@ LEDScheduler::InterpolationResult LEDScheduler::interpolate_values_with_astro(ui
         for (size_t i = 0; i < num_channels_; i++) {
             result.pwm_values[i] = before->pwm_values[i] + ratio * (after->pwm_values[i] - before->pwm_values[i]);
             result.current_values[i] = before->current_values[i] + ratio * (after->current_values[i] - before->current_values[i]);
-            // Clamp to max current
-            if (result.current_values[i] > channel_configs_[i].max_current) {
-                result.current_values[i] = channel_configs_[i].max_current;
-            }
         }
         result.valid = true;
+    }
+    
+    // Clamp to each channel's max current
+    for (size_t i = 0; i < num_channels_ && i < channel_configs_.size(); i++) {
+        if (result.current_values[i] > channel_configs_[i].max_current) {
+            result.current_values[i] = channel_configs_[i].max_current;
+        }
     }
     
     // Apply moon simulation if enabled

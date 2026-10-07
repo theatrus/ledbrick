@@ -269,6 +269,47 @@ void test_negative_time_shift() {
     results.add_suite_results(runner);
 }
 
+void test_sun_rise_set_accuracy() {
+    runner.start_suite("Sunrise/Sunset Accuracy Tests");
+
+    // San Francisco, compared with NOAA solar calculator times (local clock time)
+    struct Case { int year, month, day; double tz; int rise, set; const char* label; };
+    const Case cases[] = {
+        {2025, 6, 21, -7.0, 5 * 60 + 48, 20 * 60 + 35, "June solstice"},
+        {2025, 12, 21, -8.0, 7 * 60 + 21, 16 * 60 + 54, "December solstice"},
+        {2025, 3, 20, -7.0, 7 * 60 + 12, 19 * 60 + 21, "March equinox"},
+    };
+    for (const auto& c : cases) {
+        AstronomicalCalculator calc(37.7749, -122.4194, c.tz);
+        auto times = calc.get_sun_rise_set_times(AstronomicalCalculator::DateTime(c.year, c.month, c.day, 12, 0, 0));
+        runner.assert_true(times.rise_valid && std::abs(static_cast<int>(times.rise_minutes) - c.rise) <= 3,
+            string(c.label) + " sunrise within 3 min (expected " + to_string(c.rise) + ", actual " +
+            to_string(times.rise_minutes) + ")");
+        runner.assert_true(times.set_valid && std::abs(static_cast<int>(times.set_minutes) - c.set) <= 3,
+            string(c.label) + " sunset within 3 min (expected " + to_string(c.set) + ", actual " +
+            to_string(times.set_minutes) + ")");
+    }
+
+    results.add_suite_results(runner);
+}
+
+void test_projected_intensity_matches_shift() {
+    runner.start_suite("Projected Intensity Tests");
+
+    // Projection moves rise/set later by the shift, so the projected sky at t must be the real sky at t - shift
+    AstronomicalCalculator real(37.7749, -122.4194, -7.0);
+    AstronomicalCalculator projected(37.7749, -122.4194, -7.0);
+    projected.set_projection_settings(true, 3, 0);
+    for (int hour = 9; hour <= 21; hour += 4) {
+        AstronomicalCalculator::DateTime at(2025, 6, 21, hour, 0, 0);
+        AstronomicalCalculator::DateTime earlier(2025, 6, 21, hour - 3, 0, 0);
+        runner.assert_equals(real.get_sun_intensity(earlier), projected.get_projected_sun_intensity(at), 0.001f,
+            "Projected sun at " + to_string(hour) + ":00 equals real sun 3 h earlier");
+    }
+
+    results.add_suite_results(runner);
+}
+
 int main() {
     cout << "=== COMPREHENSIVE ASTRONOMICAL CALCULATOR TESTS ===" << endl;
     cout << "Testing date: January 8, 2025" << endl << endl;
@@ -282,6 +323,8 @@ int main() {
     test_sun_rise_set();
     test_singapore_pacific_offset();
     test_negative_time_shift();
+    test_sun_rise_set_accuracy();
+    test_projected_intensity_matches_shift();
     
     results.print_final_summary("Astronomical Calculator");
     

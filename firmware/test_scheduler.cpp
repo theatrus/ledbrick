@@ -919,6 +919,43 @@ void test_json_import_validation(TestRunner& runner) {
     runner.assert_equals(1.25f, unchanged.get_channel_max_current(0), 0.001f, "Channel config unchanged after bad imports");
 }
 
+void test_exact_point_time(TestRunner& runner) {
+    runner.start_suite("Exact Point Time Tests");
+
+    // On a point's exact minute the result must still get the current clamp and moonlight
+    LEDScheduler scheduler(2);
+    scheduler.set_schedule_point(600, {0.0f, 0.0f}, {2.0f, 2.0f});
+    scheduler.set_schedule_point(700, {0.0f, 0.0f}, {2.0f, 2.0f});
+    scheduler.set_channel_max_current(0, 0.5f);
+
+    LEDScheduler::MoonSimulation moon;
+    moon.enabled = true;
+    moon.phase_scaling_pwm = false;
+    moon.phase_scaling_current = false;
+    moon.base_intensity = {5.0f, 5.0f};
+    moon.base_current = {0.1f, 0.1f};
+    scheduler.set_moon_simulation(moon);
+
+    LEDScheduler::AstronomicalTimes astro;
+    astro.moonrise_minutes = 1;
+    astro.moonset_minutes = 1438;
+    astro.moon_phase = 0.5f;
+    astro.valid = true;
+    scheduler.set_astronomical_times(astro);
+
+    auto before = scheduler.get_values_at_time_with_astro(599, astro);
+    auto exact = scheduler.get_values_at_time_with_astro(600, astro);
+    auto after = scheduler.get_values_at_time_with_astro(601, astro);
+    runner.assert_true(before.pwm_values[0] > 0.0f, "Moonlight on before the point");
+    runner.assert_equals(before.pwm_values[0], exact.pwm_values[0], 0.001f, "Moonlight unchanged on the point's minute");
+    runner.assert_equals(after.pwm_values[0], exact.pwm_values[0], 0.001f, "Moonlight unchanged after the point");
+
+    // Without moonlight, the exact minute is still limited to the channel maximum
+    scheduler.enable_moon_simulation(false);
+    auto clamped = scheduler.get_values_at_time_with_astro(600, astro);
+    runner.assert_equals(0.5f, clamped.current_values[0], 0.001f, "Current clamped on the point's minute");
+}
+
 void test_json_export_size(TestRunner& runner) {
     runner.start_suite("JSON Export Size Tests");
 
@@ -967,6 +1004,9 @@ int main() {
     results.add_suite_results(runner);
 
     test_json_export_size(runner);
+    results.add_suite_results(runner);
+
+    test_exact_point_time(runner);
     results.add_suite_results(runner);
     
     test_edge_cases(runner);
