@@ -28,6 +28,15 @@ light:
     name: "Ch${channel_number} PWM"
     gamma_correct: 1
     restore_mode: ALWAYS_OFF
+    on_turn_on:
+      # Keep the channel dark for the whole thermal emergency, whoever turns it on
+      - if:
+          condition:
+            lambda: 'return id(main_scheduler)->is_thermal_emergency();'
+          then:
+            - light.turn_off:
+                id: lpwm${channel_number}
+                transition_length: 0s
 
 number:
   # Current control slider (0-2A)
@@ -48,6 +57,10 @@ number:
             float max_current = id(max_current_${channel_number}).state;
             float requested_current = x;
             float limited_current = min(requested_current, max_current);
+            // No current to the LEDs during a thermal emergency
+            if (id(main_scheduler)->is_thermal_emergency()) {
+              limited_current = 0.0f;
+            }
             
             // Update the output (0-2A maps to 0-100% PWM)
             float pwm_value = limited_current / 2.0;

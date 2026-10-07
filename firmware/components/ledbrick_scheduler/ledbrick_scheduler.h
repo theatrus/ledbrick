@@ -44,7 +44,6 @@ class LEDBrickScheduler : public PollingComponent {
 
   // Configuration
   void set_num_channels(uint8_t channels) { num_channels_ = channels; }
-  void set_update_interval(uint32_t interval_ms) { update_interval_ = interval_ms; }
   void set_time_source(time::RealTimeClock *time_source) { time_source_ = time_source; }
   void set_timezone(const std::string &timezone) { 
     timezone_ = timezone; 
@@ -93,10 +92,14 @@ class LEDBrickScheduler : public PollingComponent {
   void save_preset(const std::string &preset_name);
   
   // Persistent storage (ESPHome-specific)
-  void save_schedule_to_flash();
+  // Returns false when the schedule is too large to store; the previous copy is kept
+  bool save_schedule_to_flash();
   void load_schedule_from_flash();
-  void export_schedule_json(std::string &json_output) const;
-  bool import_schedule_json(const std::string &json_input);
+  // for_storage writes compact JSON without volatile fields such as the current time
+  void export_schedule_json(std::string &json_output, bool for_storage = false) const;
+  // Nothing changes unless the whole document is valid. from_flash skips invalid
+  // settings fields (with a warning) instead of rejecting the saved schedule.
+  bool import_schedule_json(const std::string &json_input, std::string *error = nullptr, bool from_flash = false);
   
   // Control
   void set_enabled(bool enabled);
@@ -122,7 +125,7 @@ class LEDBrickScheduler : public PollingComponent {
   LEDScheduler::MoonSimulation get_moon_simulation() const { return scheduler_.get_moon_simulation(); }
   
   // Channel configuration
-  void set_channel_config(uint8_t channel, const LEDScheduler::ChannelConfig& config) { scheduler_.set_channel_config(channel, config); }
+  void set_channel_config(uint8_t channel, const LEDScheduler::ChannelConfig& config);
   LEDScheduler::ChannelConfig get_channel_config(uint8_t channel) const { return scheduler_.get_channel_config(channel); }
   void set_channel_color(uint8_t channel, const std::string& rgb_hex);
   void set_channel_max_current(uint8_t channel, float max_current);
@@ -142,18 +145,19 @@ class LEDBrickScheduler : public PollingComponent {
   void enable_temperature_control(bool enabled);
   const ledbrick::TemperatureControlStatus& get_temperature_status() const { return temp_control_.get_status(); }
   std::string get_temperature_config_json() const { return temp_control_.export_config_json(); }
-  bool set_temperature_config_json(const std::string& json);
+  bool set_temperature_config_json(const std::string& json, std::string *error = nullptr);
   std::vector<ledbrick::TemperatureControl::FanCurvePoint> get_fan_curve() const { return temp_control_.get_fan_curve(); }
   const std::vector<TempSensorMapping>& get_temperature_sensors() const { return temp_sensors_; }
   bool is_temperature_control_initialized() const { return temp_control_initialized_; }
   
   // Current state
-  uint16_t get_current_time_minutes() const;
+  bool has_valid_time() const;
+  uint16_t get_current_time_minutes() const;  // 0 when the time is not valid
   InterpolationResult get_current_values() const;
   InterpolationResult get_actual_channel_values() const;
   
-  // Manual channel control (only works when scheduler is disabled)
-  void set_channel_manual_control(uint8_t channel, float pwm, float current);
+  // Manual channel control (only works when scheduler is disabled and there is no thermal emergency)
+  bool set_channel_manual_control(uint8_t channel, float pwm, float current);
   
   // Update timezone offset from time source
   void update_timezone_from_time_source();
@@ -204,7 +208,6 @@ class LEDBrickScheduler : public PollingComponent {
 
  protected:
   uint8_t num_channels_{8};
-  uint32_t update_interval_{1000}; // 1 second for smooth transitions
   bool enabled_{true};
   // thermal_emergency_ removed - now tracked by temp_hardware_.get_hardware_state().thermal_emergency
   bool force_next_update_{false};   // Force update after emergency recovery
@@ -274,6 +277,8 @@ class LEDBrickScheduler : public PollingComponent {
   // Boot state management to prevent flash save race conditions
   bool boot_complete_{false};
   bool save_pending_{false};
+  bool flash_load_failed_{false};  // A saved schedule exists but could not be loaded
+  uint32_t last_time_warning_ms_{0};
   
   // Internal methods
   void apply_values(const InterpolationResult &values);
@@ -289,6 +294,8 @@ class LEDBrickScheduler : public PollingComponent {
   void create_sunrise_sunset_preset_with_astro_data() const;
   
   // Temperature control methods
+  void register_temperature_sensor_(const std::string &name, sensor::Sensor *sensor);
+  void on_temperature_reading_(const std::string &name, float temp);
   void update_temperature_sensors();
   void update_fan_speed();
   void publish_temp_sensor_values();

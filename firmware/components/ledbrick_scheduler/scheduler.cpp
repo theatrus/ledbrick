@@ -966,7 +966,7 @@ std::string LEDScheduler::export_json() const {
         cJSON_AddNumberToObject(point_obj, "time_minutes", actual_time);
         
         // Add time_formatted
-        char time_str[6];
+        char time_str[8];
         snprintf(time_str, sizeof(time_str), "%02d:%02d", 
                  actual_time / 60, actual_time % 60);
         cJSON_AddStringToObject(point_obj, "time_formatted", time_str);
@@ -1094,7 +1094,7 @@ std::string LEDScheduler::export_json_minified() const {
         cJSON_AddNumberToObject(point_obj, "time_minutes", actual_time);
         
         // Add time_formatted
-        char time_str[6];
+        char time_str[8];
         snprintf(time_str, sizeof(time_str), "%02d:%02d", 
                  actual_time / 60, actual_time % 60);
         cJSON_AddStringToObject(point_obj, "time_formatted", time_str);

@@ -41,11 +41,6 @@ void LEDBrickScheduler::setup() {
   temp_hardware_.set_fan_enable_callback([this](bool enabled) { this->on_fan_enable_change(enabled); });
   temp_hardware_.set_emergency_callback([this](bool emergency) { this->on_emergency_change(emergency); });
   
-  // Add temperature sensors to the control module
-  for (const auto &mapping : temp_sensors_) {
-    temp_control_.add_temperature_sensor(mapping.name);
-  }
-  
   // Enable temperature control by default
   temp_control_.enable(true);
   temp_control_initialized_ = true;
@@ -66,9 +61,15 @@ void LEDBrickScheduler::setup() {
   
   // Load default astronomical schedule if no points exist
   if (scheduler_.is_schedule_empty()) {
-    ESP_LOGI(TAG, "No saved schedule found, loading default preset");
     load_preset("default");
-    save_schedule_to_flash();  // Save the default schedule
+    if (flash_load_failed_) {
+      // Run the default preset, but leave the saved copy alone rather than overwrite it at boot
+      ESP_LOGE(TAG, "Saved schedule could not be loaded; running the default preset without saving it");
+      save_pending_ = false;
+    } else {
+      ESP_LOGI(TAG, "No saved schedule found, loaded default preset");
+      save_schedule_to_flash();  // Save the default schedule
+    }
   }
   
   ESP_LOGI(TAG, "Schedule loaded - %zu points, %u channels, enabled: %s", 
@@ -105,6 +106,13 @@ void LEDBrickScheduler::update() {
     ESP_LOGV(TAG, "Scheduler disabled, skipping schedule update");
     // When scheduler is disabled but not in emergency, we don't change outputs
     // This allows manual control to work
+  } else if (!has_valid_time()) {
+    // Hold the outputs until the clock is set; the 00:00 values would be wrong
+    uint32_t now = millis();
+    if (last_time_warning_ms_ == 0 || now - last_time_warning_ms_ > 60000) {
+      ESP_LOGW(TAG, "No valid time yet, holding channel outputs");
+      last_time_warning_ms_ = now == 0 ? 1 : now;
+    }
   } else {
     // Normal scheduler operation
     // Update timezone offset from time source if available
@@ -115,12 +123,6 @@ void LEDBrickScheduler::update() {
     
     // Get current values from standalone scheduler and apply them
     uint16_t current_time = get_current_time_minutes();
-    
-    // Check if we have valid time before proceeding
-    if (current_time == 0 && !time_source_) {
-      ESP_LOGW(TAG, "No valid time source available, skipping schedule update");
-      return;
-    }
     
     // Use astronomical interpolation if we have dynamic points
     auto values = scheduler_.get_values_at_time_with_astro(current_time, scheduler_.get_astronomical_times());
@@ -221,7 +223,7 @@ void LEDBrickScheduler::update() {
 void LEDBrickScheduler::dump_config() {
   ESP_LOGCONFIG(TAG, "LEDBrick Scheduler:");
   ESP_LOGCONFIG(TAG, "  Channels: %u", num_channels_);
-  ESP_LOGCONFIG(TAG, "  Update Interval: %" PRIu32 " ms", update_interval_);
+  ESP_LOGCONFIG(TAG, "  Update Interval: %" PRIu32 " ms", this->get_update_interval());
   ESP_LOGCONFIG(TAG, "  Enabled: %s", enabled_ ? "YES" : "NO");
   ESP_LOGCONFIG(TAG, "  PWM Scale: %.2f (%.0f%%)", pwm_scale_, pwm_scale_ * 100.0f);
   ESP_LOGCONFIG(TAG, "  Timezone: %s (UTC%+.1fh)", timezone_.c_str(), timezone_offset_hours_);
@@ -325,6 +327,10 @@ void LEDBrickScheduler::load_preset(const std::string &preset_name) {
 void LEDBrickScheduler::save_preset(const std::string &preset_name) {
   scheduler_.save_preset(preset_name);
   ESP_LOGI(TAG, "Saved current schedule as preset '%s'", preset_name.c_str());
+}
+
+bool LEDBrickScheduler::has_valid_time() const {
+  return time_source_ != nullptr && time_source_->now().is_valid();
 }
 
 uint16_t LEDBrickScheduler::get_current_time_minutes() const {
@@ -436,6 +442,10 @@ void LEDBrickScheduler::apply_values(const InterpolationResult &values) {
            values.pwm_values.empty() ? 0.0f : values.pwm_values[0]);
   
   for (uint8_t channel = 0; channel < num_channels_; channel++) {
+    if (channel >= values.pwm_values.size() || channel >= values.current_values.size()) {
+      ESP_LOGW(TAG, "Schedule has %zu channels, expected %u", values.pwm_values.size(), num_channels_);
+      break;
+    }
 
     // Apply current control with limiting
     // We need to do this before applying PWM to ensure LED controller enters the right state
@@ -537,35 +547,36 @@ void LEDBrickScheduler::add_max_current_control(uint8_t channel, number::Number 
 
 
 
-void LEDBrickScheduler::save_schedule_to_flash() {
+bool LEDBrickScheduler::save_schedule_to_flash() {
   // Prevent saving during boot to avoid race conditions
   if (!boot_complete_) {
     save_pending_ = true;
     ESP_LOGD(TAG, "Boot in progress - deferring schedule save");
-    return;
+    return true;
   }
   
   // Export the complete schedule as JSON (includes moon settings, channel configs, etc.)
   std::string json_output;
-  export_schedule_json(json_output);
+  export_schedule_json(json_output, true);
   
   // Allocate storage on heap to avoid stack overflow
   std::unique_ptr<ScheduleStorage> storage(new (std::nothrow) ScheduleStorage);
   if (!storage) {
     ESP_LOGE(TAG, "Failed to allocate memory for schedule storage");
-    return;
+    return false;
+  }
+  
+  // A truncated document cannot be parsed at the next boot, so keep the previous copy instead
+  if (json_output.length() >= sizeof(storage->json_data)) {
+    ESP_LOGE(TAG, "Schedule JSON too large to save (%zu bytes, limit %zu); keeping previous copy",
+             json_output.length(), sizeof(storage->json_data) - 1);
+    return false;
   }
   
   memset(storage.get(), 0, sizeof(ScheduleStorage));
   
   storage->version = 2;  // Version 2 uses JSON format
   storage->json_length = static_cast<uint32_t>(json_output.length());
-  
-  // Ensure it fits in our storage
-  if (storage->json_length >= sizeof(storage->json_data) - 1) {
-    ESP_LOGW(TAG, "Schedule JSON too large (%" PRIu32 " bytes), truncating", storage->json_length);
-    storage->json_length = sizeof(storage->json_data) - 1;
-  }
   
   // Copy JSON data
   std::memcpy(storage->json_data, json_output.c_str(), storage->json_length);
@@ -577,7 +588,7 @@ void LEDBrickScheduler::save_schedule_to_flash() {
   } else {
     ESP_LOGW(TAG, "Failed to save schedule to flash");
   }
-  // unique_ptr automatically deletes
+  return success;
 }
 
 void LEDBrickScheduler::load_schedule_from_flash() {
@@ -603,29 +614,38 @@ void LEDBrickScheduler::load_schedule_from_flash() {
       
       ESP_LOGD(TAG, "Loading schedule from flash (JSON format, %" PRIu32 " bytes)", storage->json_length);
       
-      if (import_schedule_json(json_input)) {
+      std::string error;
+      if (import_schedule_json(json_input, &error, true)) {
         ESP_LOGI(TAG, "Successfully loaded schedule from flash (JSON format)");
         ESP_LOGI(TAG, "Loaded: %zu points, Moon: %s, Location: %.4f,%.4f", 
                  scheduler_.get_schedule_size(),
                  scheduler_.get_moon_simulation().enabled ? "ON" : "OFF",
                  latitude_, longitude_);
       } else {
-        ESP_LOGW(TAG, "Failed to import schedule JSON from flash");
+        ESP_LOGW(TAG, "Failed to import schedule JSON from flash: %s", error.c_str());
+        flash_load_failed_ = true;
       }
+    } else {
+      ESP_LOGW(TAG, "Saved schedule has invalid length %" PRIu32, storage->json_length);
+      flash_load_failed_ = true;
     }
   } else if (storage->version == 0 || storage->version == 1) {
     // Legacy format - try to migrate
     ESP_LOGW(TAG, "Found legacy schedule format in flash, migration not supported");
   } else {
     ESP_LOGW(TAG, "Unknown schedule storage version %" PRIu32, storage->version);
+    flash_load_failed_ = true;
   }
   // unique_ptr automatically deletes
 }
 
-void LEDBrickScheduler::export_schedule_json(std::string &json_output) const {
-  // If astronomical projection is enabled, we need to update the scheduler's
-  // astronomical times with projected values before exporting
-  if (astronomical_projection_) {
+void LEDBrickScheduler::export_schedule_json(std::string &json_output, bool for_storage) const {
+  if (for_storage) {
+    // Compact form for flash; dynamic point times are recomputed after loading
+    json_output = scheduler_.export_json_minified();
+  } else if (astronomical_projection_) {
+    // If astronomical projection is enabled, we need to update the scheduler's
+    // astronomical times with projected values before exporting
     // Get current time for calculations
     auto dt = esphome_time_to_datetime();
     
@@ -689,18 +709,22 @@ void LEDBrickScheduler::export_schedule_json(std::string &json_output) const {
   
   // Parse and modify the JSON to add ESPHome-specific fields
   // For simplicity, we'll create a new JSON string
-  uint16_t current_time = get_current_time_minutes();
-  auto current_values = get_current_values();
-  
   size_t closing_brace = json_output.rfind('}');
   if (closing_brace != std::string::npos) {
     // Add temperature control configuration
     std::string temp_config_json = temp_control_.export_config_json();
     
+    // The current time changes every minute; leaving it out of the stored copy
+    // avoids rewriting flash when nothing else changed
+    std::string current_time_field;
+    if (!for_storage) {
+      current_time_field = ",\"current_time_minutes\":" + std::to_string(get_current_time_minutes());
+    }
+    
     json_output.insert(closing_brace, 
       ",\"timezone\":\"" + timezone_ + 
       "\",\"timezone_offset_hours\":" + std::to_string(timezone_offset_hours_) +
-      ",\"current_time_minutes\":" + std::to_string(current_time) +
+      current_time_field +
       ",\"enabled\":" + std::string(enabled_ ? "true" : "false") +
       ",\"latitude\":" + std::to_string(latitude_) +
       ",\"longitude\":" + std::to_string(longitude_) +
@@ -711,147 +735,143 @@ void LEDBrickScheduler::export_schedule_json(std::string &json_output) const {
   }
 }
 
-bool LEDBrickScheduler::import_schedule_json(const std::string &json_input) {
+bool LEDBrickScheduler::import_schedule_json(const std::string &json_input, std::string *error, bool from_flash) {
   ESP_LOGI(TAG, "Importing schedule from JSON (%zu chars)", json_input.length());
   
-  // Extract enabled state from the root object. A plain string search would match
-  // moon_simulation.enabled, which the scheduler JSON writes before the root fields.
+  auto fail = [error](const std::string &message) {
+    ESP_LOGW(TAG, "Schedule import rejected: %s", message.c_str());
+    if (error) *error = message;
+    return false;
+  };
+  
   cJSON *root = cJSON_Parse(json_input.c_str());
-  if (root != nullptr) {
-    cJSON *enabled_item = cJSON_GetObjectItemCaseSensitive(root, "enabled");
-    if (cJSON_IsBool(enabled_item)) {
-      enabled_ = cJSON_IsTrue(enabled_item);
-    }
+  if (root == nullptr || !cJSON_IsObject(root)) {
     cJSON_Delete(root);
+    return fail("invalid JSON");
   }
   
-  // Extract location if present
-  size_t lat_pos = json_input.find("\"latitude\":");
-  if (lat_pos != std::string::npos) {
-    size_t lat_start = json_input.find_first_of("-0123456789.", lat_pos + 11);
-    size_t lat_end = json_input.find_first_not_of("-0123456789.", lat_start);
-    if (lat_start != std::string::npos && lat_end != std::string::npos) {
-      double lat = std::stod(json_input.substr(lat_start, lat_end - lat_start));
-      if (lat >= -90.0 && lat <= 90.0) {
-        latitude_ = lat;
+  // The firmware drives a fixed number of outputs; a schedule for another count
+  // would leave channels without values
+  cJSON *channels_item = cJSON_GetObjectItemCaseSensitive(root, "num_channels");
+  if (cJSON_IsNumber(channels_item) && channels_item->valuedouble != num_channels_) {
+    cJSON_Delete(root);
+    return fail("num_channels must be " + std::to_string(num_channels_));
+  }
+  
+  // Read the settings fields. A bad field rejects an API request; in a schedule
+  // loaded from flash it is skipped so the rest of the saved schedule still loads.
+  std::string field_error;
+  auto bad_field = [&](const char *key) {
+    if (field_error.empty()) field_error = std::string(key) + " is missing a valid value";
+  };
+  auto read_bool = [&](const char *key, bool &out, bool &present) {
+    cJSON *item = cJSON_GetObjectItemCaseSensitive(root, key);
+    if (item == nullptr) return;
+    if (!cJSON_IsBool(item)) { bad_field(key); return; }
+    out = cJSON_IsTrue(item);
+    present = true;
+  };
+  auto read_number = [&](const char *key, double low, double high, double &out, bool &present) {
+    cJSON *item = cJSON_GetObjectItemCaseSensitive(root, key);
+    if (item == nullptr) return;
+    if (!cJSON_IsNumber(item) || !(item->valuedouble >= low && item->valuedouble <= high)) { bad_field(key); return; }
+    out = item->valuedouble;
+    present = true;
+  };
+  
+  bool new_enabled = enabled_, has_enabled = false;
+  bool new_projection = astronomical_projection_, has_projection = false;
+  double new_lat = latitude_, new_lon = longitude_, new_tz = timezone_offset_hours_;
+  double new_shift_h = time_shift_hours_, new_shift_m = time_shift_minutes_;
+  bool has_lat = false, has_lon = false, has_tz = false, has_shift_h = false, has_shift_m = false;
+  read_bool("enabled", new_enabled, has_enabled);
+  read_bool("astronomical_projection", new_projection, has_projection);
+  read_number("latitude", -90.0, 90.0, new_lat, has_lat);
+  read_number("longitude", -180.0, 180.0, new_lon, has_lon);
+  read_number("timezone_offset_hours", -14.0, 14.0, new_tz, has_tz);
+  read_number("time_shift_hours", -12.0, 12.0, new_shift_h, has_shift_h);
+  read_number("time_shift_minutes", -59.0, 59.0, new_shift_m, has_shift_m);
+  
+  // Check the temperature control settings on a scratch controller first
+  std::string temp_config_json;
+  cJSON *temp_item = cJSON_GetObjectItemCaseSensitive(root, "temperature_control");
+  if (temp_item != nullptr) {
+    char *printed = cJSON_IsObject(temp_item) ? cJSON_PrintUnformatted(temp_item) : nullptr;
+    if (printed != nullptr) {
+      temp_config_json = printed;
+      cJSON_free(printed);
+      ledbrick::TemperatureControl scratch;
+      scratch.set_config(temp_control_.get_config());
+      std::string temp_error;
+      if (!scratch.import_config_json(temp_config_json, &temp_error)) {
+        if (field_error.empty()) field_error = "temperature_control: " + temp_error;
+        temp_config_json.clear();
       }
+    } else if (field_error.empty()) {
+      field_error = "temperature_control must be an object";
+    }
+  }
+  cJSON_Delete(root);
+  
+  if (!field_error.empty()) {
+    if (!from_flash) {
+      return fail(field_error);
+    }
+    ESP_LOGW(TAG, "Saved schedule: %s; keeping the current value", field_error.c_str());
+  }
+  
+  // The standalone import replaces the schedule only when it succeeds
+  if (!scheduler_.import_json(json_input)) {
+    return fail("schedule_points missing or invalid");
+  }
+  
+  // Apply the settings now that the whole document is accepted
+  if (has_enabled) enabled_ = new_enabled;
+  if (has_projection) astronomical_projection_ = new_projection;
+  if (has_lat) latitude_ = new_lat;
+  if (has_lon) longitude_ = new_lon;
+  if (has_tz) timezone_offset_hours_ = new_tz;
+  if (has_shift_h) time_shift_hours_ = static_cast<int>(new_shift_h);
+  if (has_shift_m) time_shift_minutes_ = static_cast<int>(new_shift_m);
+  if (!temp_config_json.empty()) {
+    temp_control_.import_config_json(temp_config_json);
+    temp_config_ = temp_control_.get_config();
+    ESP_LOGI(TAG, "Imported temperature control configuration");
+  }
+  
+  // Update astronomical calculator with loaded settings (without saving during import)
+  astro_calc_.set_location(latitude_, longitude_);
+  astro_calc_.set_timezone_offset(timezone_offset_hours_);
+  astro_calc_.set_projection_settings(astronomical_projection_, time_shift_hours_, time_shift_minutes_);
+  
+  // Don't save after import - callers decide; the flash load must not write back
+  ESP_LOGI(TAG, "Successfully imported %zu schedule points, enabled=%s", 
+           scheduler_.get_schedule_size(), enabled_ ? "true" : "false");
+  ESP_LOGI(TAG, "Location: %.4f, %.4f; Time shift: %s %+d:%02d",
+           latitude_, longitude_, 
+           astronomical_projection_ ? "enabled" : "disabled",
+           time_shift_hours_, abs(time_shift_minutes_));
+  
+  // Update max current controls from imported channel configs, within each number's range
+  for (uint8_t ch = 0; ch < num_channels_; ch++) {
+    auto max_current_it = max_current_controls_.find(ch);
+    if (max_current_it != max_current_controls_.end() && max_current_it->second) {
+      float max_current = std::min(scheduler_.get_channel_max_current(ch),
+                                   max_current_it->second->traits.get_max_value());
+      scheduler_.set_channel_max_current(ch, max_current);
+      max_current_it->second->publish_state(max_current);
+      ESP_LOGD(TAG, "Updated channel %u max current to %.2fA", ch, max_current);
     }
   }
   
-  size_t lon_pos = json_input.find("\"longitude\":");
-  if (lon_pos != std::string::npos) {
-    size_t lon_start = json_input.find_first_of("-0123456789.", lon_pos + 12);
-    size_t lon_end = json_input.find_first_not_of("-0123456789.", lon_start);
-    if (lon_start != std::string::npos && lon_end != std::string::npos) {
-      double lon = std::stod(json_input.substr(lon_start, lon_end - lon_start));
-      if (lon >= -180.0 && lon <= 180.0) {
-        longitude_ = lon;
-      }
-    }
-  }
+  // Force update to refresh text sensors and color sensors
+  update();
+  update_color_sensors();
   
-  // Extract time shift settings
-  size_t proj_pos = json_input.find("\"astronomical_projection\":");
-  if (proj_pos != std::string::npos) {
-    size_t value_start = json_input.find_first_not_of(" \t", proj_pos + 26);
-    if (value_start != std::string::npos) {
-      astronomical_projection_ = json_input.substr(value_start, 4) == "true";
-    }
-  }
+  ESP_LOGI(TAG, "Channel configurations updated: Ch0 color=%s", 
+           scheduler_.get_channel_color(0).c_str());
   
-  size_t hours_pos = json_input.find("\"time_shift_hours\":");
-  if (hours_pos != std::string::npos) {
-    size_t hours_start = json_input.find_first_of("-0123456789", hours_pos + 19);
-    size_t hours_end = json_input.find_first_not_of("-0123456789", hours_start);
-    if (hours_start != std::string::npos && hours_end != std::string::npos) {
-      time_shift_hours_ = std::stoi(json_input.substr(hours_start, hours_end - hours_start));
-    }
-  }
-  
-  size_t mins_pos = json_input.find("\"time_shift_minutes\":");
-  if (mins_pos != std::string::npos) {
-    size_t mins_start = json_input.find_first_of("-0123456789", mins_pos + 21);
-    size_t mins_end = json_input.find_first_not_of("-0123456789", mins_start);
-    if (mins_start != std::string::npos && mins_end != std::string::npos) {
-      time_shift_minutes_ = std::stoi(json_input.substr(mins_start, mins_end - mins_start));
-    }
-  }
-  
-  // Extract timezone offset if present
-  size_t tz_offset_pos = json_input.find("\"timezone_offset_hours\":");
-  if (tz_offset_pos != std::string::npos) {
-    size_t offset_start = json_input.find_first_of("-0123456789.", tz_offset_pos + 24);
-    size_t offset_end = json_input.find_first_not_of("-0123456789.", offset_start);
-    if (offset_start != std::string::npos && offset_end != std::string::npos) {
-      timezone_offset_hours_ = std::stod(json_input.substr(offset_start, offset_end - offset_start));
-    }
-  }
-  
-  // Extract temperature control configuration if present
-  size_t temp_config_pos = json_input.find("\"temperature_control\":");
-  if (temp_config_pos != std::string::npos) {
-    // Find the opening brace for the temperature_control object
-    size_t temp_start = json_input.find('{', temp_config_pos + 22);
-    if (temp_start != std::string::npos) {
-      // Find the matching closing brace
-      int brace_depth = 1;
-      size_t pos = temp_start + 1;
-      while (pos < json_input.length() && brace_depth > 0) {
-        if (json_input[pos] == '{') {
-          brace_depth++;
-        } else if (json_input[pos] == '}') {
-          brace_depth--;
-        }
-        pos++;
-      }
-      
-      if (brace_depth == 0) {
-        std::string temp_config_json = json_input.substr(temp_start, pos - temp_start);
-        temp_control_.import_config_json(temp_config_json);
-        temp_config_ = temp_control_.get_config();
-        ESP_LOGI(TAG, "Imported temperature control configuration");
-      }
-    }
-  }
-  
-  // Use standalone scheduler's JSON import
-  bool success = scheduler_.import_json(json_input);
-  
-  if (success) {
-    // Update astronomical calculator with loaded settings (without saving during import)
-    astro_calc_.set_location(latitude_, longitude_);
-    astro_calc_.set_timezone_offset(timezone_offset_hours_);
-    astro_calc_.set_projection_settings(astronomical_projection_, time_shift_hours_, time_shift_minutes_);
-    
-    // Don't save after import - we just loaded from flash, saving is redundant and causes race conditions
-    ESP_LOGI(TAG, "Successfully imported %zu schedule points, enabled=%s", 
-             scheduler_.get_schedule_size(), enabled_ ? "true" : "false");
-    ESP_LOGI(TAG, "Location: %.4f, %.4f; Time shift: %s %+d:%02d",
-             latitude_, longitude_, 
-             astronomical_projection_ ? "enabled" : "disabled",
-             time_shift_hours_, abs(time_shift_minutes_));
-    
-    // Update max current controls from imported channel configs
-    for (uint8_t ch = 0; ch < num_channels_; ch++) {
-      auto config = scheduler_.get_channel_config(ch);
-      auto max_current_it = max_current_controls_.find(ch);
-      if (max_current_it != max_current_controls_.end() && max_current_it->second) {
-        max_current_it->second->publish_state(config.max_current);
-        ESP_LOGD(TAG, "Updated channel %u max current to %.2fA", ch, config.max_current);
-      }
-    }
-    
-    // Force update to refresh text sensors and color sensors
-    update();
-    update_color_sensors();
-    
-    ESP_LOGI(TAG, "Channel configurations updated: Ch0 color=%s", 
-             scheduler_.get_channel_color(0).c_str());
-  } else {
-    ESP_LOGW(TAG, "Failed to import JSON schedule");
-  }
-  
-  return success;
+  return true;
 }
 
 
@@ -1040,6 +1060,20 @@ void LEDBrickScheduler::set_time_shift(int hours, int minutes) {
   // Save to persistent storage (scheduler JSON)
   save_schedule_to_flash();
   ESP_LOGI(TAG, "Time shift updated to %+d:%02d and saved", hours, abs(minutes));
+}
+
+void LEDBrickScheduler::set_channel_config(uint8_t channel, const LEDScheduler::ChannelConfig& config) {
+  // The standalone scheduler clamps max_current to the hardware limit
+  scheduler_.set_channel_config(channel, config);
+  
+  // Keep the max-current number in step, within its own range
+  auto max_current_it = max_current_controls_.find(channel);
+  if (max_current_it != max_current_controls_.end() && max_current_it->second) {
+    float max_current = std::min(scheduler_.get_channel_max_current(channel),
+                                 max_current_it->second->traits.get_max_value());
+    scheduler_.set_channel_max_current(channel, max_current);
+    max_current_it->second->publish_state(max_current);
+  }
 }
 
 void LEDBrickScheduler::set_channel_color(uint8_t channel, const std::string& rgb_hex) {
@@ -1363,16 +1397,22 @@ LEDBrickScheduler::SchedulePointInfo LEDBrickScheduler::get_schedule_point_info(
   return info;
 }
 
-void LEDBrickScheduler::set_channel_manual_control(uint8_t channel, float pwm, float current) {
+bool LEDBrickScheduler::set_channel_manual_control(uint8_t channel, float pwm, float current) {
   // Only allow manual control when scheduler is disabled
   if (enabled_) {
     ESP_LOGW(TAG, "Manual control rejected - scheduler is enabled");
-    return;
+    return false;
+  }
+  
+  // Outputs stay off for the whole thermal emergency
+  if (is_thermal_emergency()) {
+    ESP_LOGW(TAG, "Manual control rejected - thermal emergency active");
+    return false;
   }
   
   if (channel >= num_channels_) {
     ESP_LOGW(TAG, "Invalid channel %u for manual control", channel);
-    return;
+    return false;
   }
   
   ESP_LOGI(TAG, "Setting manual control for channel %u: PWM=%.1f%%, Current=%.2fA", 
@@ -1404,6 +1444,7 @@ void LEDBrickScheduler::set_channel_manual_control(uint8_t channel, float pwm, f
     }
     current_it->second->publish_state(current);
   }
+  return true;
 }
 
 void LEDBrickScheduler::set_thermal_emergency(bool emergency) {
@@ -1459,12 +1500,29 @@ void LEDBrickScheduler::add_temperature_sensor(const std::string &name, sensor::
     return;
   }
   
-  TempSensorMapping mapping;
-  mapping.name = name;
-  mapping.sensor = sensor;
-  temp_sensors_.push_back(mapping);
-  
+  register_temperature_sensor_(name, sensor);
   ESP_LOGD(TAG, "Added temperature sensor: %s", name.c_str());
+}
+
+void LEDBrickScheduler::register_temperature_sensor_(const std::string &name, sensor::Sensor *sensor) {
+  temp_sensors_.push_back({name, sensor});
+  temp_control_.add_temperature_sensor(name);
+  
+  // Stamp each reading when the sensor publishes it, so a sensor that stops
+  // reporting times out instead of being re-stamped with its last value
+  sensor->add_on_state_callback([this, name](float temp) { this->on_temperature_reading_(name, temp); });
+  if (sensor->has_state()) {
+    on_temperature_reading_(name, sensor->state);
+  }
+}
+
+void LEDBrickScheduler::on_temperature_reading_(const std::string &name, float temp) {
+  // Basic sanity check on temperature value; NaN fails it too
+  if (!(temp > -50.0f && temp < 150.0f)) {
+    ESP_LOGW(TAG, "Invalid temperature reading from %s: %.1f°C", name.c_str(), temp);
+    return;
+  }
+  temp_control_.update_temperature_sensor(name, temp, millis());
 }
 
 void LEDBrickScheduler::enable_temperature_control(bool enabled) {
@@ -1477,8 +1535,8 @@ void LEDBrickScheduler::enable_temperature_control(bool enabled) {
   }
 }
 
-bool LEDBrickScheduler::set_temperature_config_json(const std::string& json) {
-  if (!temp_control_.import_config_json(json)) {
+bool LEDBrickScheduler::set_temperature_config_json(const std::string& json, std::string *error) {
+  if (!temp_control_.import_config_json(json, error)) {
     return false;
   }
   
@@ -1535,36 +1593,13 @@ void LEDBrickScheduler::update_temperature_sensors() {
         }
         
         if (!found) {
-          temp_sensors_.push_back({name, sensor});
-          // Also add the sensor to the temperature control system
-          temp_control_.add_temperature_sensor(name);
+          register_temperature_sensor_(name, sensor);
           ESP_LOGI(TAG, "Auto-discovered temperature sensor: %s (%s)", name.c_str(), unit.c_str());
         }
       }
     }
   }
-  
-  // Update temperature sensors
-  if (!temp_sensors_.empty()) {
-    ESP_LOGD(TAG, "Updating %zu temperature sensors", temp_sensors_.size());
-  }
-  
-  for (const auto &mapping : temp_sensors_) {
-    if (mapping.sensor && mapping.sensor->has_state()) {
-      float temp = mapping.sensor->state;
-      ESP_LOGD(TAG, "Temperature sensor '%s': %.2f°C", mapping.name.c_str(), temp);
-      
-      // Basic sanity check on temperature value
-      if (temp > -50.0f && temp < 150.0f) {
-        temp_control_.update_temperature_sensor(mapping.name, temp, now);
-      } else {
-        ESP_LOGW(TAG, "Invalid temperature reading from %s: %.1f°C", 
-                mapping.name.c_str(), temp);
-      }
-    } else {
-      ESP_LOGD(TAG, "Temperature sensor '%s': no valid state", mapping.name.c_str());
-    }
-  }
+  // Readings reach the controller through the callbacks set in register_temperature_sensor_()
 }
 
 void LEDBrickScheduler::update_fan_speed() {
@@ -1678,8 +1713,8 @@ void LEDBrickScheduler::on_emergency_change(bool emergency) {
     // Force the next update to apply all values
     force_next_update_ = true;
     
-    // Immediately restore normal operation if scheduler is enabled
-    if (enabled_) {
+    // Immediately restore normal operation if scheduler is enabled and the clock is set
+    if (enabled_ && has_valid_time()) {
       // Get current values and apply them
       uint16_t current_time = get_current_time_minutes();
       auto values = scheduler_.get_values_at_time_with_astro(current_time, scheduler_.get_astronomical_times());
