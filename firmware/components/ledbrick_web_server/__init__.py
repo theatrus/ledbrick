@@ -1,8 +1,10 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.const import CONF_ID, CONF_PORT, CONF_USERNAME, CONF_PASSWORD
-from esphome.components import sensor
-from esphome.core import CORE, coroutine_with_priority
+from esphome.components import sensor, socket
+from esphome.components.esp32 import include_builtin_idf_component
+from esphome.coroutine import CoroPriority
+from esphome.core import coroutine_with_priority
 import os
 import subprocess
 
@@ -20,6 +22,9 @@ CONF_FAN_STATE_SENSOR_ID = "fan_state_sensor_id"
 CONF_TEMPERATURE_SENSORS = "temperature_sensors"
 CONF_SENSOR_ID = "sensor_id"
 CONF_NAME = "name"
+
+# Concurrent client connections the HTTP server accepts (httpd max_open_sockets)
+MAX_OPEN_SOCKETS = 5
 
 TEMPERATURE_SENSOR_SCHEMA = cv.Schema(
     {
@@ -43,11 +48,15 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_TEMPERATURE_SENSORS, default=[]): cv.ensure_list(TEMPERATURE_SENSOR_SCHEMA),
         }
     ),
-    cv.only_with_esp_idf,
+    cv.only_on_esp32,
+    # Reserve lwIP sockets: one listener, the httpd control socket, and client connections
+    socket.consume_sockets(1, "ledbrick_web_server", socket.SocketType.TCP_LISTEN),
+    socket.consume_sockets(1, "ledbrick_web_server", socket.SocketType.UDP),
+    socket.consume_sockets(MAX_OPEN_SOCKETS, "ledbrick_web_server"),
 )
 
 
-@coroutine_with_priority(65.0)
+@coroutine_with_priority(CoroPriority.WEB_SERVER_BASE)
 async def to_code(config):
     # Get the scheduler component
     scheduler = await cg.get_variable(config[CONF_SCHEDULER_ID])
@@ -58,6 +67,7 @@ async def to_code(config):
     
     # Set configuration
     cg.add(var.set_port(config[CONF_PORT]))
+    cg.add(var.set_max_open_sockets(MAX_OPEN_SOCKETS))
     if CONF_USERNAME in config:
         cg.add(var.set_username(config[CONF_USERNAME]))
     if CONF_PASSWORD in config:
@@ -85,6 +95,9 @@ async def to_code(config):
     
     # Add defines
     cg.add_define("USE_LEDBRICK_WEB_SERVER")
+
+    # ESPHome excludes esp_http_server from the IDF build unless a component asks for it
+    include_builtin_idf_component("esp_http_server")
     
     # Check if web_content.cpp exists, if not build React
     component_dir = os.path.dirname(__file__)

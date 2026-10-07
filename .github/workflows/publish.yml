@@ -56,7 +56,7 @@ jobs:
         id: esphome-build
         with:
           yaml-file: ${{ matrix.file }}
-          version: 'latest'
+          version: '2026.9.1'
           release-summary: LEDBrick Plus v${{ env.VERSION }}
           release-url: https://github.com/${{ github.repository }}/releases/tag/${{ env.VERSION }}
         env:

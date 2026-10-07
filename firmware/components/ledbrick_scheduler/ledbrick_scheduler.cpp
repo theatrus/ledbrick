@@ -1,4 +1,5 @@
 #include "ledbrick_scheduler.h"
+#include "cJSON.h"
 #include "esphome/core/log.h"
 #include "esphome/core/application.h"
 #include "esphome/components/light/light_state.h"
@@ -209,7 +210,7 @@ void LEDBrickScheduler::update() {
         ESP_LOGI(TAG, "Recently recovered from thermal emergency");
       }
       if (recovery_time > 0 && current_millis - recovery_time < 30000) {  // Log for 30 seconds after recovery
-        ESP_LOGD(TAG, "Post-emergency recovery: %d seconds ago", (current_millis - recovery_time) / 1000);
+        ESP_LOGD(TAG, "Post-emergency recovery: %" PRIu32 " seconds ago", (current_millis - recovery_time) / 1000);
       }
       was_emergency = current_emergency;
     }
@@ -220,7 +221,7 @@ void LEDBrickScheduler::update() {
 void LEDBrickScheduler::dump_config() {
   ESP_LOGCONFIG(TAG, "LEDBrick Scheduler:");
   ESP_LOGCONFIG(TAG, "  Channels: %u", num_channels_);
-  ESP_LOGCONFIG(TAG, "  Update Interval: %u ms", update_interval_);
+  ESP_LOGCONFIG(TAG, "  Update Interval: %" PRIu32 " ms", update_interval_);
   ESP_LOGCONFIG(TAG, "  Enabled: %s", enabled_ ? "YES" : "NO");
   ESP_LOGCONFIG(TAG, "  PWM Scale: %.2f (%.0f%%)", pwm_scale_, pwm_scale_ * 100.0f);
   ESP_LOGCONFIG(TAG, "  Timezone: %s (UTC%+.1fh)", timezone_.c_str(), timezone_offset_hours_);
@@ -377,6 +378,18 @@ InterpolationResult LEDBrickScheduler::get_actual_channel_values() const {
   }
   
   return result;
+}
+
+void LEDBrickScheduler::set_enabled(bool enabled) {
+  if (enabled_ == enabled) {
+    return;  // No change, skip save
+  }
+
+  enabled_ = enabled;
+
+  // The scheduler's flash JSON is the only persisted copy of this setting
+  save_schedule_to_flash();
+  ESP_LOGI(TAG, "Scheduler %s and saved", enabled ? "enabled" : "disabled");
 }
 
 void LEDBrickScheduler::set_pwm_scale(float scale) {
@@ -550,7 +563,7 @@ void LEDBrickScheduler::save_schedule_to_flash() {
   
   // Ensure it fits in our storage
   if (storage->json_length >= sizeof(storage->json_data) - 1) {
-    ESP_LOGW(TAG, "Schedule JSON too large (%u bytes), truncating", storage->json_length);
+    ESP_LOGW(TAG, "Schedule JSON too large (%" PRIu32 " bytes), truncating", storage->json_length);
     storage->json_length = sizeof(storage->json_data) - 1;
   }
   
@@ -560,7 +573,7 @@ void LEDBrickScheduler::save_schedule_to_flash() {
   
   bool success = schedule_pref_.save(storage.get());
   if (success) {
-    ESP_LOGD(TAG, "Saved schedule to flash (JSON format, %u bytes)", storage->json_length);
+    ESP_LOGD(TAG, "Saved schedule to flash (JSON format, %" PRIu32 " bytes)", storage->json_length);
   } else {
     ESP_LOGW(TAG, "Failed to save schedule to flash");
   }
@@ -588,7 +601,7 @@ void LEDBrickScheduler::load_schedule_from_flash() {
       storage->json_data[storage->json_length] = '\0';  // Ensure null terminated
       std::string json_input(storage->json_data);
       
-      ESP_LOGD(TAG, "Loading schedule from flash (JSON format, %u bytes)", storage->json_length);
+      ESP_LOGD(TAG, "Loading schedule from flash (JSON format, %" PRIu32 " bytes)", storage->json_length);
       
       if (import_schedule_json(json_input)) {
         ESP_LOGI(TAG, "Successfully loaded schedule from flash (JSON format)");
@@ -604,7 +617,7 @@ void LEDBrickScheduler::load_schedule_from_flash() {
     // Legacy format - try to migrate
     ESP_LOGW(TAG, "Found legacy schedule format in flash, migration not supported");
   } else {
-    ESP_LOGW(TAG, "Unknown schedule storage version %u", storage->version);
+    ESP_LOGW(TAG, "Unknown schedule storage version %" PRIu32, storage->version);
   }
   // unique_ptr automatically deletes
 }
@@ -701,13 +714,15 @@ void LEDBrickScheduler::export_schedule_json(std::string &json_output) const {
 bool LEDBrickScheduler::import_schedule_json(const std::string &json_input) {
   ESP_LOGI(TAG, "Importing schedule from JSON (%zu chars)", json_input.length());
   
-  // Extract enabled state from ESPHome-specific fields
-  size_t enabled_pos = json_input.find("\"enabled\":");
-  if (enabled_pos != std::string::npos) {
-    size_t value_start = json_input.find_first_not_of(" \t", enabled_pos + 10);
-    if (value_start != std::string::npos) {
-      enabled_ = json_input.substr(value_start, 4) == "true";
+  // Extract enabled state from the root object. A plain string search would match
+  // moon_simulation.enabled, which the scheduler JSON writes before the root fields.
+  cJSON *root = cJSON_Parse(json_input.c_str());
+  if (root != nullptr) {
+    cJSON *enabled_item = cJSON_GetObjectItemCaseSensitive(root, "enabled");
+    if (cJSON_IsBool(enabled_item)) {
+      enabled_ = cJSON_IsTrue(enabled_item);
     }
+    cJSON_Delete(root);
   }
   
   // Extract location if present
@@ -1493,8 +1508,8 @@ void LEDBrickScheduler::update_temperature_sensors() {
     
     // Scan all sensors for temperature sensors (by unit of measurement)
     for (auto* sensor : App.get_sensors()) {
-      std::string unit = sensor->get_unit_of_measurement().c_str();
-      std::string name = sensor->get_name().c_str();
+      std::string unit = sensor->get_unit_of_measurement_ref().str();
+      std::string name = sensor->get_name().str();
       
       // Debug log all sensors with units to help troubleshoot
       ESP_LOGD(TAG, "Checking sensor '%s' with unit '%s'", name.c_str(), unit.c_str());

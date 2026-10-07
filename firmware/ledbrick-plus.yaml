@@ -5,6 +5,7 @@ substitutions:
 esphome:
   name: ledbrickplus
   friendly_name: ledbrickplus
+  min_version: 2026.9.0
   project:
     name: "ledbrick.plus"
     version: "__VERSION__"
@@ -82,32 +83,6 @@ esphome:
             
             ESP_LOGI("main", "Temperature control configuration complete");
 
-            
-    
-    - priority: -100  # Run after all components are initialized
-      then:
-        - lambda: |-
-            // Sync scheduler state with restored switch state
-            bool switch_state = id(scheduler_enable_switch).state;
-            bool scheduler_state = id(main_scheduler).is_enabled();
-            if (switch_state != scheduler_state) {
-              ESP_LOGI("main", "Syncing scheduler state: switch=%d, scheduler=%d", 
-                       switch_state, scheduler_state);
-              id(main_scheduler).set_enabled(switch_state);
-            }
-            
-            // Sync astronomical projection state
-            bool astro_switch_state = id(astronomical_projection_switch).state;
-            bool astro_scheduler_state = id(main_scheduler).is_astronomical_projection_enabled();
-            if (astro_switch_state != astro_scheduler_state) {
-              ESP_LOGI("main", "Syncing astronomical projection: switch=%d, scheduler=%d", 
-                       astro_switch_state, astro_scheduler_state);
-              id(main_scheduler).set_astronomical_projection(astro_switch_state);
-            }
-            
-
-            // Temperature sensors will be auto-discovered by scheduler during runtime
-            
 dashboard_import:
   package_import_url: github://theatrus/ledbrick/firmware/ledbrick-plus.yaml@master
   import_full_config: false
@@ -163,7 +138,7 @@ external_components:
   - source:
       type: git
       url: https://github.com/theatrus/mcpwm_unified
-      ref: ebfcc0a743dfe2ccbdd7d582cc5bd97225980ee2
+      ref: 6a9a6cfff48f870bd5073428e83f52e647a482f5
     components: [ mcpwm_unified ]
   - source:
       type: local
@@ -252,7 +227,7 @@ fan:
 # Status LED - WS2812 RGB on GPIO21
 light:
   - platform: esp32_rmt_led_strip
-    rgb_order: GRB
+    channel_colors: GRB
     pin: GPIO21
     num_leds: 1
     chipset: WS2812
@@ -424,7 +399,7 @@ text_sensor:
       } else if (hrs > 0) {
         return str_sprintf("%dh %dm", hrs, mnts);
       } else {
-        return str_sprintf("%dm %ds", mnts, dur);
+        return str_sprintf("%dm %" PRIu32 "s", mnts, dur);
       }
       
   # Sunrise time

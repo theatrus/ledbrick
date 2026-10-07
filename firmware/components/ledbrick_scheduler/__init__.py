@@ -16,7 +16,7 @@ from esphome.cpp_generator import MockObj
 CODEOWNERS = ["@theatrus"]
 
 ledbrick_scheduler_ns = cg.esphome_ns.namespace("ledbrick_scheduler")
-LEDBrickScheduler = ledbrick_scheduler_ns.class_("LEDBrickScheduler", cg.Component)
+LEDBrickScheduler = ledbrick_scheduler_ns.class_("LEDBrickScheduler", cg.PollingComponent)
 
 # Actions
 SetSchedulePointAction = ledbrick_scheduler_ns.class_("SetSchedulePointAction", automation.Action)
@@ -90,7 +90,9 @@ SET_ENABLED_SCHEMA = cv.Schema({
 })
 
 
-@automation.register_action("ledbrick_scheduler.set_schedule_point", SetSchedulePointAction, SET_SCHEDULE_POINT_SCHEMA)
+@automation.register_action(
+    "ledbrick_scheduler.set_schedule_point", SetSchedulePointAction, SET_SCHEDULE_POINT_SCHEMA, synchronous=True
+)
 async def set_schedule_point_to_code(config, action_id, template_arg, args):
     var = cg.new_Pvariable(action_id, template_arg)
     await cg.register_parented(var, config[CONF_ID])
@@ -107,7 +109,9 @@ async def set_schedule_point_to_code(config, action_id, template_arg, args):
     return var
 
 
-@automation.register_action("ledbrick_scheduler.load_preset", LoadPresetAction, LOAD_PRESET_SCHEMA)
+@automation.register_action(
+    "ledbrick_scheduler.load_preset", LoadPresetAction, LOAD_PRESET_SCHEMA, synchronous=True
+)
 async def load_preset_to_code(config, action_id, template_arg, args):
     var = cg.new_Pvariable(action_id, template_arg)
     await cg.register_parented(var, config[CONF_ID])
@@ -118,7 +122,9 @@ async def load_preset_to_code(config, action_id, template_arg, args):
     return var
 
 
-@automation.register_action("ledbrick_scheduler.set_enabled", SetEnabledAction, SET_ENABLED_SCHEMA)
+@automation.register_action(
+    "ledbrick_scheduler.set_enabled", SetEnabledAction, SET_ENABLED_SCHEMA, synchronous=True
+)
 async def set_enabled_to_code(config, action_id, template_arg, args):
     var = cg.new_Pvariable(action_id, template_arg)
     await cg.register_parented(var, config[CONF_ID])

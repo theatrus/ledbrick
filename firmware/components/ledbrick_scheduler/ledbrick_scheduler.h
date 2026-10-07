@@ -99,7 +99,7 @@ class LEDBrickScheduler : public PollingComponent {
   bool import_schedule_json(const std::string &json_input);
   
   // Control
-  void set_enabled(bool enabled) { enabled_ = enabled; }
+  void set_enabled(bool enabled);
   bool is_enabled() const { return enabled_; }
   
   // Thermal emergency control
@@ -304,7 +304,7 @@ template<typename... Ts> class SetSchedulePointAction : public Action<Ts...>, pu
   TEMPLATABLE_VALUE(std::vector<float>, pwm_values)
   TEMPLATABLE_VALUE(std::vector<float>, current_values)
 
-  void play(Ts... x) override {
+  void play(const Ts &...x) override {
     auto timepoint = this->timepoint_.value(x...);
     auto pwm_values = this->pwm_values_.value(x...);
     auto current_values = this->current_values_.value(x...);
@@ -317,7 +317,7 @@ template<typename... Ts> class LoadPresetAction : public Action<Ts...>, public P
  public:
   TEMPLATABLE_VALUE(std::string, preset_name)
 
-  void play(Ts... x) override {
+  void play(const Ts &...x) override {
     auto preset_name = this->preset_name_.value(x...);
     this->parent_->load_preset(preset_name);
   }
@@ -327,7 +327,7 @@ template<typename... Ts> class SetEnabledAction : public Action<Ts...>, public P
  public:
   TEMPLATABLE_VALUE(bool, enabled)
 
-  void play(Ts... x) override {
+  void play(const Ts &...x) override {
     auto enabled = this->enabled_.value(x...);
     this->parent_->set_enabled(enabled);
   }

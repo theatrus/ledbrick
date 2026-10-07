@@ -24,6 +24,7 @@ class LEDBrickWebServer : public Component {
   float get_setup_priority() const override { return setup_priority::WIFI; }
   
   void set_port(uint16_t port) { this->port_ = port; }
+  void set_max_open_sockets(uint8_t max_open_sockets) { this->max_open_sockets_ = max_open_sockets; }
   void set_username(const std::string &username) { this->username_ = username; }
   void set_password(const std::string &password) { this->password_ = password; }
   
@@ -44,6 +45,7 @@ class LEDBrickWebServer : public Component {
   ledbrick_scheduler::LEDBrickScheduler *scheduler_;
   httpd_handle_t server_{nullptr};
   uint16_t port_{80};
+  uint8_t max_open_sockets_{5};
   std::string username_;
   std::string password_;
   

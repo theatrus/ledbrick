@@ -9,6 +9,8 @@
 #include <ctime>
 #include <cstdlib>
 #include <cctype>
+#include <sys/socket.h>
+#include <unistd.h>
 
 namespace esphome {
 namespace ledbrick_web_server {
@@ -17,6 +19,13 @@ static const char *const TAG = "ledbrick_web_server";
 static const size_t MAX_REQUEST_SIZE = 32768;  // 32KB max request body
 
 LEDBrickWebServer *LEDBrickWebServer::instance_ = nullptr;
+
+// Shut down receive before close so lwIP cannot process packets on a socket that is
+// being torn down (same approach as ESPHome's web_server_idf)
+static void safe_close_with_shutdown(httpd_handle_t hd, int sockfd) {
+  shutdown(sockfd, SHUT_RD);
+  close(sockfd);
+}
 
 void LEDBrickWebServer::setup() {
   ESP_LOGI(TAG, "Setting up LEDBrick Web Server on port %d", this->port_);
@@ -32,6 +41,10 @@ void LEDBrickWebServer::setup() {
   config.max_uri_handlers = 28;  // We register 26 handlers
   config.recv_wait_timeout = 10;
   config.send_wait_timeout = 10;
+  // Match the socket count reserved at codegen; purge the oldest connection when full
+  config.max_open_sockets = this->max_open_sockets_;
+  config.lru_purge_enable = true;
+  config.close_fn = safe_close_with_shutdown;
   
   esp_err_t ret = httpd_start(&this->server_, &config);
   if (ret != ESP_OK) {
@@ -539,12 +552,12 @@ esp_err_t LEDBrickWebServer::handle_api_status_get(httpd_req_t *req) {
   // Add astronomical times (use projected times if projection is enabled)
   auto astro = self->scheduler_->get_projected_astronomical_times();
   if (astro.rise_valid) {
-    char sunrise_str[6];
+    char sunrise_str[8];
     snprintf(sunrise_str, sizeof(sunrise_str), "%02d:%02d", astro.rise_minutes / 60, astro.rise_minutes % 60);
     doc["sunrise_time"] = sunrise_str;
   }
   if (astro.set_valid) {
-    char sunset_str[6];
+    char sunset_str[8];
     snprintf(sunset_str, sizeof(sunset_str), "%02d:%02d", astro.set_minutes / 60, astro.set_minutes % 60);
     doc["sunset_time"] = sunset_str;
   }
@@ -555,12 +568,12 @@ esp_err_t LEDBrickWebServer::handle_api_status_get(httpd_req_t *req) {
   // Add moon rise/set times
   auto moon_times = self->scheduler_->get_moon_rise_set_times();
   if (moon_times.rise_valid) {
-    char moonrise_str[6];
+    char moonrise_str[8];
     snprintf(moonrise_str, sizeof(moonrise_str), "%02d:%02d", moon_times.rise_minutes / 60, moon_times.rise_minutes % 60);
     doc["moonrise_time"] = moonrise_str;
   }
   if (moon_times.set_valid) {
-    char moonset_str[6];
+    char moonset_str[8];
     snprintf(moonset_str, sizeof(moonset_str), "%02d:%02d", moon_times.set_minutes / 60, moon_times.set_minutes % 60);
     doc["moonset_time"] = moonset_str;
   }
@@ -909,7 +922,7 @@ esp_err_t LEDBrickWebServer::handle_api_moon_simulation_post(httpd_req_t *req) {
   bool phase_scaling_current = doc["phase_scaling_current"] | true;
   
   float min_current_threshold = 0.0f;
-  if (doc.containsKey("min_current_threshold")) {
+  if (doc["min_current_threshold"].is<float>()) {
     min_current_threshold = doc["min_current_threshold"].as<float>();
   }
   
@@ -1003,10 +1016,10 @@ esp_err_t LEDBrickWebServer::handle_api_schedule_debug(httpd_req_t *req) {
   astro["sunrise_minutes"] = astro_times.rise_minutes;
   astro["sunset_minutes"] = astro_times.set_minutes;
   
-  char sunrise_buf[6];
-  char sunset_buf[6];
-  sprintf(sunrise_buf, "%02d:%02d", astro_times.rise_minutes / 60, astro_times.rise_minutes % 60);
-  sprintf(sunset_buf, "%02d:%02d", astro_times.set_minutes / 60, astro_times.set_minutes % 60);
+  char sunrise_buf[8];
+  char sunset_buf[8];
+  snprintf(sunrise_buf, sizeof(sunrise_buf), "%02d:%02d", astro_times.rise_minutes / 60, astro_times.rise_minutes % 60);
+  snprintf(sunset_buf, sizeof(sunset_buf), "%02d:%02d", astro_times.set_minutes / 60, astro_times.set_minutes % 60);
   astro["sunrise_formatted"] = sunrise_buf;
   astro["sunset_formatted"] = sunset_buf;
   
@@ -1117,102 +1130,9 @@ esp_err_t LEDBrickWebServer::handle_api_timezone_post(httpd_req_t *req) {
     return ESP_OK;
   }
   
-  // Update SNTP timezone if it's the active time source
-  if (doc["timezone"].is<JsonVariant>()) {
-    const char* tz_str = doc["timezone"];
-    std::string posix_tz;
-    
-    // Check if it looks like a POSIX TZ string (contains numbers or special chars)
-    bool is_posix = false;
-    for (const char* p = tz_str; *p; p++) {
-      if (isdigit(*p) || *p == ',' || *p == '-' || *p == '+') {
-        is_posix = true;
-        break;
-      }
-    }
-    
-    if (is_posix) {
-      // Use the string directly as POSIX TZ
-      posix_tz = tz_str;
-      ESP_LOGI(TAG, "Using POSIX TZ string directly: %s", tz_str);
-    } else {
-      // Try to convert IANA timezone name to POSIX TZ string
-      // This is a subset of common timezones - for full support, 
-      // consider using a complete mapping table or external service
-      struct TZMapping {
-        const char* iana;
-        const char* posix;
-      };
-      
-      static const TZMapping tz_mappings[] = {
-        // US & Canada
-        {"America/Los_Angeles", "PST8PDT,M3.2.0,M11.1.0"},
-        {"America/Denver", "MST7MDT,M3.2.0,M11.1.0"},
-        {"America/Phoenix", "MST7"},  // No DST
-        {"America/Chicago", "CST6CDT,M3.2.0,M11.1.0"},
-        {"America/New_York", "EST5EDT,M3.2.0,M11.1.0"},
-        {"America/Toronto", "EST5EDT,M3.2.0,M11.1.0"},
-        {"America/Vancouver", "PST8PDT,M3.2.0,M11.1.0"},
-        
-        // Europe
-        {"Europe/London", "GMT0BST,M3.5.0,M10.5.0"},
-        {"Europe/Berlin", "CET-1CEST,M3.5.0,M10.5.0"},
-        {"Europe/Paris", "CET-1CEST,M3.5.0,M10.5.0"},
-        {"Europe/Amsterdam", "CET-1CEST,M3.5.0,M10.5.0"},
-        {"Europe/Rome", "CET-1CEST,M3.5.0,M10.5.0"},
-        {"Europe/Madrid", "CET-1CEST,M3.5.0,M10.5.0"},
-        {"Europe/Stockholm", "CET-1CEST,M3.5.0,M10.5.0"},
-        {"Europe/Moscow", "MSK-3"},  // No DST since 2014
-        
-        // Asia
-        {"Asia/Tokyo", "JST-9"},
-        {"Asia/Shanghai", "CST-8"},
-        {"Asia/Singapore", "SGT-8"},
-        {"Asia/Hong_Kong", "HKT-8"},
-        {"Asia/Seoul", "KST-9"},
-        {"Asia/Kolkata", "IST-5:30"},
-        {"Asia/Dubai", "GST-4"},
-        
-        // Australia & NZ
-        {"Australia/Sydney", "AEST-10AEDT,M10.1.0,M4.1.0"},
-        {"Australia/Melbourne", "AEST-10AEDT,M10.1.0,M4.1.0"},
-        {"Australia/Brisbane", "AEST-10"},  // No DST
-        {"Australia/Perth", "AWST-8"},
-        {"Pacific/Auckland", "NZST-12NZDT,M9.5.0,M4.1.0"},
-        
-        // Others
-        {"UTC", "UTC0"},
-        {"Etc/UTC", "UTC0"},
-        {nullptr, nullptr}
-      };
-      
-      // Search for matching timezone
-      bool found = false;
-      for (const TZMapping* map = tz_mappings; map->iana != nullptr; map++) {
-        if (strcmp(tz_str, map->iana) == 0) {
-          posix_tz = map->posix;
-          found = true;
-          break;
-        }
-      }
-      
-      if (!found) {
-        // Try to use it anyway, might be a valid timezone we don't know
-        posix_tz = tz_str;
-        ESP_LOGW(TAG, "Unknown timezone '%s', using as-is", tz_str);
-      }
-    }
-    
-    // Update system timezone
-    setenv("TZ", posix_tz.c_str(), 1);
-    tzset();
-    
-    // Update the scheduler's timezone string
-    self->scheduler_->set_timezone(tz_str);
-    
-    ESP_LOGI(TAG, "Updated system timezone to: %s (%s)", tz_str, posix_tz.c_str());
-  }
-  
+  // ESPHome keeps its own parsed timezone (from YAML or Home Assistant) and ignores
+  // setenv("TZ")/tzset(), so this endpoint only updates the scheduler's settings.
+
   // Force immediate update
   self->scheduler_->update_timezone_from_time_source();
   

@@ -44,7 +44,7 @@ To build and test the LEDBrick firmware:
 
 7. Upload firmware to device:
    ```bash
-   uv run esphome run ledbrick-plus.yaml --device=COM3
+   uvx --from esphome==2026.9.1 esphome run ledbrick-plus.yaml --device=COM3
    # Replace COM3 with your actual device port
    ```
 

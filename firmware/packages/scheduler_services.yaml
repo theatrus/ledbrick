@@ -32,7 +32,7 @@ api:
             id(main_scheduler).set_schedule_point(time_minutes, pwm_values, current_values);
         - logger.log:
             format: "Schedule point set at %02d:%02d for all channels"
-            args: [ 'time_minutes / 60', 'time_minutes % 60' ]
+            args: [ '(int) (time_minutes / 60)', '(int) (time_minutes % 60)' ]
 
     # Simplified 4-channel version for testing
     - service: set_schedule_point_4ch
@@ -53,7 +53,7 @@ api:
             id(main_scheduler).set_schedule_point(time_minutes, pwm_values, current_values);
         - logger.log:
             format: "Schedule point set at %02d:%02d for channels 1-4"
-            args: [ 'time_minutes / 60', 'time_minutes % 60' ]
+            args: [ '(int) (time_minutes / 60)', '(int) (time_minutes % 60)' ]
 
     # Remove a schedule point
     - service: remove_schedule_point
@@ -64,7 +64,7 @@ api:
             id(main_scheduler).remove_schedule_point(time_minutes);
         - logger.log:
             format: "Removed schedule point at %02d:%02d"
-            args: [ 'time_minutes / 60', 'time_minutes % 60' ]
+            args: [ '(int) (time_minutes / 60)', '(int) (time_minutes % 60)' ]
 
     # Clear all schedule points
     - service: clear_schedule
@@ -108,7 +108,7 @@ api:
             std::vector<float> pwm_values = {pwm_ch1, pwm_ch2, pwm_ch3, pwm_ch4, pwm_ch5, pwm_ch6, pwm_ch7, pwm_ch8};
             std::vector<float> current_values = {current_ch1, current_ch2, current_ch3, current_ch4, current_ch5, current_ch6, current_ch7, current_ch8};
             id(main_scheduler).add_dynamic_schedule_point(type, offset_minutes, pwm_values, current_values);
-            ESP_LOGI("main", "Dynamic schedule point set: %s %+d minutes", time_type.c_str(), offset_minutes);
+            ESP_LOGI("main", "Dynamic schedule point set: %s %+d minutes", time_type.c_str(), (int) offset_minutes);
 
     # Simplified 4-channel dynamic version
     - service: set_dynamic_schedule_point_4ch
@@ -135,7 +135,7 @@ api:
             std::vector<float> pwm_values = {pwm_ch1, pwm_ch2, pwm_ch3, pwm_ch4, 0, 0, 0, 0};
             std::vector<float> current_values = {current_ch1, current_ch2, current_ch3, current_ch4, 0, 0, 0, 0};
             id(main_scheduler).add_dynamic_schedule_point(type, offset_minutes, pwm_values, current_values);
-            ESP_LOGI("main", "Dynamic schedule point set: %s %+d minutes (4ch)", time_type.c_str(), offset_minutes);
+            ESP_LOGI("main", "Dynamic schedule point set: %s %+d minutes (4ch)", time_type.c_str(), (int) offset_minutes);
 
     # Remove a dynamic schedule point
     - service: remove_dynamic_schedule_point
@@ -152,7 +152,7 @@ api:
             }
             
             id(main_scheduler).remove_dynamic_schedule_point(type, offset_minutes);
-            ESP_LOGI("main", "Removed dynamic schedule point: %s %+d minutes", time_type.c_str(), offset_minutes);
+            ESP_LOGI("main", "Removed dynamic schedule point: %s %+d minutes", time_type.c_str(), (int) offset_minutes);
 
     # === Preset Management ===
     
@@ -407,9 +407,7 @@ number:
     set_action:
       then:
         - lambda: |-
-            if (id(main_scheduler) != nullptr) {
-              id(main_scheduler)->set_location(x, id(main_scheduler)->get_longitude());
-            }
+            id(main_scheduler)->set_location(x, id(main_scheduler)->get_longitude());
     
   - platform: template
     id: longitude
@@ -427,9 +425,7 @@ number:
     set_action:
       then:
         - lambda: |-
-            if (id(main_scheduler) != nullptr) {
-              id(main_scheduler)->set_location(id(main_scheduler)->get_latitude(), x);
-            }
+            id(main_scheduler)->set_location(id(main_scheduler)->get_latitude(), x);
 
   # Time shift configuration - reflects scheduler state, triggers save on change
   - platform: template
@@ -448,9 +444,7 @@ number:
     set_action:
       then:
         - lambda: |-
-            if (id(main_scheduler) != nullptr) {
-              id(main_scheduler)->set_time_shift(x, id(main_scheduler)->get_time_shift_minutes());
-            }
+            id(main_scheduler)->set_time_shift(x, id(main_scheduler)->get_time_shift_minutes());
     
   - platform: template
     id: time_shift_minutes
@@ -468,9 +462,7 @@ number:
     set_action:
       then:
         - lambda: |-
-            if (id(main_scheduler) != nullptr) {
-              id(main_scheduler)->set_time_shift(id(main_scheduler)->get_time_shift_hours(), x);
-            }
+            id(main_scheduler)->set_time_shift(id(main_scheduler)->get_time_shift_hours(), x);
 
 
 # === Control Entities ===
@@ -480,7 +472,8 @@ switch:
   - platform: template
     name: "Scheduler Enabled"
     id: scheduler_enable_switch
-    restore_mode: RESTORE_DEFAULT_ON
+    # The scheduler saves this setting in its own flash JSON; the lambda reports it
+    restore_mode: DISABLED
     lambda: |-
       return id(main_scheduler).is_enabled();
     turn_on_action:
@@ -514,14 +507,10 @@ switch:
       return id(main_scheduler)->is_astronomical_projection_enabled();
     turn_on_action:
       - lambda: |-
-          if (id(main_scheduler) != nullptr) {
-            id(main_scheduler)->set_astronomical_projection(true);
-          }
+          id(main_scheduler)->set_astronomical_projection(true);
     turn_off_action:
       - lambda: |-
-          if (id(main_scheduler) != nullptr) {
-            id(main_scheduler)->set_astronomical_projection(false);
-          }
+          id(main_scheduler)->set_astronomical_projection(false);
 
 
 text_sensor:
