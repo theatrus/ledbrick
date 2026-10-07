@@ -28,11 +28,20 @@ void PIDController::set_output_limits(float min_output, float max_output) {
     if (output_ < min_output_) output_ = min_output_;
     
     // Clamp integral to prevent windup
-    if (ki_ > 0.0f) {
-        float max_integral = (max_output_ - min_output_) / ki_;
-        if (integral_ > max_integral) integral_ = max_integral;
-        if (integral_ < -max_integral) integral_ = -max_integral;
+    clamp_integral();
+}
+
+void PIDController::clamp_integral() {
+    // Keep the I term (ki * integral) inside the output range. Works for negative
+    // gains too, which reverse-acting loops such as fan cooling use.
+    if (ki_ == 0.0f) {
+        return;
     }
+    float bound_a = min_output_ / ki_;
+    float bound_b = max_output_ / ki_;
+    float low = std::min(bound_a, bound_b);
+    float high = std::max(bound_a, bound_b);
+    integral_ = std::max(low, std::min(high, integral_));
 }
 
 void PIDController::reset() {
@@ -48,6 +57,9 @@ float PIDController::compute(float input, uint32_t dt_ms) {
     if (dt_ms == 0) {
         return output_; // No time passed, return last output
     }
+    if (!std::isfinite(input)) {
+        return output_; // Ignore bad readings rather than poisoning the integral
+    }
     
     float dt_sec = static_cast<float>(dt_ms) / 1000.0f;
     
@@ -56,10 +68,7 @@ float PIDController::compute(float input, uint32_t dt_ms) {
     
     // Integral term with windup protection
     integral_ += error_ * dt_sec;
-    if (ki_ > 0.0f) {
-        float max_integral = (max_output_ - min_output_) / ki_;
-        integral_ = std::max(-max_integral, std::min(max_integral, integral_));
-    }
+    clamp_integral();
     
     // Derivative term (derivative on measurement to avoid spikes on setpoint changes)
     if (first_run_) {

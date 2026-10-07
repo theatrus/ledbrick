@@ -123,7 +123,10 @@ public:
     
     // Configuration serialization
     std::string export_config_json() const;
-    bool import_config_json(const std::string& json);
+    // Fields missing from the JSON keep their current values. Returns false, and changes
+    // nothing, when a field has the wrong type, is out of range, or the result is inconsistent.
+    bool import_config_json(const std::string& json, std::string* error = nullptr);
+    static bool validate_config(const TemperatureControlConfig& config, std::string* error = nullptr);
     
     // Fan curve data for visualization
     struct FanCurvePoint {
@@ -138,15 +141,16 @@ private:
     PIDController pid_controller_;
     
     // Internal controller state (not hardware state)
-    bool emergency_cooldown_;
+    bool emergency_countdown_active_;
     uint32_t emergency_triggered_ms_;
-    
+
     std::vector<TemperatureSensor> sensors_;
-    
+
     uint32_t last_update_ms_;
     uint32_t last_fan_update_ms_;
     uint32_t last_valid_temp_ms_;
     uint32_t last_pid_compute_temp_ms_;  // Timestamp of temp data used for last PID compute
+    bool pid_has_computed_;              // last_pid_compute_temp_ms_ is set
 
     float filtered_temperature_;
     bool ever_had_valid_temp_;
