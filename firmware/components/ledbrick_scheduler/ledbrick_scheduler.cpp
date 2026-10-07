@@ -584,6 +584,7 @@ bool LEDBrickScheduler::save_schedule_to_flash() {
   
   bool success = schedule_pref_.save(storage.get());
   if (success) {
+    flash_load_failed_ = false;  // The stored copy is valid again
     ESP_LOGD(TAG, "Saved schedule to flash (JSON format, %" PRIu32 " bytes)", storage->json_length);
   } else {
     ESP_LOGW(TAG, "Failed to save schedule to flash");
@@ -803,7 +804,8 @@ bool LEDBrickScheduler::import_schedule_json(const std::string &json_input, std:
       ledbrick::TemperatureControl scratch;
       scratch.set_config(temp_control_.get_config());
       std::string temp_error;
-      if (!scratch.import_config_json(temp_config_json, &temp_error)) {
+      // Settings saved by older firmware may be out of today's ranges; repair them on load
+      if (!scratch.import_config_json(temp_config_json, &temp_error, from_flash)) {
         if (field_error.empty()) field_error = "temperature_control: " + temp_error;
         temp_config_json.clear();
       }
@@ -834,9 +836,14 @@ bool LEDBrickScheduler::import_schedule_json(const std::string &json_input, std:
   if (has_shift_h) time_shift_hours_ = static_cast<int>(new_shift_h);
   if (has_shift_m) time_shift_minutes_ = static_cast<int>(new_shift_m);
   if (!temp_config_json.empty()) {
-    temp_control_.import_config_json(temp_config_json);
-    temp_config_ = temp_control_.get_config();
-    ESP_LOGI(TAG, "Imported temperature control configuration");
+    if (is_thermal_emergency()) {
+      // New limits could clear the latched emergency without a real recovery
+      ESP_LOGW(TAG, "Thermal emergency active; keeping current temperature control settings");
+    } else {
+      temp_control_.import_config_json(temp_config_json, nullptr, from_flash);
+      temp_config_ = temp_control_.get_config();
+      ESP_LOGI(TAG, "Imported temperature control configuration");
+    }
   }
   
   // Update astronomical calculator with loaded settings (without saving during import)
@@ -993,8 +1000,11 @@ void LEDBrickScheduler::update_timezone_from_time_source() {
     // Force recalculation of astronomical times
     update_astronomical_times_for_scheduler();
     
-    // Save the new timezone offset
-    save_schedule_to_flash();
+    // Save the new timezone offset, unless that would overwrite a saved schedule
+    // that failed to load (only a user change replaces it)
+    if (!flash_load_failed_) {
+      save_schedule_to_flash();
+    }
   }
 }
 
@@ -1536,6 +1546,11 @@ void LEDBrickScheduler::enable_temperature_control(bool enabled) {
 }
 
 bool LEDBrickScheduler::set_temperature_config_json(const std::string& json, std::string *error) {
+  // New limits could clear the latched emergency without a real recovery
+  if (is_thermal_emergency()) {
+    if (error) *error = "cannot change temperature settings during a thermal emergency";
+    return false;
+  }
   if (!temp_control_.import_config_json(json, error)) {
     return false;
   }

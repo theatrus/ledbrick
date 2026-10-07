@@ -236,7 +236,7 @@ The project follows a clean separation between core algorithms and ESPHome integ
 - **Modal positioning**: Ensure proper z-index and DOM structure
 - **Refresh on control changes**: Remove unnecessary onUpdate() calls
 - **Temperature sensors not reading**: Check 1-wire bus connections and sensor IDs
-- **Emergency recovery bug**: Known issue - emergency_cooldown_ prevents recovery (line 186)
+- **Thermal emergency stays latched**: Only a reading at or below `recovery_temp_c` clears it; sensor loss or disabling temperature control does not
 - **Fan curve rapid refresh loop**: Fixed - API returns null when temperature control unavailable
 
 ### Debugging
@@ -253,6 +253,7 @@ The project follows a clean separation between core algorithms and ESPHome integ
 - Unit tests ensure correctness before ESPHome integration
 - Clean separation allows testing and development of algorithms independently
 - ESPHome component acts as a thin integration layer
+- Web server handlers run on the ESP-IDF httpd task. Any call into the scheduler or another component must go through `run_in_loop_()` or `respond_from_loop_()`, which run it on the main loop; capture by value, since a request that times out returns before the work runs
 - Both astronomical and scheduler components support serialization
 - Timezone handling is proper with PST/UTC conversion for accurate sun calculations
 - Singapore sunrise can be projected to appear at 10 AM Pacific time using time projection

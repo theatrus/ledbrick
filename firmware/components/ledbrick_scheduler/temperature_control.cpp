@@ -475,6 +475,8 @@ std::string TemperatureControl::export_config_json() const {
     return json.str();
 }
 
+static const uint32_t MIN_SENSOR_TIMEOUT_MS = 10000;
+
 bool TemperatureControl::validate_config(const TemperatureControlConfig& c, std::string* error) {
     auto fail = [error](const char* message) {
         if (error) *error = message;
@@ -491,7 +493,9 @@ bool TemperatureControl::validate_config(const TemperatureControlConfig& c, std:
     if (!(c.max_fan_pwm > 0.0f && c.max_fan_pwm <= 100.0f)) return fail("max_fan_pwm must be above 0 and at most 100");
     if (c.fan_update_interval_ms < 100 || c.fan_update_interval_ms > 10000) return fail("fan_update_interval_ms must be 100-10000");
     if (c.emergency_delay_ms > 60000) return fail("emergency_delay_ms must be 0-60000");
-    if (c.sensor_timeout_ms < 1000 || c.sensor_timeout_ms > 60000) return fail("sensor_timeout_ms must be 1000-60000");
+    // Readings are stamped when the sensor publishes (every 5 s for the DS18B20s), so a
+    // shorter timeout marks every sensor stale and the emergency check never runs
+    if (c.sensor_timeout_ms < MIN_SENSOR_TIMEOUT_MS || c.sensor_timeout_ms > 60000) return fail("sensor_timeout_ms must be 10000-60000");
     if (!(c.temp_filter_alpha > 0.0f && c.temp_filter_alpha <= 1.0f)) return fail("temp_filter_alpha must be above 0 and at most 1");
     if (c.min_fan_pwm > c.max_fan_pwm) return fail("min_fan_pwm must not exceed max_fan_pwm");
     if (c.recovery_temp_c >= c.emergency_temp_c) return fail("recovery_temp_c must be below emergency_temp_c");
@@ -499,7 +503,43 @@ bool TemperatureControl::validate_config(const TemperatureControlConfig& c, std:
     return true;
 }
 
-bool TemperatureControl::import_config_json(const std::string& json, std::string* error) {
+void TemperatureControl::repair_config(TemperatureControlConfig& c) {
+    auto fix = [](const char* name, float& value, float low, float high) {
+        float fixed = std::max(low, std::min(high, value));
+        if (fixed != value) {
+            LOG_WARN("Saved %s %.2f out of range, using %.2f", name, value, fixed);
+            value = fixed;
+        }
+    };
+    auto fix_ms = [](const char* name, uint32_t& value, uint32_t low, uint32_t high) {
+        uint32_t fixed = std::max(low, std::min(high, value));
+        if (fixed != value) {
+            LOG_WARN("Saved %s %u out of range, using %u", name, static_cast<unsigned>(value), static_cast<unsigned>(fixed));
+            value = fixed;
+        }
+    };
+    // Never raise the emergency or recovery temperature: lower is the safe side
+    fix("emergency_temp_c", c.emergency_temp_c, 0.0f, 100.0f);
+    fix("recovery_temp_c", c.recovery_temp_c, 0.0f, 90.0f);
+    fix("target_temp_c", c.target_temp_c, 0.0f, 70.0f);
+    if (c.recovery_temp_c >= c.emergency_temp_c) {
+        fix("recovery_temp_c", c.recovery_temp_c, 0.0f, c.emergency_temp_c - 5.0f);
+    }
+    if (c.target_temp_c >= c.emergency_temp_c) {
+        fix("target_temp_c", c.target_temp_c, 0.0f, c.emergency_temp_c - 5.0f);
+    }
+    fix("kp", c.kp, 0.0f, 10.0f);
+    fix("ki", c.ki, 0.0f, 1.0f);
+    fix("kd", c.kd, 0.0f, 5.0f);
+    fix("max_fan_pwm", c.max_fan_pwm, 1.0f, 100.0f);
+    fix("min_fan_pwm", c.min_fan_pwm, 0.0f, c.max_fan_pwm);
+    fix("temp_filter_alpha", c.temp_filter_alpha, 0.01f, 1.0f);
+    fix_ms("fan_update_interval_ms", c.fan_update_interval_ms, 100, 10000);
+    fix_ms("emergency_delay_ms", c.emergency_delay_ms, 0, 60000);
+    fix_ms("sensor_timeout_ms", c.sensor_timeout_ms, MIN_SENSOR_TIMEOUT_MS, 60000);
+}
+
+bool TemperatureControl::import_config_json(const std::string& json, std::string* error, bool repair) {
     cJSON* root = cJSON_Parse(json.c_str());
     if (root == nullptr || !cJSON_IsObject(root)) {
         cJSON_Delete(root);
@@ -544,6 +584,17 @@ bool TemperatureControl::import_config_json(const std::string& json, std::string
     read_ms("emergency_delay_ms", new_config.emergency_delay_ms);
     read_ms("sensor_timeout_ms", new_config.sensor_timeout_ms);
     cJSON_Delete(root);
+
+    if (repair) {
+        // Fields that failed to parse kept their current values
+        if (!bad_field.empty()) {
+            LOG_WARN("Saved temperature setting %s is not a number, keeping current value", bad_field.c_str());
+        }
+        repair_config(new_config);
+        set_config(new_config);
+        LOG_INFO("Temperature control configuration loaded");
+        return true;
+    }
 
     if (!bad_field.empty()) {
         if (error) *error = bad_field + " must be a number";

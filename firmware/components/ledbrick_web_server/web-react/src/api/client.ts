@@ -69,7 +69,11 @@ class LEDBrickAPI {
       },
       body: jsonStr,
     });
-    return response.json();
+    const result = await response.json().catch(() => ({ error: response.statusText, code: response.status }));
+    if (!response.ok) {
+      throw result;
+    }
+    return result;
   }
 
   async getStatus(): Promise<Status> {

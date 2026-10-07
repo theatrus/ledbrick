@@ -173,6 +173,13 @@ esp_err_t LEDBrickWebServer::respond_from_loop_(httpd_req_t *req, std::function<
   return ESP_OK;
 }
 
+// Fills an error reply for changes that took effect but could not be saved to flash
+static int save_failed(JsonDocument &doc) {
+  doc["error"] = "Change applied but the schedule is too large to save; it will be lost on restart";
+  doc["code"] = 500;
+  return 500;
+}
+
 // Helper to read the whole request body with size limits
 std::unique_ptr<char[]> LEDBrickWebServer::read_request_body(httpd_req_t *req) {
   auto *self = get_instance(req);
@@ -424,7 +431,9 @@ esp_err_t LEDBrickWebServer::handle_api_preset_load(httpd_req_t *req) {
   auto *scheduler = self->scheduler_;
   return self->respond_from_loop_(req, [scheduler, preset_name](JsonDocument &doc) {
     scheduler->load_preset(preset_name);
-    scheduler->save_schedule_to_flash();
+    if (!scheduler->save_schedule_to_flash()) {
+      return save_failed(doc);
+    }
     doc["success"] = true;
     doc["preset"] = preset_name;
     doc["message"] = "Preset loaded successfully";
@@ -577,7 +586,9 @@ esp_err_t LEDBrickWebServer::handle_api_clear(httpd_req_t *req) {
   auto *scheduler = self->scheduler_;
   return self->respond_from_loop_(req, [scheduler](JsonDocument &doc) {
     scheduler->clear_schedule();
-    scheduler->save_schedule_to_flash();
+    if (!scheduler->save_schedule_to_flash()) {
+      return save_failed(doc);
+    }
     doc["success"] = true;
     doc["message"] = "Schedule cleared";
     return 200;
@@ -636,7 +647,9 @@ esp_err_t LEDBrickWebServer::handle_api_point_post(httpd_req_t *req) {
       limited[ch] = std::min(limited[ch], scheduler->get_channel_max_current(ch));
     }
     scheduler->set_schedule_point(time_minutes, pwm_values, limited);
-    scheduler->save_schedule_to_flash();
+    if (!scheduler->save_schedule_to_flash()) {
+      return save_failed(response);
+    }
     response["success"] = true;
     response["time_minutes"] = time_minutes;
     response["message"] = "Schedule point added";
@@ -792,8 +805,9 @@ esp_err_t LEDBrickWebServer::handle_api_location_post(httpd_req_t *req) {
 
     // Update the scheduler location (saves when it changes)
     scheduler->set_location(latitude, longitude);
-    if (has_timezone_offset) {
-      scheduler->save_schedule_to_flash();  // set_location skips the save when only the offset changed
+    // set_location skips the save when only the offset changed
+    if (has_timezone_offset && !scheduler->save_schedule_to_flash()) {
+      return save_failed(response);
     }
     ESP_LOGI(TAG, "Updated location to %.4f, %.4f", latitude, longitude);
 
@@ -1113,7 +1127,9 @@ esp_err_t LEDBrickWebServer::handle_api_timezone_post(httpd_req_t *req) {
     scheduler->update_timezone_from_time_source();
 
     // Save to flash
-    scheduler->save_schedule_to_flash();
+    if (!scheduler->save_schedule_to_flash()) {
+      return save_failed(response);
+    }
 
     response["success"] = true;
     response["timezone"] = scheduler->get_timezone();
@@ -1266,11 +1282,13 @@ esp_err_t LEDBrickWebServer::handle_api_channel_configs(httpd_req_t *req) {
       scheduler->set_channel_config(i, current_config);
     }
 
-    // Save to flash
-    scheduler->save_schedule_to_flash();
-
     // Update color sensors to reflect the new colors
     scheduler->update_color_sensors();
+
+    // Save to flash
+    if (!scheduler->save_schedule_to_flash()) {
+      return save_failed(response);
+    }
 
     ESP_LOGI(TAG, "Updated channel configurations");
 
@@ -1323,6 +1341,12 @@ esp_err_t LEDBrickWebServer::handle_api_temperature_config_post(httpd_req_t *req
   auto body = std::make_shared<std::string>(buf.get());
   auto *scheduler = self->scheduler_;
   return self->respond_from_loop_(req, [scheduler, body](JsonDocument &doc) {
+    if (scheduler->is_thermal_emergency()) {
+      doc["error"] = "Thermal emergency active; temperature settings cannot change until it clears";
+      doc["code"] = 409;
+      return 409;
+    }
+
     // Update configuration through scheduler
     std::string error;
     if (!scheduler->set_temperature_config_json(*body, &error)) {

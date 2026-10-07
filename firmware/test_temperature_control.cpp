@@ -459,7 +459,22 @@ void test_config_import_validation(TestRunner& runner) {
                         "Recovery above emergency rejected");
     runner.assert_false(controller.import_config_json("{\"min_fan_pwm\":80,\"max_fan_pwm\":50}"),
                         "Min fan above max rejected");
+    runner.assert_false(controller.import_config_json("{\"sensor_timeout_ms\":3000}"),
+                        "Sensor timeout shorter than the sensor interval rejected");
     runner.assert_equals(40.0f, controller.get_config().target_temp_c, 0.001f, "Rejected imports change nothing");
+
+    // Settings saved by older firmware are repaired on the safe side instead of dropped
+    TemperatureControl loaded;
+    std::string saved = "{\"emergency_temp_c\":45,\"recovery_temp_c\":50,\"target_temp_c\":40,"
+                        "\"sensor_timeout_ms\":1000,\"kp\":\"x\",\"max_fan_pwm\":150}";
+    runner.assert_true(loaded.import_config_json(saved, nullptr, true), "Repair import accepted");
+    auto repaired = loaded.get_config();
+    runner.assert_equals(45.0f, repaired.emergency_temp_c, 0.001f, "Lower emergency temp kept");
+    runner.assert_equals(40.0f, repaired.recovery_temp_c, 0.001f, "Recovery moved below emergency");
+    runner.assert_equals(static_cast<int>(10000), static_cast<int>(repaired.sensor_timeout_ms), "Sensor timeout raised to floor");
+    runner.assert_equals(defaults.kp, repaired.kp, 0.001f, "Unparseable kp keeps current value");
+    runner.assert_equals(100.0f, repaired.max_fan_pwm, 0.001f, "Max fan clamped");
+    runner.assert_false(loaded.import_config_json("not json", nullptr, true), "Repair still rejects malformed JSON");
     runner.assert_equals(defaults.emergency_temp_c, controller.get_config().emergency_temp_c, 0.001f,
                          "Emergency temp unchanged after rejection");
 }

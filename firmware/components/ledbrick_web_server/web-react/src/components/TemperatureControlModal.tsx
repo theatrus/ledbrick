@@ -345,7 +345,7 @@ export function TemperatureControlModal({ isOpen, onClose }: TemperatureControlM
                     value={config.sensor_timeout_ms}
                     onChange={(e) => updateConfig('sensor_timeout_ms', parseInt(e.target.value))}
                     step="1000"
-                    min="1000"
+                    min="10000"
                     max="60000"
                   />
                   <div className="help-text">

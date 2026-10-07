@@ -125,8 +125,11 @@ public:
     std::string export_config_json() const;
     // Fields missing from the JSON keep their current values. Returns false, and changes
     // nothing, when a field has the wrong type, is out of range, or the result is inconsistent.
-    bool import_config_json(const std::string& json, std::string* error = nullptr);
+    // With repair (for settings saved by older firmware), bad fields are skipped and values
+    // are moved into range on the safe side instead; only invalid JSON fails.
+    bool import_config_json(const std::string& json, std::string* error = nullptr, bool repair = false);
     static bool validate_config(const TemperatureControlConfig& config, std::string* error = nullptr);
+    static void repair_config(TemperatureControlConfig& config);
     
     // Fan curve data for visualization
     struct FanCurvePoint {
