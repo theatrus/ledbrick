@@ -8,7 +8,9 @@
 #ifdef USE_ESP_IDF
 #include <esp_http_server.h>
 #include "esphome/components/json/json_util.h"
+#include <functional>
 #include <map>
+#include <memory>
 #include <string>
 
 namespace esphome {
@@ -82,7 +84,15 @@ class LEDBrickWebServer : public Component {
   // Helper methods
   static LEDBrickWebServer *get_instance(httpd_req_t *req);
   static std::unique_ptr<char[]> read_request_body(httpd_req_t *req);
+  // Checks credentials when configured, and rejects cross-site POSTs
   bool check_auth(httpd_req_t *req);
+  bool origin_allowed_(httpd_req_t *req);
+  void send_unauthorized_(httpd_req_t *req);
+  // Handlers run on the httpd task. Anything that touches the scheduler or other
+  // components goes through these, which run it on the main loop and wait for it.
+  bool run_in_loop_(std::function<void()> &&work);
+  esp_err_t respond_from_loop_(httpd_req_t *req, std::function<int(JsonDocument &)> &&build);
+  static const char *status_line_(int status);
   void send_json_response(httpd_req_t *req, int status, const JsonDocument &doc);
   void send_error(httpd_req_t *req, int status, const std::string &message);
   void send_compressed_content(httpd_req_t *req, const uint8_t *compressed_data, 
