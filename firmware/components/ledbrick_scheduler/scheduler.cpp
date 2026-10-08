@@ -1479,7 +1479,10 @@ bool LEDScheduler::set_channel_dimming(uint8_t channel, ledbrick::DimMode mode, 
         return fail(led_error);
     }
 
-    const ledbrick::ChannelDimmer old_dimmer = channel_dimmer(channel);
+    // Back to manual, the level becomes a PWM at the channel's maximum current, the way
+    // manual schedules are usually written, rather than the current-first split
+    const ledbrick::ChannelDimmer old_dimmer(channel_leds(channel), ledbrick::DimPriority::PWM_FIRST,
+                                             channel_configs_[channel].floor_current);
     const std::vector<ledbrick::LedGroup> new_leds =
         leds.empty() ? ledbrick::default_channel_leds(channel, num_channels_) : leds;
     const ledbrick::ChannelDimmer new_dimmer(new_leds, priority, floor_current);

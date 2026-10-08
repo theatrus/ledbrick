@@ -1041,6 +1041,19 @@ void test_channel_dimming(TestRunner& runner) {
     float landed = std::floor(point.current_values[4] / step) * step;
     float light_after = point.pwm_values[4] / 100.0f * dimmer_before.output(landed, 25.0f);
     runner.assert_equals(light_before, light_after, 0.01f * light_before, "Round trip keeps the light");
+    runner.assert_true(point.current_values[4] > 1.0f - 2 * step && point.current_values[4] <= 1.0f,
+                       "Back in manual mode the current is the channel maximum");
+
+    // A typical manual point (PWM at the maximum current) comes back as itself
+    scheduler.set_schedule_point(700, std::vector<float>(8, 15.5f), std::vector<float>(8, 1.0f));
+    scheduler.set_channel_dimming(4, DimMode::CURVE, DimPriority::CURRENT_FIRST, 0.1f, {}, &error);
+    scheduler.set_channel_dimming(4, DimMode::MANUAL, DimPriority::CURRENT_FIRST, 0.1f, {}, &error);
+    for (const auto& p : scheduler.get_schedule_points()) {
+        if (p.time_minutes == 700) {
+            runner.assert_equals(15.5f, p.pwm_values[4], 0.2f, "PWM restored after a round trip");
+            runner.assert_equals(1.0f, p.current_values[4], 2 * step, "Current restored after a round trip");
+        }
+    }
 
     // Bad settings change nothing
     runner.assert_false(scheduler.set_channel_dimming(4, DimMode::CURVE, DimPriority::CURRENT_FIRST, 0.01f, {}, &error),
