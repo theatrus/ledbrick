@@ -11,7 +11,7 @@
   "id": "standard_led",
   "name": "Standard LED (median LUXEON C)",
   "purpose": "Stands in for an LED without a model: a model lost from flash, LEDs with no published curve (the violet string's UV LEDs), and boards without an LED map.",
-  "method": "Point-wise median of the listed models' curves on a fixed grid, over the range all of them cover (so every point has the same set of curves). Median of their thermal resistances. Deep Red (a different chip type) and the Rubix (normalized at 1500 mA) are left out.",
+  "method": "Point-wise median of the listed models' curves on a fixed grid, over the range all of them cover (so every point has the same set of curves). Current and Vf curves that stop below 1250 mA continue along their last 100 mA first. Median of their thermal resistances. Deep Red (a different chip type) and the Rubix (normalized at 1500 mA) are left out.",
   "from": [
    "luxeon_c_royal_blue",
    "luxeon_c_blue",
@@ -24,10 +24,10 @@
    "luxeon_c_white_3900k"
   ],
   "test_current_mA": 350,
-  "max_dc_current_mA": 1050,
+  "max_dc_current_mA": 1250,
   "grid_current_mA": [
    105,
-   1050,
+   1250,
    25
   ],
   "grid_temp_C": [

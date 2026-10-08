@@ -124,10 +124,10 @@ const std::vector<LedModel>& builtin_led_models() {
         //   temperature: median, as above
         //   Vf: median, as above
         //   Stands in for an LED without a model: a model lost from flash, LEDs with no published curve (the violet string's UV LEDs), and boards without an LED map.
-        make_model("standard_led", "Standard LED (median LUXEON C)", 0.35f, 1.05f, 3.0f,
-                   {{0.1225f, 0.3892f}, {0.155f, 0.4844f}, {0.205f, 0.6248f}, {0.28f, 0.8244f}, {0.355f, 1.012f}, {0.455f, 1.246f}, {0.58f, 1.517f}, {0.73f, 1.816f}, {0.905f, 2.138f}, {1.05f, 2.387f}},
+        make_model("standard_led", "Standard LED (median LUXEON C)", 0.35f, 1.25f, 3.0f,
+                   {{0.1225f, 0.3892f}, {0.155f, 0.4844f}, {0.205f, 0.6248f}, {0.28f, 0.8244f}, {0.355f, 1.012f}, {0.455f, 1.246f}, {0.58f, 1.517f}, {0.73f, 1.816f}, {0.905f, 2.138f}, {1.25f, 2.726f}},
                    {{25.0f, 1.057f}, {60.0f, 1.03f}, {85.0f, 1.0f}, {105.0f, 0.9659f}, {120.0f, 0.9329f}},
-                   {{0.1225f, 2.685f}, {0.23f, 2.72f}, {0.63f, 2.82f}, {1.05f, 2.91f}}),
+                   {{0.1225f, 2.685f}, {0.23f, 2.72f}, {0.63f, 2.82f}, {1.18f, 2.936f}, {1.25f, 2.95f}}),
     };
     return models;
 }

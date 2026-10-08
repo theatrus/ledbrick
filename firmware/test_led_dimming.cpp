@@ -377,14 +377,14 @@ void test_standard_model(TestRunner& runner) {
     runner.assert_true(validate_led_model(*standard, &error), "Standard LED passes validation " + error);
     runner.assert_equals(1.0f, curve_lookup(standard->output_vs_current, 0.35f), 0.01f, "1.0 at 350 mA");
     runner.assert_equals(1.0f, curve_lookup(standard->output_vs_temp, 85.0f), 0.003f, "1.0 at 85 C");
-    runner.assert_equals(1.05f, standard->max_current_a, 1e-6f, "Rated 1050 mA, like most LUXEON C");
+    runner.assert_equals(1.25f, standard->max_current_a, 1e-6f, "Rated 1250 mA");
 
     // A median sits inside the family it comes from
     const char* family[] = {"luxeon_c_royal_blue", "luxeon_c_blue", "luxeon_c_cyan", "luxeon_c_mint",
                             "luxeon_c_pc_amber", "luxeon_c_violet", "luxeon_c_pc_blue", "luxeon_c_white_5900k",
                             "luxeon_c_white_3900k"};
     bool inside = true;
-    for (float current : {0.15f, 0.3f, 0.5f, 0.7f, 0.9f, 1.05f}) {
+    for (float current : {0.15f, 0.3f, 0.5f, 0.7f, 0.9f, 1.05f, 1.2f}) {
         float low = 1e9f;
         float high = -1e9f;
         for (const char* id : family) {
@@ -413,7 +413,7 @@ void test_standard_model(TestRunner& runner) {
     ChannelDimmer violet({{"luxeon_c_violet", 6}, {STANDARD_LED_MODEL, 2}}, DimPriority::CURRENT_FIRST, 0.1f);
     runner.assert_equals(violet.output(0.5f, 40.0f), mixed.output(0.5f, 40.0f), 1e-6f,
                          "Unknown LEDs in a mixed string count as standard LEDs");
-    runner.assert_equals(1.05f, mixed.max_current(limits(2.0f)), 1e-6f, "and are held to its 1050 mA");
+    runner.assert_equals(1.225f, mixed.max_current(limits(2.0f)), 1e-6f, "The lower rating, violet's 1225 mA, caps the string");
     runner.assert_false(ChannelDimmer(std::vector<LedGroup>(), DimPriority::CURRENT_FIRST, 0.1f).valid(),
                         "No LEDs at all is still invalid");
 

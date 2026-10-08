@@ -8,8 +8,8 @@
 
 The schedule file holds the schedule, channel settings (names, limits, dimming, LEDs),
 location, moon and temperature settings. The models file holds the custom LED models,
-which have their own record on the board. apply posts the models first, since channels
-name them. The PWM scale is not copied; set it on the board.
+which have their own record on the board; they are rarely needed. apply posts the models
+first, since channels name them, and skips an empty list. The PWM scale is not copied.
 
 Set LEDBRICK_USER and LEDBRICK_PASSWORD if the board's web server has a password.
 Standard library only.
@@ -79,7 +79,8 @@ def apply(host, folder):
     schedule = os.path.join(folder, "schedule.json")
     if not os.path.exists(models) and not os.path.exists(schedule):
         sys.exit(f"{folder}: no schedule.json or led_models.json")
-    if os.path.exists(models):
+    # An empty list would only rewrite the board's model record; none are normally needed
+    if os.path.exists(models) and read_json(models).get("led_models"):
         post_models(host, models)
     if os.path.exists(schedule):
         result = request(host, "POST", "/api/schedule", read_json(schedule))

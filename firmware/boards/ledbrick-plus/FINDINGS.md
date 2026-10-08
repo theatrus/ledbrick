@@ -27,7 +27,8 @@ What we learned bringing up and testing a LEDBrick Plus (8-channel controller `r
 - Curves come from Lumileds DS144 (LUXEON C) and DS309 (LUXEON Rubix), digitized from the PDFs' vector paths: `tools/led_curves/lumileds_curves.json` names the figure and page for each.
 - The Rubix uses DS309 2023 thermal data, which matches the emitter BOM. The 2026 revision's current curve is the same.
 - Neither datasheet publishes colour or wavelength shift against current, so PWM-first dimming is the choice where colour must not move.
-- **Standard LED (`standard_led`):** the point-wise median of nine LUXEON C curves (all but Deep Red), over the range they all cover. Rated 1050 mA, Rth 3.0 C/W. It stands in for LEDs without a model: the UV LEDs, boards without an LED map, and models lost from flash. Its curve lies within the LUXEON C family at every current tested.
+- **Standard LED (`standard_led`):** the point-wise median of nine LUXEON C curves (all but Deep Red), over the range they all cover. Rated 1250 mA, Rth 3.0 C/W. Five of the nine curves stop at 1050 mA; they continue along their last 100 mA to 1250 mA first. Up to 1225 mA the result lies between the real LUXEON C white and mint curves. It stands in for LEDs without a model: the UV LEDs, boards without an LED map, and models lost from flash.
+- `tools/led_curves/led_models.json` has every built-in model with the exact values the firmware uses, generated alongside `led_models.cpp`.
 
 ## Fan and sensors
 

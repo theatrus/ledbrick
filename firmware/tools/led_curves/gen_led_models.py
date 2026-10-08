@@ -11,6 +11,9 @@ point, so the firmware's curves match the digitized datasheet curves.
 
 The standard LED (standard_model in the JSON) is the point-wise median of a set of models.
 It stands in for LEDs without a model.
+
+It also writes led_models.json: every built-in model as the firmware has it, in the form
+GET /api/led_models lists them.
 """
 import json
 import os
@@ -20,6 +23,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SOURCE = os.path.join(HERE, "lumileds_curves.json")
 TARGET = os.path.join(HERE, "..", "..", "components", "ledbrick_scheduler", "led_models.cpp")
 BOARD = os.path.join(HERE, "..", "..", "boards", "ledbrick-plus", "channels.json")
+MODELS_JSON = os.path.join(HERE, "led_models.json")
 MAX_ERROR = 0.002  # relative to the value, for output curves; volts for Vf
 
 
@@ -61,6 +65,16 @@ def grid(start, stop, step):
     return xs
 
 
+def extend(points, x_end, span=100):
+    """Continue a curve to x_end along its slope over the last `span` units."""
+    if points[-1][0] >= x_end:
+        return points
+    x1, y1 = points[-1]
+    x0, y0 = next(p for p in reversed(points) if p[0] <= x1 - span)
+    slope = (y1 - y0) / (x1 - x0)
+    return points + [[x_end, round(y1 + slope * (x_end - x1), 4)]]
+
+
 def median_curve(curves, xs):
     """Median of the curves on the range they all cover, so every point has the same set."""
     lo = max(c[0][0] for c in curves)
@@ -77,6 +91,10 @@ def standard_model(data):
         sys.exit("standard_model: unknown model in 'from'")
     currents = grid(*spec["grid_current_mA"])
     temps = grid(*spec["grid_temp_C"])
+    # Curves that stop below the standard LED's rating continue along their last 100 mA
+    top = spec["max_dc_current_mA"]
+    current_curves = [extend(m["output_vs_current"]["points_mA_rel"], top) for m in sources]
+    vf_curves = [extend(m["vf_vs_current"]["points_mA_V"], top) for m in sources]
     return {
         "id": spec["id"],
         "name": spec["name"],
@@ -85,13 +103,13 @@ def standard_model(data):
         "rth_junction_to_pad_C_per_W": median(m["rth_junction_to_pad_C_per_W"] for m in sources),
         "output_vs_current": {
             "source": "median of " + ", ".join(spec["from"]),
-            "points_mA_rel": median_curve([m["output_vs_current"]["points_mA_rel"] for m in sources], currents)},
+            "points_mA_rel": median_curve(current_curves, currents)},
         "output_vs_junction_temp": {
             "source": "median, as above",
             "points_C_rel": median_curve([m["output_vs_junction_temp"]["points_C_rel"] for m in sources], temps)},
         "vf_vs_current": {
             "source": "median, as above",
-            "points_mA_V": median_curve([m["vf_vs_current"]["points_mA_V"] for m in sources], currents)},
+            "points_mA_V": median_curve(vf_curves, currents)},
         "note": spec["purpose"],
     }
 
@@ -122,6 +140,31 @@ def channel_map(board, known):
         "",
     ]
     return out
+
+
+def sig4(value):
+    """The value the firmware stores: 4 significant digits, printed as the board prints it."""
+    value = float(f"{value:.4g}")
+    return int(value) if value.is_integer() else value
+
+
+def model_json(m, cur, temp, vf):
+    return {
+        "id": m["id"],
+        "name": m["name"],
+        "test_current": sig4(m["test_current_mA"] / 1000),
+        "max_current": sig4(m["max_dc_current_mA"] / 1000),
+        "output_vs_current": [[sig4(x / 1000), sig4(y)] for x, y in cur],
+        "curve_temp": 85,
+        "output_vs_temp": [[sig4(x), sig4(y)] for x, y in temp],
+        "rth": sig4(m["rth_junction_to_pad_C_per_W"]),
+        "vf_vs_current": [[sig4(x / 1000), sig4(y)] for x, y in vf],
+        "source": {
+            "current": m["output_vs_current"]["source"],
+            "temperature": m["output_vs_junction_temp"]["source"],
+            "vf": m["vf_vs_current"]["source"],
+        },
+    }
 
 
 def flt(value):
@@ -173,11 +216,13 @@ def main():
         "    static const std::vector<LedModel> models = {",
     ]
     total = 0
+    listing = []
     for m in models:
         cur = thin([tuple(p) for p in m["output_vs_current"]["points_mA_rel"]], True)
         temp = thin([tuple(p) for p in m["output_vs_junction_temp"]["points_C_rel"]], True)
         vf = thin([tuple(p) for p in m["vf_vs_current"]["points_mA_V"]], False)
         total += len(cur) + len(temp) + len(vf)
+        listing.append(model_json(m, cur, temp, vf))
         out += [
             f"        // {m['name']}" + (f" ({m['part_number']}, BOM {m['bom_code']})" if "part_number" in m else ""),
             f"        //   current: {m['output_vs_current']['source']}",
@@ -209,6 +254,15 @@ def main():
     ]
     with open(TARGET, "w", encoding="utf-8", newline="\n") as f:
         f.write("\n".join(out))
+    with open(MODELS_JSON, "w", encoding="utf-8", newline="\n") as f:
+        json.dump({
+            "description": "The built-in LED models as the firmware has them (generated by gen_led_models.py from "
+                           "lumileds_curves.json; do not edit). Currents in A; output relative to the test current; "
+                           "output_vs_current is at junction temperature curve_temp (C); Vf in V; rth in C/W.",
+            "models": listing,
+        }, f, indent=1)
+        f.write("\n")
+    print(f"wrote {os.path.normpath(MODELS_JSON)}: {len(listing)} models")
     print(f"wrote {os.path.normpath(TARGET)}: {total} points ({total * 8} bytes of curve data)")
 
 

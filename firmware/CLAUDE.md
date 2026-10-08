@@ -259,8 +259,8 @@ How the dimmer works:
 LED data:
 - `boards/ledbrick-plus/channels.json` lists each channel's LEDs on the LEDBrick Plus emitter, as built. WW differs from the schematic: built boards have PC ambers where it has deep reds, so WW is 4 LUXEON C 3900K whites and 4 PC ambers. Five strings mix parts: CyMint, WW, PCBlue, V and WBl. A channel's LEDs can be changed in the web UI.
 - `tools/led_curves/lumileds_curves.json` holds the Lumileds curves (DS144 LUXEON C, DS309 LUXEON Rubix) with the figure and page each came from, and the standard LED's definition.
-- Run `python3 tools/led_curves/gen_led_models.py` from `firmware/` after changing either file. It regenerates `led_models.cpp`: the models and `default_channel_leds()`.
-- The standard LED (`standard_led`) is the median of nine LUXEON C curves. It stands in wherever a model is missing, so a channel always has a curve: the violet string's two VIOSYS UV LEDs, boards without an LED map (one standard LED per channel), and a model that is not on the board (lost from flash, say). A custom model with that id replaces it.
+- Run `python3 tools/led_curves/gen_led_models.py` from `firmware/` after changing either file. It regenerates `led_models.cpp` (the models and `default_channel_leds()`) and `tools/led_curves/led_models.json` (every built-in model, readable, with the values the firmware uses). Commit both.
+- The standard LED (`standard_led`) is the median of nine LUXEON C curves, rated 1250 mA. It stands in wherever a model is missing, so a channel always has a curve: the violet string's two VIOSYS UV LEDs, boards without an LED map (one standard LED per channel), and a model that is not on the board (lost from flash, say). A custom model with that id replaces it.
 - `boards/README.md` covers updating more boards; `boards/ledbrick-plus/FINDINGS.md` has the hardware findings.
 
 Custom LED models:
