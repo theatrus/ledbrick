@@ -138,7 +138,7 @@ external_components:
   - source:
       type: git
       url: https://github.com/theatrus/mcpwm_unified
-      ref: 6a9a6cfff48f870bd5073428e83f52e647a482f5
+      ref: 2b5f4cd1d4a8d3aa2e87013a8734fca2a024df20
     components: [ mcpwm_unified ]
   - source:
       type: local

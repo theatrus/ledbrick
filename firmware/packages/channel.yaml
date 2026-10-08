@@ -12,8 +12,8 @@ esphome:
 #
 # Each channel is a TPS922053. pwm_pin drives EN/PWM (on/off dimming). current_pin drives
 # ADIM/HD, which the driver reads as a digital duty cycle: LED current = 2 A x duty.
-# - ADIM runs at 10 kHz. The driver resolves 8 bits only up to 39 kHz, and the MCPWM timer
-#   runs at 1 MHz, so 10 kHz gives 100 steps (20 mA). 39 kHz gave 25 steps (80 mA).
+# - ADIM runs at 10 kHz. The driver resolves 8 bits (about 8 mA) only up to 39 kHz. The
+#   MCPWM timer counts at 10 MHz, so 10 kHz gives 1000 steps and the driver is the limit.
 # - If ADIM stays low while EN/PWM pulses, the driver enters hybrid dimming and sets the
 #   current from the PWM duty alone, up to 2 A. So EN/PWM is held off until the current is
 #   high enough to pulse ADIM (see adim_on below).
@@ -90,9 +90,8 @@ number:
             }
             
             // ADIM must pulse before EN/PWM turns the driver on, or it enters hybrid dimming.
-            // The first pulse must be at least 1 us: 1% duty (20 mA) at 10 kHz. The output
-            // rounds down to 20 mA steps, so 50 mA still gives a 2 us pulse. Below that the
-            // channel is off.
+            // The first pulse must be at least 1 us: 1% duty (20 mA) at 10 kHz. 50 mA gives
+            // 2.5 us, leaving margin. Below that the channel is off.
             const float MIN_ADIM_CURRENT = 0.05f;
             bool adim_on = limited_current >= MIN_ADIM_CURRENT;
             if (!adim_on) {
