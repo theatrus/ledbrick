@@ -127,9 +127,12 @@ public:
     
     // Interpolation and current state
     InterpolationResult get_values_at_time(uint16_t current_time_minutes) const;
-    InterpolationResult get_values_at_time_with_astro(uint16_t current_time_minutes, 
+    InterpolationResult get_values_at_time_with_astro(uint16_t current_time_minutes,
                                                       const AstronomicalTimes& astro_times) const;
-    
+    // Same, to the second, so ramps move smoothly instead of in one-minute steps
+    InterpolationResult get_values_at_seconds_with_astro(uint32_t second_of_day,
+                                                         const AstronomicalTimes& astro_times) const;
+
     // Moon simulation
     void set_moon_simulation(const MoonSimulation& config);
     MoonSimulation get_moon_simulation() const { return moon_simulation_; }
@@ -197,7 +200,7 @@ private:
     
     // Internal methods
     InterpolationResult interpolate_values(uint16_t current_time) const;
-    InterpolationResult interpolate_values_with_astro(uint16_t current_time, const AstronomicalTimes& astro_times) const;
+    InterpolationResult interpolate_values_with_astro(float current_time, const AstronomicalTimes& astro_times) const;
     InterpolationResult apply_moon_simulation(const InterpolationResult& base_result, uint16_t current_time, 
                                              const AstronomicalTimes& astro_times) const;
     bool is_moon_visible(uint16_t current_time, const AstronomicalTimes& astro_times) const;

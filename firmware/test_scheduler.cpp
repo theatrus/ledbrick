@@ -971,6 +971,41 @@ void test_exact_point_time(TestRunner& runner) {
     runner.assert_equals(0.5f, clamped.current_values[0], 0.001f, "Current clamped on the point's minute");
 }
 
+void test_interpolation_to_the_second(TestRunner& runner) {
+    runner.start_suite("Interpolation To The Second Tests");
+
+    LEDScheduler scheduler(2);
+    scheduler.set_schedule_point(600, {0.0f, 0.0f}, {0.0f, 0.0f});
+    scheduler.set_schedule_point(660, {60.0f, 30.0f}, {1.0f, 0.5f});
+    LEDScheduler::AstronomicalTimes astro;
+    astro.valid = true;
+
+    // Whole minutes match the minute API
+    auto by_minute = scheduler.get_values_at_time_with_astro(630, astro);
+    auto by_second = scheduler.get_values_at_seconds_with_astro(630 * 60, astro);
+    runner.assert_equals(by_minute.pwm_values[0], by_second.pwm_values[0], 0.0001f, "Same value on a whole minute");
+    runner.assert_equals(by_minute.current_values[1], by_second.current_values[1], 0.0001f, "Same current on a whole minute");
+
+    // Between minutes the value moves instead of holding for the whole minute
+    auto half = scheduler.get_values_at_seconds_with_astro(630 * 60 + 30, astro);
+    runner.assert_equals(30.5f, half.pwm_values[0], 0.001f, "Half a minute later: half a minute's change");
+    runner.assert_equals(0.5083f, half.current_values[0], 0.001f, "Current also moves within the minute");
+
+    // Every second of the ramp is a little higher than the last
+    bool rising = true;
+    float last = -1.0f;
+    for (uint32_t s = 600 * 60; s <= 660 * 60; s += 7) {
+        float v = scheduler.get_values_at_seconds_with_astro(s, astro).pwm_values[0];
+        if (s > 600 * 60 && !(v > last)) rising = false;
+        last = v;
+    }
+    runner.assert_true(rising, "Ramp rises at every sample, not once a minute");
+
+    // Out of range is invalid, wrap-around still works near midnight
+    runner.assert_false(scheduler.get_values_at_seconds_with_astro(1440 * 60, astro).valid, "86400 s is out of range");
+    runner.assert_true(scheduler.get_values_at_seconds_with_astro(1440 * 60 - 1, astro).valid, "Last second of the day is valid");
+}
+
 void test_json_export_size(TestRunner& runner) {
     runner.start_suite("JSON Export Size Tests");
 
@@ -1022,6 +1057,9 @@ int main() {
     results.add_suite_results(runner);
 
     test_exact_point_time(runner);
+    results.add_suite_results(runner);
+
+    test_interpolation_to_the_second(runner);
     results.add_suite_results(runner);
     
     test_edge_cases(runner);

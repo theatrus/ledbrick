@@ -174,7 +174,16 @@ LEDScheduler::InterpolationResult LEDScheduler::get_values_at_time_with_astro(ui
         return InterpolationResult(); // Invalid time
     }
     
-    return interpolate_values_with_astro(current_time_minutes, astro_times);
+    return interpolate_values_with_astro(static_cast<float>(current_time_minutes), astro_times);
+}
+
+LEDScheduler::InterpolationResult LEDScheduler::get_values_at_seconds_with_astro(uint32_t second_of_day,
+                                                                               const AstronomicalTimes& astro_times) const {
+    if (second_of_day >= 1440u * 60u) {
+        return InterpolationResult(); // Invalid time
+    }
+
+    return interpolate_values_with_astro(second_of_day / 60.0f, astro_times);
 }
 
 void LEDScheduler::set_astronomical_times(const AstronomicalTimes& times) {
@@ -434,7 +443,7 @@ std::vector<LEDScheduler::SchedulePoint> LEDScheduler::resolve_dynamic_points(co
     return resolved_points;
 }
 
-LEDScheduler::InterpolationResult LEDScheduler::interpolate_values_with_astro(uint16_t current_time, 
+LEDScheduler::InterpolationResult LEDScheduler::interpolate_values_with_astro(float current_time,
                                                                             const AstronomicalTimes& astro_times) const {
     // Resolve all dynamic points to actual times
     auto resolved_points = resolve_dynamic_points(astro_times);
@@ -492,15 +501,15 @@ LEDScheduler::InterpolationResult LEDScheduler::interpolate_values_with_astro(ui
         
         // An exact match on a point gives elapsed = 0, so the same path handles it
         // and still gets the current clamp and moon simulation below
-        uint16_t time_span = after->time_minutes > before->time_minutes ? 
+        uint16_t time_span = after->time_minutes > before->time_minutes ?
             after->time_minutes - before->time_minutes :
             (1440 - before->time_minutes) + after->time_minutes; // Handle wrap-around
-            
-        uint16_t elapsed = current_time >= before->time_minutes ?
+
+        float elapsed = current_time >= before->time_minutes ?
             current_time - before->time_minutes :
             (1440 - before->time_minutes) + current_time; // Handle wrap-around
-            
-        float ratio = time_span > 0 ? static_cast<float>(elapsed) / time_span : 0.0f;
+
+        float ratio = time_span > 0 ? elapsed / time_span : 0.0f;
         
         for (size_t i = 0; i < num_channels_; i++) {
             result.pwm_values[i] = before->pwm_values[i] + ratio * (after->pwm_values[i] - before->pwm_values[i]);
@@ -518,7 +527,7 @@ LEDScheduler::InterpolationResult LEDScheduler::interpolate_values_with_astro(ui
     
     // Apply moon simulation if enabled
     if (moon_simulation_.enabled && astro_times.valid) {
-        result = apply_moon_simulation(result, current_time, astro_times);
+        result = apply_moon_simulation(result, static_cast<uint16_t>(current_time), astro_times);
     }
     
     return result;

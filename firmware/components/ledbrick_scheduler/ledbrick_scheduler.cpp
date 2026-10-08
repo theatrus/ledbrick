@@ -139,11 +139,12 @@ void LEDBrickScheduler::update() {
     // Update astronomical times for dynamic schedule points
     update_astronomical_times_for_scheduler();
     
-    // Get current values from standalone scheduler and apply them
+    // Get current values from standalone scheduler and apply them. Interpolate to the
+    // second so ramps move at every update instead of in one-minute steps
     uint16_t current_time = get_current_time_minutes();
     
     // Use astronomical interpolation if we have dynamic points
-    auto values = scheduler_.get_values_at_time_with_astro(current_time, scheduler_.get_astronomical_times());
+    auto values = scheduler_.get_values_at_seconds_with_astro(get_current_time_seconds(), scheduler_.get_astronomical_times());
     ESP_LOGD(TAG, "Scheduler values at %02d:%02d - valid: %s, channels: %zu, schedule_points: %zu", 
              current_time / 60, current_time % 60, 
              values.valid ? "true" : "false", 
@@ -366,10 +367,20 @@ uint16_t LEDBrickScheduler::get_current_time_minutes() const {
   return time.hour * 60 + time.minute;
 }
 
+uint32_t LEDBrickScheduler::get_current_time_seconds() const {
+  if (!time_source_) {
+    return 0;
+  }
+  auto time = time_source_->now();
+  if (!time.is_valid()) {
+    return 0;
+  }
+  return time.hour * 3600u + time.minute * 60u + time.second;
+}
+
 InterpolationResult LEDBrickScheduler::get_current_values() const {
   // Same interpolation as update(), so dynamic (sunrise-relative etc.) points count
-  uint16_t current_time = get_current_time_minutes();
-  return scheduler_.get_values_at_time_with_astro(current_time, scheduler_.get_astronomical_times());
+  return scheduler_.get_values_at_seconds_with_astro(get_current_time_seconds(), scheduler_.get_astronomical_times());
 }
 
 InterpolationResult LEDBrickScheduler::get_actual_channel_values() const {
@@ -1797,7 +1808,7 @@ void LEDBrickScheduler::on_emergency_change(bool emergency) {
     if (enabled_ && has_valid_time()) {
       // Get current values and apply them
       uint16_t current_time = get_current_time_minutes();
-      auto values = scheduler_.get_values_at_time_with_astro(current_time, scheduler_.get_astronomical_times());
+      auto values = scheduler_.get_values_at_seconds_with_astro(get_current_time_seconds(), scheduler_.get_astronomical_times());
       
       if (values.valid) {
         ESP_LOGI(TAG, "Restoring scheduled values at %02d:%02d", current_time / 60, current_time % 60);

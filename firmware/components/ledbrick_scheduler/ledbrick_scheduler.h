@@ -158,6 +158,7 @@ class LEDBrickScheduler : public PollingComponent {
   // Current state
   bool has_valid_time() const;
   uint16_t get_current_time_minutes() const;  // 0 when the time is not valid
+  uint32_t get_current_time_seconds() const;  // Second of the day; 0 when the time is not valid
   InterpolationResult get_current_values() const;
   InterpolationResult get_actual_channel_values() const;
   
