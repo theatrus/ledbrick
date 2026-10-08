@@ -112,7 +112,7 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
         configs.push({
           name: config?.name || `Channel ${i + 1}`,
           rgb_hex: config?.rgb_hex || DEFAULT_CHANNEL_COLORS[i % DEFAULT_CHANNEL_COLORS.length],
-          max_current: config?.max_current || 2.0
+          max_current: config?.max_current ?? 2.0
         });
       }
       setChannelConfigs(configs);
@@ -365,7 +365,7 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
                       value={config.max_current}
                       onChange={(e) => handleChannelConfigChange(index, 'max_current', e.target.value)}
                       min="0"
-                      max="10"
+                      max="2"
                       step="0.1"
                     />
                   </div>
@@ -455,8 +455,8 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
                         className="form-control"
                         value={timeShiftHours}
                         onChange={(e) => { setTimeShiftHours(e.target.value); setHasChanges(true); }}
-                        min="-23"
-                        max="23"
+                        min="-12"
+                        max="12"
                       />
                     </div>
                     <div className="form-group">
