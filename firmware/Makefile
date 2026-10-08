@@ -17,9 +17,10 @@ TEST_DIR := tests
 
 # Source files
 ASTRO_SOURCES := $(COMPONENT_DIR)/astronomical_calculator.cpp
-SCHEDULER_SOURCES := $(COMPONENT_DIR)/scheduler.cpp $(COMPONENT_DIR)/cJSON.c
+SCHEDULER_SOURCES := $(COMPONENT_DIR)/scheduler.cpp $(COMPONENT_DIR)/cJSON.c $(COMPONENT_DIR)/led_dimming.cpp $(COMPONENT_DIR)/led_models.cpp
 PID_SOURCES := $(COMPONENT_DIR)/pid_controller.cpp
 TEMP_CONTROL_SOURCES := $(COMPONENT_DIR)/temperature_control.cpp $(COMPONENT_DIR)/cJSON.c
+LED_DIMMING_SOURCES := $(COMPONENT_DIR)/led_dimming.cpp $(COMPONENT_DIR)/led_models.cpp
 TEST_FRAMEWORK := test_framework.h
 
 # Test executables
@@ -27,10 +28,11 @@ ASTRO_TEST := $(BUILD_DIR)/test_astronomical
 SCHEDULER_TEST := $(BUILD_DIR)/test_scheduler
 PID_TEST := $(BUILD_DIR)/test_pid_controller
 TEMP_CONTROL_TEST := $(BUILD_DIR)/test_temperature_control
-ALL_TESTS := $(ASTRO_TEST) $(SCHEDULER_TEST) $(PID_TEST) $(TEMP_CONTROL_TEST)
+LED_DIMMING_TEST := $(BUILD_DIR)/test_led_dimming
+ALL_TESTS := $(ASTRO_TEST) $(SCHEDULER_TEST) $(PID_TEST) $(TEMP_CONTROL_TEST) $(LED_DIMMING_TEST)
 
 # Phony targets
-.PHONY: all test test-astro test-scheduler test-pid test-temperature clean help setup esphome web dev
+.PHONY: all test test-astro test-scheduler test-pid test-temperature test-led clean help setup esphome web dev
 
 # Default target
 all: test
@@ -59,6 +61,11 @@ $(TEMP_CONTROL_TEST): test_temperature_control.cpp $(TEMP_CONTROL_SOURCES) $(PID
 	@echo "🔨 Building temperature control tests..."
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -o $@ test_temperature_control.cpp $(TEMP_CONTROL_SOURCES) $(PID_SOURCES)
 
+# Build LED dimming tests
+$(LED_DIMMING_TEST): test_led_dimming.cpp $(LED_DIMMING_SOURCES) $(TEST_FRAMEWORK) | $(BUILD_DIR)
+	@echo "🔨 Building LED dimming tests..."
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -o $@ test_led_dimming.cpp $(LED_DIMMING_SOURCES)
+
 # Run all tests
 test: $(ALL_TESTS)
 	@echo "=== LEDBrick Firmware Test Suite ==="
@@ -74,6 +81,9 @@ test: $(ALL_TESTS)
 	@echo
 	@echo "🧪 Running temperature control tests..."
 	@$(TEMP_CONTROL_TEST)
+	@echo
+	@echo "🧪 Running LED dimming tests..."
+	@$(LED_DIMMING_TEST)
 	@echo
 	@echo "=== ALL TESTS COMPLETED ==="
 
@@ -94,12 +104,17 @@ test-temperature: $(TEMP_CONTROL_TEST)
 	@echo "🧪 Running temperature control tests..."
 	@$(TEMP_CONTROL_TEST)
 
+test-led: $(LED_DIMMING_TEST)
+	@echo "🧪 Running LED dimming tests..."
+	@$(LED_DIMMING_TEST)
+
 # Cross-compiler testing
 test-clang: CXX := clang++
 test-clang: $(ALL_TESTS)
 	@echo "🔄 Running tests with clang++..."
 	@$(ASTRO_TEST) > /dev/null && echo "✅ Astronomical tests passed with clang++"
 	@$(SCHEDULER_TEST) > /dev/null && echo "✅ Scheduler tests passed with clang++"
+	@$(LED_DIMMING_TEST) > /dev/null && echo "✅ LED dimming tests passed with clang++"
 
 # Verbose test output
 test-verbose: $(ALL_TESTS)
@@ -191,6 +206,7 @@ help:
 	@echo "  test            - Run all tests"
 	@echo "  test-astro      - Run astronomical calculator tests only"
 	@echo "  test-scheduler  - Run scheduler tests only"
+	@echo "  test-led        - Run LED dimming tests only"
 	@echo "  test-clang      - Run tests with clang++ compiler"
 	@echo "  test-verbose    - Run tests with verbose output"
 	@echo "  web             - Build React web UI"

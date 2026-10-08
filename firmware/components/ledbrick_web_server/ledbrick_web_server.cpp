@@ -68,6 +68,9 @@ void LEDBrickWebServer::setup() {
     {"/api/timezone", HTTP_POST, handle_api_timezone_post},
     {"/api/channel/control", HTTP_POST, handle_api_channel_control},
     {"/api/channel/configs", HTTP_POST, handle_api_channel_configs},
+    {"/api/channel/dimming", HTTP_POST, handle_api_channel_dimming},
+    {"/api/led_models", HTTP_GET, handle_api_led_models_get},
+    {"/api/led_models", HTTP_POST, handle_api_led_models_post},
     {"/api/temperature/config", HTTP_GET, handle_api_temperature_config_get},
     {"/api/temperature/config", HTTP_POST, handle_api_temperature_config_post},
     {"/api/temperature/status", HTTP_GET, handle_api_temperature_status_get},
@@ -571,6 +574,15 @@ esp_err_t LEDBrickWebServer::handle_api_status_get(httpd_req_t *req) {
       channel["id"] = i + 1;
       channel["pwm"] = values.pwm_values[i];
       channel["current"] = values.current_values[i];
+      if (scheduler->is_curve_channel(i)) {
+        channel["mode"] = "curve";
+        float level = scheduler->get_channel_level(i);
+        if (level >= 0.0f) {
+          channel["level"] = level * 100.0f;
+        }
+      } else {
+        channel["mode"] = "manual";
+      }
     }
 
     // Add time formatted (handle invalid time gracefully)
@@ -598,6 +610,7 @@ esp_err_t LEDBrickWebServer::handle_api_status_get(httpd_req_t *req) {
 
     // Add moon phase
     doc["moon_phase"] = scheduler->get_moon_phase();
+    doc["led_temp_c"] = scheduler->get_led_temperature_c();
 
     // Add moon rise/set times
     auto moon_times = scheduler->get_moon_rise_set_times();
@@ -1243,24 +1256,30 @@ esp_err_t LEDBrickWebServer::handle_api_channel_control(httpd_req_t *req) {
     return ESP_OK;
   }
 
-  // Extract channel and values
-  if (!doc["channel"].is<int>() || !doc["pwm"].is<float>() || !doc["current"].is<float>()) {
-    self->send_error(req, 400, "Missing channel, pwm, or current");
+  // A curve-mode channel takes a level (0-100); a manual one takes PWM and current
+  const bool by_level = doc["level"].is<float>();
+  if (!doc["channel"].is<int>() || (!by_level && (!doc["pwm"].is<float>() || !doc["current"].is<float>()))) {
+    self->send_error(req, 400, "Missing channel and level, or channel, pwm and current");
     return ESP_OK;
   }
 
   int channel = doc["channel"];
-  float pwm = doc["pwm"];
-  float current = doc["current"];
+  float level = by_level ? doc["level"].as<float>() : 0.0f;
+  float pwm = by_level ? 0.0f : doc["pwm"].as<float>();
+  float current = by_level ? 0.0f : doc["current"].as<float>();
 
+  if (by_level && !(level >= 0.0f && level <= 100.0f)) {
+    self->send_error(req, 400, "level must be between 0 and 100");
+    return ESP_OK;
+  }
   // Validate PWM (0-100%)
-  if (!(pwm >= 0.0f && pwm <= 100.0f)) {
+  if (!by_level && !(pwm >= 0.0f && pwm <= 100.0f)) {
     self->send_error(req, 400, "PWM must be between 0 and 100");
     return ESP_OK;
   }
 
   auto *scheduler = self->scheduler_;
-  return self->respond_from_loop_(req, [scheduler, channel, pwm, current](JsonDocument &response) {
+  return self->respond_from_loop_(req, [scheduler, channel, by_level, level, pwm, current](JsonDocument &response) {
     auto reject = [&response](int status, const std::string &message) {
       response["error"] = message;
       response["code"] = status;
@@ -1276,6 +1295,20 @@ esp_err_t LEDBrickWebServer::handle_api_channel_control(httpd_req_t *req) {
     }
     if (channel < 0 || channel >= scheduler->get_num_channels()) {
       return reject(400, "Invalid channel number");
+    }
+
+    if (by_level) {
+      if (!scheduler->is_curve_channel(channel)) {
+        return reject(400, "level needs a channel in curve mode");
+      }
+      if (!scheduler->set_channel_manual_level(channel, level / 100.0f)) {
+        return reject(409, "Manual control rejected");
+      }
+      response["success"] = true;
+      response["channel"] = channel;
+      response["level"] = level;
+      response["message"] = "Channel control updated";
+      return 200;
     }
 
     // Validate current (0 to max current for channel)
@@ -1392,6 +1425,163 @@ esp_err_t LEDBrickWebServer::handle_not_found(httpd_req_t *req) {
 }
 
 // Temperature control API handlers
+esp_err_t LEDBrickWebServer::handle_api_led_models_get(httpd_req_t *req) {
+  auto *self = get_instance(req);
+  if (!self->check_auth(req)) return ESP_OK;
+
+  // ?custom=true gives just the custom models, as {"led_models": [...]}, ready to post back
+  bool custom_only = false;
+  char query[48];
+  char value[8];
+  if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK &&
+      httpd_query_key_value(query, "custom", value, sizeof(value)) == ESP_OK) {
+    custom_only = strcmp(value, "true") == 0 || strcmp(value, "1") == 0;
+  }
+
+  // Custom models change at runtime, so read them on the main loop
+  auto json = std::make_shared<std::string>();
+  auto *scheduler = self->scheduler_;
+  if (!self->run_in_loop_([scheduler, json, custom_only]() { *json = scheduler->get_led_models_json(custom_only); })) {
+    self->send_error(req, 503, "Device busy, try again");
+    return ESP_OK;
+  }
+
+  httpd_resp_set_type(req, "application/json");
+  httpd_resp_send(req, json->c_str(), json->length());
+  return ESP_OK;
+}
+
+esp_err_t LEDBrickWebServer::handle_api_led_models_post(httpd_req_t *req) {
+  auto *self = get_instance(req);
+  if (!self->check_auth(req)) return ESP_OK;
+
+  auto buf = read_request_body(req);
+  if (!buf) return ESP_OK;  // Error already sent
+
+  auto body = std::make_shared<std::string>(buf.get());
+  auto *scheduler = self->scheduler_;
+  return self->respond_from_loop_(req, [scheduler, body](JsonDocument &doc) {
+    std::string error;
+    bool save_failed = false;
+    if (!scheduler->set_led_models_json(*body, &error, &save_failed)) {
+      int code = save_failed ? 500 : 400;
+      doc["error"] = error;
+      doc["code"] = code;
+      return code;
+    }
+    doc["success"] = true;
+    doc["custom_models"] = scheduler->get_custom_led_model_count();
+    return 200;
+  });
+}
+
+esp_err_t LEDBrickWebServer::handle_api_channel_dimming(httpd_req_t *req) {
+  auto *self = get_instance(req);
+  if (!self->check_auth(req)) return ESP_OK;
+
+  auto buf = read_request_body(req);
+  if (!buf) return ESP_OK;  // Error already sent
+
+  JsonDocument doc;
+  if (deserializeJson(doc, buf.get())) {
+    self->send_error(req, 400, "Invalid JSON");
+    return ESP_OK;
+  }
+
+  // Fields left out keep the channel's current settings
+  struct Request {
+    int channel{-1};
+    bool has_mode{false};
+    ledbrick::DimMode mode{ledbrick::DimMode::MANUAL};
+    bool has_priority{false};
+    ledbrick::DimPriority priority{ledbrick::DimPriority::CURRENT_FIRST};
+    bool has_floor{false};
+    float floor_current{0.0f};
+    bool has_leds{false};
+    std::vector<ledbrick::LedGroup> leds;
+  } request;
+
+  if (!doc["channel"].is<int>()) {
+    self->send_error(req, 400, "Missing channel");
+    return ESP_OK;
+  }
+  request.channel = doc["channel"];
+  if (!doc["mode"].isNull()) {
+    std::string mode = doc["mode"].is<const char *>() ? doc["mode"].as<const char *>() : "";
+    if (mode != "curve" && mode != "manual") {
+      self->send_error(req, 400, "mode must be curve or manual");
+      return ESP_OK;
+    }
+    request.has_mode = true;
+    request.mode = mode == "curve" ? ledbrick::DimMode::CURVE : ledbrick::DimMode::MANUAL;
+  }
+  if (!doc["priority"].isNull()) {
+    std::string priority = doc["priority"].is<const char *>() ? doc["priority"].as<const char *>() : "";
+    if (priority != "current" && priority != "pwm") {
+      self->send_error(req, 400, "priority must be current or pwm");
+      return ESP_OK;
+    }
+    request.has_priority = true;
+    request.priority = priority == "pwm" ? ledbrick::DimPriority::PWM_FIRST : ledbrick::DimPriority::CURRENT_FIRST;
+  }
+  if (!doc["floor_current"].isNull()) {
+    if (!doc["floor_current"].is<float>()) {
+      self->send_error(req, 400, "floor_current must be a number");
+      return ESP_OK;
+    }
+    request.has_floor = true;
+    request.floor_current = doc["floor_current"];
+  }
+  if (doc["leds_default"].is<bool>() && doc["leds_default"].as<bool>()) {
+    request.has_leds = true;  // empty: the emitter's LEDs
+  } else if (!doc["leds"].isNull()) {
+    if (!doc["leds"].is<JsonArrayConst>()) {
+      self->send_error(req, 400, "leds must be an array");
+      return ESP_OK;
+    }
+    for (JsonObjectConst entry : doc["leds"].as<JsonArrayConst>()) {
+      if (!entry["model"].is<const char *>() || !entry["count"].is<int>()) {
+        self->send_error(req, 400, "Each LED needs a model and a whole count");
+        return ESP_OK;
+      }
+      int count = entry["count"];
+      if (count < 1 || count > 100) {
+        self->send_error(req, 400, "LED count must be 1-100");
+        return ESP_OK;
+      }
+      request.leds.push_back({entry["model"].as<const char *>(), static_cast<uint16_t>(count)});
+    }
+    request.has_leds = true;
+  }
+
+  auto *scheduler = self->scheduler_;
+  return self->respond_from_loop_(req, [scheduler, request](JsonDocument &response) {
+    if (request.channel < 0 || request.channel >= scheduler->get_num_channels()) {
+      response["error"] = "Invalid channel number";
+      response["code"] = 400;
+      return 400;
+    }
+    uint8_t channel = static_cast<uint8_t>(request.channel);
+    auto config = scheduler->get_channel_config(channel);
+    std::string error;
+    if (!scheduler->set_channel_dimming(channel, request.has_mode ? request.mode : config.dim_mode,
+                                        request.has_priority ? request.priority : config.dim_priority,
+                                        request.has_floor ? request.floor_current : config.floor_current,
+                                        request.has_leds ? request.leds : config.leds, &error)) {
+      response["error"] = error;
+      response["code"] = 400;
+      return 400;
+    }
+    if (!scheduler->save_schedule_to_flash()) {
+      return save_failed(response);
+    }
+    response["success"] = true;
+    response["channel"] = request.channel;
+    response["mode"] = scheduler->is_curve_channel(channel) ? "curve" : "manual";
+    return 200;
+  });
+}
+
 esp_err_t LEDBrickWebServer::handle_api_temperature_config_get(httpd_req_t *req) {
   auto *self = get_instance(req);
   if (!self->check_auth(req)) return ESP_OK;

@@ -15,6 +15,7 @@ import { Line } from 'react-chartjs-2';
 import annotationPlugin from 'chartjs-plugin-annotation';
 import type { Schedule, SchedulePoint } from '../types';
 import { DEFAULT_CHANNEL_COLORS } from '../constants/colors';
+import { isCurveChannel } from '../utils/dimming';
 
 // Register Chart.js components
 ChartJS.register(
@@ -41,6 +42,11 @@ export function ScheduleChart({ schedule, currentTime, moonriseTime, moonsetTime
     new Array(schedule.num_channels).fill(true)
   );
   const [showCurrent, setShowCurrent] = useState(false);
+
+  // Curve channels hold a level (% of their light at max current) in pwm_values and
+  // have no set current, so the current view leaves them out
+  const curveChannels = Array.from({ length: schedule.num_channels }, (_, i) => isCurveChannel(schedule, i));
+  const anyCurve = curveChannels.some(curve => curve);
 
   // Generate time labels for x-axis (every 15 minutes)
   const timeLabels = Array.from({ length: 96 }, (_, i) => {
@@ -188,7 +194,7 @@ export function ScheduleChart({ schedule, currentTime, moonriseTime, moonsetTime
       tension: 0.4,
       pointRadius: 0,
       pointHoverRadius: 5,
-      hidden: !visibleChannels[i]
+      hidden: !visibleChannels[i] || (showCurrent && curveChannels[i])
     };
   });
 
@@ -218,7 +224,7 @@ export function ScheduleChart({ schedule, currentTime, moonriseTime, moonsetTime
     let maxScheduledCurrent = 0;
     for (const point of schedule.schedule_points) {
       if (point.current_values) {
-        const pointMax = Math.max(...point.current_values);
+        const pointMax = Math.max(...point.current_values.filter((_, i) => !curveChannels[i]));
         maxScheduledCurrent = Math.max(maxScheduledCurrent, pointMax);
       }
     }
@@ -252,7 +258,8 @@ export function ScheduleChart({ schedule, currentTime, moonriseTime, moonsetTime
         callbacks: {
           title: (tooltipItems: TooltipItem<'line'>[]) => `Time: ${tooltipItems[0].label}`,
           label: (context: TooltipItem<'line'>) =>
-            `${context.dataset.label}: ${context.parsed.y?.toFixed(1) ?? '--'}${showCurrent ? 'mA' : '%'}`
+            `${context.dataset.label}: ${context.parsed.y?.toFixed(1) ?? '--'}${showCurrent ? 'mA' : '%'}` +
+            (!showCurrent && curveChannels[context.datasetIndex] ? ' level' : '')
         }
       },
       annotation: {
@@ -331,7 +338,7 @@ export function ScheduleChart({ schedule, currentTime, moonriseTime, moonsetTime
       y: {
         title: {
           display: true,
-          text: showCurrent ? 'Current (mA)' : 'PWM (%)'
+          text: showCurrent ? 'Current (mA)' : (anyCurve ? 'PWM / level (%)' : 'PWM (%)')
         },
         min: 0,
         max: yAxisMax,
@@ -340,7 +347,7 @@ export function ScheduleChart({ schedule, currentTime, moonriseTime, moonsetTime
           callback: function(value) {
             if (!showCurrent) {
               // Only show tick labels up to 100%
-              return value <= 100 ? value : '';
+              return Number(value) <= 100 ? value : '';
             }
             return value;
           }
@@ -383,6 +390,9 @@ export function ScheduleChart({ schedule, currentTime, moonriseTime, moonsetTime
           Current (mA)
         </button>
       </div>
+      {showCurrent && anyCurve && (
+        <div className="chart-note">LED curve channels set a level, not a current, so they are not shown here.</div>
+      )}
       <div className="chart-container">
         <Line
           ref={chartRef}
@@ -396,19 +406,26 @@ export function ScheduleChart({ schedule, currentTime, moonriseTime, moonsetTime
           const channelConfig = schedule.channel_configs?.[i];
           const color = channelConfig?.rgb_hex || DEFAULT_CHANNEL_COLORS[i % DEFAULT_CHANNEL_COLORS.length];
           const name = channelConfig?.name || `Channel ${i + 1}`;
+          const notShown = showCurrent && curveChannels[i];
 
           return (
-            <div key={i} className="legend-item">
+            <div
+              key={i}
+              className="legend-item"
+              style={notShown ? { opacity: 0.5 } : undefined}
+              title={curveChannels[i] ? (notShown ? 'LED curve: no set current' : 'LED curve: plotted as its level') : undefined}
+            >
               <input
                 type="checkbox"
                 checked={visibleChannels[i]}
                 onChange={() => toggleChannel(i)}
+                disabled={notShown}
               />
               <div 
                 className="legend-color" 
                 style={{ backgroundColor: color }}
               />
-              <span>{name}</span>
+              <span>{name}{curveChannels[i] ? ' (curve)' : ''}</span>
             </div>
           );
         })}

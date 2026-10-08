@@ -4,3 +4,6 @@
 /.esphome/
 /.venv/
 secrets.yaml
+
+# Board settings backups (tools/board_config.py): tank schedules and locations
+/backups/

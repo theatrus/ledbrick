@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import type { MoonSimulation, Schedule } from '../types';
 import { api } from '../api/client';
 import { DEFAULT_CHANNEL_COLORS } from '../constants/colors';
+import { isCurveChannel } from '../utils/dimming';
 
 interface MoonSettingsProps {
   moonSimulation: MoonSimulation | undefined;
@@ -21,6 +22,11 @@ export function MoonSettings({ moonSimulation, schedule, onUpdate }: MoonSetting
   const [baseCurrent, setBaseCurrent] = useState<number[]>(new Array(numChannels).fill(0));
   const [isSaving, setIsSaving] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  // Curve channels take a moonlight level (base_intensity); their current is unused
+  const curveChannels = Array.from({ length: schedule.num_channels }, (_, i) => isCurveChannel(schedule, i));
+  const anyCurve = curveChannels.some(curve => curve);
+  const allCurve = curveChannels.length > 0 && curveChannels.every(curve => curve);
 
   // Initialize from props only once
   useEffect(() => {
@@ -91,6 +97,7 @@ export function MoonSettings({ moonSimulation, schedule, onUpdate }: MoonSetting
     setBaseIntensity(new Array(numChannels).fill(pwmValue));
     // Set current proportionally based on max current
     const newCurrents = new Array(numChannels).fill(0).map((_, i) => {
+      if (curveChannels[i]) return 0;
       const maxCurrent = schedule.channel_configs?.[i]?.max_current || 2.0;
       return (pwmValue / 20) * maxCurrent; // Scale to 20% max for moon
     });
@@ -151,25 +158,27 @@ export function MoonSettings({ moonSimulation, schedule, onUpdate }: MoonSetting
                   setHasUnsavedChanges(true);
                 }}
               />
-              <span>Scale PWM with moon phase</span>
+              <span>{anyCurve ? 'Scale PWM and levels with moon phase' : 'Scale PWM with moon phase'}</span>
             </label>
           </div>
 
-          <div className="form-group">
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={phaseScalingCurrent}
-                onChange={(e) => {
-                  setPhaseScalingCurrent(e.target.checked);
-                  setHasUnsavedChanges(true);
-                }}
-              />
-              <span>Scale current with moon phase</span>
-            </label>
-          </div>
+          {!allCurve && (
+            <div className="form-group">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={phaseScalingCurrent}
+                  onChange={(e) => {
+                    setPhaseScalingCurrent(e.target.checked);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+                <span>Scale current with moon phase</span>
+              </label>
+            </div>
+          )}
 
-          {phaseScalingCurrent && (
+          {phaseScalingCurrent && !allCurve && (
             <div className="form-group">
               <label>
                 <span>Minimum current threshold (A):</span>
@@ -220,6 +229,39 @@ export function MoonSettings({ moonSimulation, schedule, onUpdate }: MoonSetting
               const color = channelConfig?.rgb_hex || DEFAULT_CHANNEL_COLORS[i % DEFAULT_CHANNEL_COLORS.length];
               const name = channelConfig?.name || `Channel ${i + 1}`;
               const maxCurrent = channelConfig?.max_current || 2.0;
+
+              if (curveChannels[i]) {
+                return (
+                  <div key={i} className="channel-dual-input">
+                    <div className="channel-header" style={{ color }}>
+                      {name}
+                    </div>
+
+                    <div className="control-group">
+                      <label className="control-label">Level %</label>
+                      <input
+                        type="number"
+                        value={(baseIntensity[i] || 0).toFixed(1)}
+                        onChange={(e) => handlePwmChange(i, Number(e.target.value))}
+                        className="control-input"
+                        min="0"
+                        max="20"
+                        step="0.1"
+                      />
+                      <input
+                        type="range"
+                        value={baseIntensity[i] || 0}
+                        onChange={(e) => handlePwmChange(i, Number(e.target.value))}
+                        className="control-slider"
+                        min="0"
+                        max="20"
+                        step="0.1"
+                      />
+                      <div className="dimming-help">LED curve: % of the light at max current</div>
+                    </div>
+                  </div>
+                );
+              }
 
               return (
                 <div key={i} className="channel-dual-input">

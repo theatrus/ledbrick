@@ -29,6 +29,7 @@ void LEDBrickScheduler::setup() {
   
   // Initialize persistent storage
   schedule_pref_ = global_preferences->make_preference<ScheduleStorage>(SCHEDULE_HASH);
+  led_models_pref_ = global_preferences->make_preference<LedModelsStorage>(LED_MODELS_HASH);
   emergency_pref_ = global_preferences->make_preference<bool>(EMERGENCY_HASH);
   
   // Set up temperature hardware callbacks (moved from controller to hardware manager)
@@ -51,8 +52,15 @@ void LEDBrickScheduler::setup() {
     temp_control_.update_hardware_state(temp_hardware_.get_hardware_state());
   }
   
-  // Load schedule from flash storage (includes all settings in JSON)
+  // Load schedule from flash storage (includes all settings in JSON). The custom LED
+  // models come first, since channels name them.
+  load_led_models_from_flash();
   load_schedule_from_flash();
+  std::string model_error;
+  if (!scheduler_.channels_have_models(&model_error)) {
+    ESP_LOGE(TAG, "%s; using the standard LED for it until the model is posted to /api/led_models",
+             model_error.c_str());
+  }
   
   // Initialize temperature control
   temp_control_.set_config(temp_config_);
@@ -139,11 +147,12 @@ void LEDBrickScheduler::update() {
     // Update astronomical times for dynamic schedule points
     update_astronomical_times_for_scheduler();
     
-    // Get current values from standalone scheduler and apply them
+    // Get current values from standalone scheduler and apply them. Interpolate to the
+    // second so ramps move at every update instead of in one-minute steps
     uint16_t current_time = get_current_time_minutes();
     
     // Use astronomical interpolation if we have dynamic points
-    auto values = scheduler_.get_values_at_time_with_astro(current_time, scheduler_.get_astronomical_times());
+    auto values = scheduler_.get_values_at_seconds_with_astro(get_current_time_seconds(), scheduler_.get_astronomical_times());
     ESP_LOGD(TAG, "Scheduler values at %02d:%02d - valid: %s, channels: %zu, schedule_points: %zu", 
              current_time / 60, current_time % 60, 
              values.valid ? "true" : "false", 
@@ -366,10 +375,88 @@ uint16_t LEDBrickScheduler::get_current_time_minutes() const {
   return time.hour * 60 + time.minute;
 }
 
+uint32_t LEDBrickScheduler::get_current_time_seconds() const {
+  if (!time_source_) {
+    return 0;
+  }
+  auto time = time_source_->now();
+  if (!time.is_valid()) {
+    return 0;
+  }
+  return time.hour * 3600u + time.minute * 60u + time.second;
+}
+
 InterpolationResult LEDBrickScheduler::get_current_values() const {
   // Same interpolation as update(), so dynamic (sunrise-relative etc.) points count
-  uint16_t current_time = get_current_time_minutes();
-  return scheduler_.get_values_at_time_with_astro(current_time, scheduler_.get_astronomical_times());
+  return scheduler_.get_values_at_seconds_with_astro(get_current_time_seconds(), scheduler_.get_astronomical_times());
+}
+
+float LEDBrickScheduler::get_led_temperature_c() const {
+  // The emitter's sensors sit on the board near the LEDs' pads. Without a working one,
+  // use the reference temperature, which leaves the output uncompensated.
+  const auto &status = temp_control_.get_status();
+  if (status.sensors_valid_count > 0 && std::isfinite(status.current_temp_c) && status.current_temp_c > 0.0f) {
+    return status.current_temp_c;
+  }
+  return 25.0f;
+}
+
+float LEDBrickScheduler::get_channel_level(uint8_t channel) const {
+  if (!scheduler_.is_curve_channel(channel) || channel >= last_levels_.size()) {
+    return -1.0f;
+  }
+  return last_levels_[channel];
+}
+
+bool LEDBrickScheduler::set_channel_dimming(uint8_t channel, ledbrick::DimMode mode, ledbrick::DimPriority priority,
+                                            float floor_current, const std::vector<ledbrick::LedGroup> &leds,
+                                            std::string *error) {
+  if (!scheduler_.set_channel_dimming(channel, mode, priority, floor_current, leds, error)) {
+    return false;
+  }
+  ESP_LOGI(TAG, "Channel %u dimming: %s, %s first, floor %.3f A, %s LEDs", channel + 1,
+           mode == ledbrick::DimMode::CURVE ? "curve" : "manual",
+           priority == ledbrick::DimPriority::PWM_FIRST ? "PWM" : "current", floor_current,
+           leds.empty() ? "default" : "custom");
+  // Drive the channel the new way at the next update, without a transition
+  force_next_update_ = true;
+  return true;
+}
+
+bool LEDBrickScheduler::set_led_models_json(const std::string &json, std::string *error, bool *save_failed) {
+  *save_failed = false;
+  // A set too large for its record is refused before anything changes
+  if (!scheduler_.import_led_models_json(json, error, sizeof(LedModelsStorage::json_data) - 1)) {
+    return false;
+  }
+  ESP_LOGI(TAG, "Custom LED models: %zu", scheduler_.get_custom_led_models().size());
+  // Curve channels pick up the new curves at the next update
+  force_next_update_ = true;
+  if (!save_led_models_to_flash()) {
+    if (error) *error = "LED models applied but not saved; they will be lost on restart";
+    *save_failed = true;
+    return false;
+  }
+  return true;
+}
+
+bool LEDBrickScheduler::set_channel_manual_level(uint8_t channel, float level) {
+  if (!scheduler_.is_curve_channel(channel)) {
+    ESP_LOGW(TAG, "Manual level rejected - channel %u is not in curve mode", channel);
+    return false;
+  }
+  level = std::max(0.0f, std::min(level, 1.0f));
+  ledbrick::DriveLimits limits;
+  limits.max_current_a = scheduler_.get_channel_max_current(channel);
+  ledbrick::Drive drive = scheduler_.channel_dimmer(channel).drive_for_level(level, limits, get_led_temperature_c());
+  if (!set_channel_manual_control(channel, drive.pwm * 100.0f, drive.current_a)) {
+    return false;
+  }
+  if (last_levels_.size() != num_channels_) {
+    last_levels_.assign(num_channels_, -1.0f);
+  }
+  last_levels_[channel] = level;
+  return true;
 }
 
 InterpolationResult LEDBrickScheduler::get_actual_channel_values() const {
@@ -460,26 +547,52 @@ void LEDBrickScheduler::apply_values(const InterpolationResult &values) {
            num_channels_, values.pwm_values.size(), 
            values.pwm_values.empty() ? 0.0f : values.pwm_values[0]);
   
+  const float led_temp = get_led_temperature_c();
   for (uint8_t channel = 0; channel < num_channels_; channel++) {
     if (channel >= values.pwm_values.size() || channel >= values.current_values.size()) {
       ESP_LOGW(TAG, "Schedule has %zu channels, expected %u", values.pwm_values.size(), num_channels_);
       break;
     }
 
-    // Apply current control with limiting
-    // We need to do this before applying PWM to ensure LED controller enters the right state
     auto current_it = current_controls_.find(channel);
     auto max_current_it = max_current_controls_.find(channel);
-    
-    if (current_it != current_controls_.end() && current_it->second) {
-      float target_current = values.current_values[channel];
-      
-      // Apply maximum current limiting
-      if (max_current_it != max_current_controls_.end() && max_current_it->second) {
-        float max_current = max_current_it->second->state;
-        target_current = std::min(target_current, max_current);
+    float max_current = scheduler_.get_channel_max_current(channel);
+    if (max_current_it != max_current_controls_.end() && max_current_it->second) {
+      max_current = max_current_it->second->state;
+    }
+
+    // Manual channels: the schedule sets the PWM and current. Curve channels: it sets a
+    // level, and the channel's LED curves give the current and PWM for it at the LEDs'
+    // temperature.
+    float target_current;
+    float brightness;
+    uint32_t transition_ms = force_next_update_ ? 0 : 1000;
+    const bool curve = scheduler_.is_curve_channel(channel);
+    if (curve) {
+      float level = std::max(0.0f, std::min(values.pwm_values[channel] * pwm_scale_ / 100.0f, 1.0f));
+      ledbrick::DriveLimits limits;
+      limits.max_current_a = max_current;
+      ledbrick::Drive drive = scheduler_.channel_dimmer(channel).drive_for_level(level, limits, led_temp);
+      target_current = drive.current_a;
+      brightness = drive.pwm;
+      if (last_levels_.size() != num_channels_) {
+        last_levels_.assign(num_channels_, -1.0f);
       }
-      
+      last_levels_[channel] = level;
+      // Current and PWM change together; a PWM transition would lag behind the current
+      transition_ms = 0;
+    } else {
+      target_current = std::min(values.current_values[channel], max_current);
+      brightness = values.pwm_values[channel] * pwm_scale_ / 100.0f;
+      if (channel < last_levels_.size()) {
+        last_levels_[channel] = -1.0f;
+      }
+    }
+
+    // Apply current control with limiting
+    // We need to do this before applying PWM to ensure LED controller enters the right state
+    if (current_it != current_controls_.end() && current_it->second) {
+
       // Always update regardless of whether value has changed
       // Set the current control value
       current_it->second->publish_state(target_current);
@@ -507,23 +620,24 @@ void LEDBrickScheduler::apply_values(const InterpolationResult &values) {
     // Apply PWM to light entity
     auto light_it = lights_.find(channel);
     if (light_it != lights_.end() && light_it->second) {
-      // Apply PWM scale factor before converting to 0-1 range
-      float scaled_pwm = values.pwm_values[channel] * pwm_scale_;
-      float brightness = scaled_pwm / 100.0f; // Convert percentage to 0-1
-      
+      float scaled_pwm = brightness * 100.0f;
+
       // Always update regardless of whether value has changed
-      ESP_LOGD(TAG, "Updating light %u: scaled_pwm=%.2f%%, brightness=%.3f (was %.3f)", 
-               channel, scaled_pwm, brightness, 
-               (last_pwm_values_.size() > channel) ? last_pwm_values_[channel] : -1.0f);
-      
-      // Create light call to set brightness
+      ESP_LOGD(TAG, "Updating light %u: scaled_pwm=%.2f%%, brightness=%.3f (was %.3f)%s",
+               channel, scaled_pwm, brightness,
+               (last_pwm_values_.size() > channel) ? last_pwm_values_[channel] : -1.0f,
+               curve ? " [curve]" : "");
+
+      // Create light call to set brightness. Curve channels dim below 0.1% with PWM, so
+      // any duty the dimmer gives turns them on.
+      bool on = curve ? brightness > 0.0f : brightness > 0.001f;
       auto call = light_it->second->make_call();
-      call.set_state(brightness > 0.001f); // Turn on if brightness > 0
-      if (brightness > 0.001f) {
+      call.set_state(on);
+      if (on) {
         call.set_brightness(brightness);
       }
-      // Use 1s transition when not forcing updates, 0 for forced updates
-      call.set_transition_length(force_next_update_ ? 0 : 1000);
+      // Manual channels ease over 1 s; curve channels and forced updates change at once
+      call.set_transition_length(transition_ms);
       call.perform();
       
       ESP_LOGV(TAG, "Light %u call performed", channel);
@@ -606,13 +720,63 @@ bool LEDBrickScheduler::save_schedule_to_flash() {
     flash_load_failed_ = false;  // The stored copy is valid again
     ESP_LOGD(TAG, "Saved schedule to flash (JSON format, %" PRIu32 " bytes)", storage->json_length);
     // ESPHome holds preference writes for up to a minute, so a power cut soon after a change
-    // lost it although the change had been reported saved. Write it out shortly after the
-    // last save; a burst of saves (one per channel, say) is written once.
-    this->set_timeout("flush_schedule", 1000, []() { global_preferences->sync(); });
+    // lost it although the change had been reported saved. Write it out a quarter second
+    // after the last save; a burst of saves (one per channel, say) is written once.
+    this->set_timeout("flush_settings", 250, []() { global_preferences->sync(); });
   } else {
     ESP_LOGW(TAG, "Failed to save schedule to flash");
   }
   return success;
+}
+
+bool LEDBrickScheduler::save_led_models_to_flash() {
+  std::string json = scheduler_.export_led_models_json(true);
+  std::unique_ptr<LedModelsStorage> storage(new (std::nothrow) LedModelsStorage);
+  if (!storage) {
+    ESP_LOGE(TAG, "Failed to allocate memory for LED model storage");
+    return false;
+  }
+  if (json.length() >= sizeof(storage->json_data)) {
+    ESP_LOGE(TAG, "LED models too large to save (%zu bytes, limit %zu)", json.length(),
+             sizeof(storage->json_data) - 1);
+    return false;
+  }
+  memset(storage.get(), 0, sizeof(LedModelsStorage));
+  storage->version = 1;
+  storage->json_length = static_cast<uint32_t>(json.length());
+  std::memcpy(storage->json_data, json.c_str(), storage->json_length);
+
+  if (!led_models_pref_.save(storage.get())) {
+    ESP_LOGW(TAG, "Failed to save LED models to flash");
+    return false;
+  }
+  ESP_LOGD(TAG, "Saved LED models to flash (%" PRIu32 " bytes)", storage->json_length);
+  // Shares the schedule's flush, so changes to both are written together
+  this->set_timeout("flush_settings", 250, []() { global_preferences->sync(); });
+  return true;
+}
+
+void LEDBrickScheduler::load_led_models_from_flash() {
+  std::unique_ptr<LedModelsStorage> storage(new (std::nothrow) LedModelsStorage);
+  if (!storage) {
+    ESP_LOGE(TAG, "Failed to allocate memory for LED model storage");
+    return;
+  }
+  if (!led_models_pref_.load(storage.get())) {
+    ESP_LOGD(TAG, "No custom LED models in flash");
+    return;
+  }
+  if (storage->version != 1 || storage->json_length >= sizeof(storage->json_data)) {
+    ESP_LOGW(TAG, "Saved LED models have version %" PRIu32 ", length %" PRIu32 "; ignoring them",
+             storage->version, storage->json_length);
+    return;
+  }
+  std::string error;
+  if (scheduler_.import_led_models_json(std::string(storage->json_data, storage->json_length), &error)) {
+    ESP_LOGI(TAG, "Loaded %zu custom LED models", scheduler_.get_custom_led_models().size());
+  } else {
+    ESP_LOGE(TAG, "Saved LED models could not be loaded: %s", error.c_str());
+  }
 }
 
 void LEDBrickScheduler::load_schedule_from_flash() {
@@ -864,8 +1028,10 @@ bool LEDBrickScheduler::import_schedule_json(const std::string &json_input, std:
   }
   
   // The standalone import replaces the schedule only when it succeeds
-  if (!scheduler_.import_json(json_input)) {
-    return fail("schedule_points missing or invalid");
+  std::string import_error;
+  // A saved channel naming a lost LED model keeps its schedule; the model can be posted again
+  if (!scheduler_.import_json(json_input, &import_error, from_flash)) {
+    return fail(import_error.empty() ? "schedule_points missing or invalid" : import_error);
   }
   
   // Apply the settings now that the whole document is accepted
@@ -1797,7 +1963,7 @@ void LEDBrickScheduler::on_emergency_change(bool emergency) {
     if (enabled_ && has_valid_time()) {
       // Get current values and apply them
       uint16_t current_time = get_current_time_minutes();
-      auto values = scheduler_.get_values_at_time_with_astro(current_time, scheduler_.get_astronomical_times());
+      auto values = scheduler_.get_values_at_seconds_with_astro(get_current_time_seconds(), scheduler_.get_astronomical_times());
       
       if (values.valid) {
         ESP_LOGI(TAG, "Restoring scheduled values at %02d:%02d", current_time / 60, current_time % 60);

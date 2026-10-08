@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { SchedulePoint, Schedule, DynamicTimeType } from '../types';
 import { DEFAULT_CHANNEL_COLORS } from '../constants/colors';
+import { isCurveChannel } from '../utils/dimming';
 
 interface SchedulePointEditorProps {
   isOpen: boolean;
@@ -28,7 +29,6 @@ export function SchedulePointEditor({
   onClose,
   onSave,
   point,
-  index,
   schedule
 }: SchedulePointEditorProps) {
   const isEditing = point !== undefined;
@@ -98,16 +98,19 @@ export function SchedulePointEditor({
       time_minutes: timeType === 'fixed' ? timeMinutes : (defaultTimes[timeType] || 720),
       time_type: timeType,
       offset_minutes: timeType !== 'fixed' ? offsetMinutes : 0,
+      // A curve channel's level is stored as its PWM value; its current is unused
       pwm_values: pwmValues,
-      current_values: currentValues,
+      current_values: currentValues.map((current, i) => (isCurveChannel(schedule, i) ? 0 : current)),
     };
     onSave(newPoint);
   };
 
   const setAllChannels = (pwmValue: number) => {
+    // Curve channels take the value as their level
     setPwmValues(new Array(8).fill(pwmValue));
     // Set current proportionally based on max current
     const newCurrents = currentValues.map((_, i) => {
+      if (isCurveChannel(schedule, i)) return 0;
       const maxCurrent = schedule.channel_configs?.[i]?.max_current || 2.0;
       return (pwmValue / 100) * maxCurrent;
     });
@@ -182,6 +185,39 @@ export function SchedulePointEditor({
               const color = channelConfig?.rgb_hex || DEFAULT_CHANNEL_COLORS[i % DEFAULT_CHANNEL_COLORS.length];
               const name = channelConfig?.name || `Channel ${i + 1}`;
               const maxCurrent = channelConfig?.max_current || 2.0;
+
+              if (isCurveChannel(schedule, i)) {
+                return (
+                  <div key={i} className="channel-dual-input">
+                    <div className="channel-header" style={{ color }}>
+                      {name}
+                    </div>
+
+                    <div className="control-group">
+                      <label className="control-label">Level %</label>
+                      <input
+                        type="number"
+                        value={pwmValues[i].toFixed(1)}
+                        onChange={(e) => handlePwmChange(i, Number(e.target.value))}
+                        className="control-input"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                      />
+                      <input
+                        type="range"
+                        value={pwmValues[i]}
+                        onChange={(e) => handlePwmChange(i, Number(e.target.value))}
+                        className="control-slider"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                      />
+                      <div className="dimming-help">LED curve: % of the light at max current</div>
+                    </div>
+                  </div>
+                );
+              }
 
               return (
                 <div key={i} className="channel-dual-input">

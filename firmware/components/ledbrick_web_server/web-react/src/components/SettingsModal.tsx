@@ -1,7 +1,27 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api/client';
-import type { Schedule, TemperatureConfig, FanCurve } from '../types';
+import type {
+  Schedule,
+  TemperatureConfig,
+  FanCurve,
+  ChannelDimming,
+  ChannelDimmingUpdate,
+  DimMode,
+  DimPriority,
+  LedGroup,
+  LedModel,
+} from '../types';
 import { DEFAULT_CHANNEL_COLORS } from '../constants/colors';
+import {
+  MIN_FLOOR_CURRENT,
+  MAX_FLOOR_CURRENT,
+  MAX_LED_KINDS,
+  MIN_LED_COUNT,
+  MAX_LED_COUNT,
+  DIM_MODE_LABELS,
+  DIM_PRIORITY_LABELS,
+} from '../constants/dimming';
+import { formatLedMix, formatAmps, characterizedCurrent, ledMaxCurrent, sameLeds } from '../utils/dimming';
 import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -35,6 +55,54 @@ interface ChannelConfigForm {
   name: string;
   rgb_hex: string;
   max_current: number;
+}
+
+interface DimmingForm {
+  mode: DimMode;
+  priority: DimPriority;
+  floor_current: string;  // as typed
+  leds: LedGroup[];
+  leds_default: boolean;
+}
+
+function dimmingToForm(dimming: ChannelDimming): DimmingForm {
+  return {
+    mode: dimming.mode === 'curve' ? 'curve' : 'manual',
+    priority: dimming.priority === 'pwm' ? 'pwm' : 'current',
+    floor_current: String(dimming.floor_current),
+    leds: (dimming.leds || []).map(group => ({ ...group })),
+    leds_default: !!dimming.leds_default,
+  };
+}
+
+// Only the fields that differ from the saved settings, or null when none do
+function dimmingUpdate(channel: number, form: DimmingForm | null, saved: ChannelDimming | null): ChannelDimmingUpdate | null {
+  if (!form || !saved) return null;
+  const update: ChannelDimmingUpdate = { channel };
+  let changed = false;
+  if (form.mode !== saved.mode) {
+    update.mode = form.mode;
+    changed = true;
+  }
+  if (form.priority !== saved.priority) {
+    update.priority = form.priority;
+    changed = true;
+  }
+  const floor = parseFloat(form.floor_current);
+  if (!(Math.abs(floor - saved.floor_current) < 1e-4)) {
+    update.floor_current = floor;
+    changed = true;
+  }
+  if (form.leds_default) {
+    if (!saved.leds_default) {
+      update.leds_default = true;
+      changed = true;
+    }
+  } else if (saved.leds_default || !sameLeds(form.leds, saved.leds)) {
+    update.leds = form.leds.map(group => ({ model: group.model, count: group.count }));
+    changed = true;
+  }
+  return changed ? update : null;
 }
 
 
@@ -72,6 +140,15 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [localSchedule, setLocalSchedule] = useState<Schedule | null>(schedule);
+
+  // Per-channel dimming; null for firmware without curve dimming
+  const [configsChanged, setConfigsChanged] = useState(false);
+  const [dimmingForms, setDimmingForms] = useState<(DimmingForm | null)[]>([]);
+  const [savedDimming, setSavedDimming] = useState<(ChannelDimming | null)[]>([]);
+  const [ledModels, setLedModels] = useState<LedModel[]>([]);
+  const [editingLeds, setEditingLeds] = useState<number | null>(null);
+  // Some dimming changes were saved but the schedule has not been reloaded yet
+  const [needsReload, setNeedsReload] = useState(false);
   
   // Temperature control state
   const [tempConfig, setTempConfig] = useState<TemperatureConfig | null>(null);
@@ -116,6 +193,13 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
         });
       }
       setChannelConfigs(configs);
+
+      const dimming = Array.from({ length: currentSchedule.num_channels }, (_, i) =>
+        currentSchedule.channel_configs?.[i]?.dimming ?? null);
+      setSavedDimming(dimming);
+      setDimmingForms(dimming.map(d => (d ? dimmingToForm(d) : null)));
+      setEditingLeds(null);
+      setConfigsChanged(false);
       
       // Initialize location settings
       setLatitude(currentSchedule.latitude?.toString() || '37.7749');
@@ -129,6 +213,17 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
       setError(null);
     }
   }, [schedule, localSchedule, isOpen]);
+
+  // LED model names for the dimming settings; without them the ids are shown
+  useEffect(() => {
+    const currentSchedule = schedule || localSchedule;
+    if (!isOpen || ledModels.length > 0 || !currentSchedule?.channel_configs?.some(c => c?.dimming)) {
+      return;
+    }
+    api.getLedModels()
+      .then(models => setLedModels(models))
+      .catch(() => { /* names fall back to ids */ });
+  }, [isOpen, schedule, localSchedule]);
 
   // Load temperature config when temperature tab is selected
   useEffect(() => {
@@ -173,7 +268,79 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
       [field]: field === 'max_current' ? parseFloat(value as string) || 0 : value
     };
     setChannelConfigs(newConfigs);
+    setConfigsChanged(true);
     setHasChanges(true);
+  };
+
+  const updateDimming = (index: number, changes: Partial<DimmingForm>) => {
+    setDimmingForms(forms => forms.map((form, i) => (i === index && form ? { ...form, ...changes } : form)));
+    setHasChanges(true);
+  };
+
+  const updateLedRow = (index: number, row: number, changes: Partial<LedGroup>) => {
+    const form = dimmingForms[index];
+    if (!form) return;
+    updateDimming(index, {
+      leds: form.leds.map((group, i) => (i === row ? { ...group, ...changes } : group)),
+      leds_default: false,
+    });
+  };
+
+  const addLedRow = (index: number) => {
+    const form = dimmingForms[index];
+    if (!form || form.leds.length >= MAX_LED_KINDS || ledModels.length === 0) return;
+    const unused = ledModels.find(m => !form.leds.some(group => group.model === m.id)) || ledModels[0];
+    updateDimming(index, { leds: [...form.leds, { model: unused.id, count: 1 }], leds_default: false });
+  };
+
+  const removeLedRow = (index: number, row: number) => {
+    const form = dimmingForms[index];
+    if (!form) return;
+    updateDimming(index, { leds: form.leds.filter((_, i) => i !== row), leds_default: false });
+  };
+
+  // The device lists the emitter's LEDs only while a channel uses them
+  const resetLedsToDefault = (index: number) => {
+    const saved = savedDimming[index];
+    updateDimming(index, {
+      leds: saved?.leds_default ? saved.leds.map(group => ({ ...group })) : [],
+      leds_default: true,
+    });
+  };
+
+  const channelName = (index: number) => channelConfigs[index]?.name || `Channel ${index + 1}`;
+
+  const validateDimming = (update: ChannelDimmingUpdate): string | null => {
+    const index = update.channel;
+    const name = channelName(index);
+    const form = dimmingForms[index];
+    const saved = savedDimming[index];
+    if (update.floor_current !== undefined) {
+      const maxFloor = Math.min(MAX_FLOOR_CURRENT, channelConfigs[index]?.max_current ?? MAX_FLOOR_CURRENT);
+      if (!(update.floor_current >= MIN_FLOOR_CURRENT && update.floor_current <= maxFloor + 1e-6)) {
+        return `${name}: floor current must be ${MIN_FLOOR_CURRENT}-${maxFloor} A`;
+      }
+    }
+    if (update.leds) {
+      if (update.leds.length === 0) {
+        return `${name}: add an LED or use the emitter default`;
+      }
+      if (update.leds.length > MAX_LED_KINDS) {
+        return `${name}: at most ${MAX_LED_KINDS} kinds of LED`;
+      }
+      for (const group of update.leds) {
+        if (ledModels.length > 0 && !ledModels.some(m => m.id === group.model)) {
+          return `${name}: unknown LED model ${group.model}`;
+        }
+        if (!Number.isInteger(group.count) || group.count < MIN_LED_COUNT || group.count > MAX_LED_COUNT) {
+          return `${name}: LED counts must be ${MIN_LED_COUNT}-${MAX_LED_COUNT}`;
+        }
+      }
+    }
+    if (form?.mode === 'curve' && form.leds_default && saved?.leds_default && saved.leds.length === 0) {
+      return `${name}: LED curve needs the channel's LEDs`;
+    }
+    return null;
   };
 
   const handleLocationPreset = (preset: typeof REEF_PRESETS[0]) => {
@@ -198,6 +365,10 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
       }
     }
     onClose();
+    if (needsReload) {
+      setNeedsReload(false);
+      onUpdate();
+    }
   };
 
   const handleTabChange = (newTab: 'channels' | 'location' | 'temperature') => {
@@ -213,13 +384,66 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
   };
 
   const handleSave = async () => {
+    // Dimming changes are checked, and mode switches confirmed, before anything is sent
+    const dimmingUpdates: ChannelDimmingUpdate[] = [];
+    if (activeTab === 'channels') {
+      for (let i = 0; i < dimmingForms.length; i++) {
+        const update = dimmingUpdate(i, dimmingForms[i], savedDimming[i]);
+        if (update) {
+          const problem = validateDimming(update);
+          if (problem) {
+            setError(problem);
+            return;
+          }
+          dimmingUpdates.push(update);
+        }
+      }
+      const switches = dimmingUpdates.filter(update => update.mode !== undefined);
+      if (switches.length > 0) {
+        const lines = switches.map(update =>
+          `${channelName(update.channel)}: ${DIM_MODE_LABELS[savedDimming[update.channel]?.mode || 'manual']}` +
+          ` to ${DIM_MODE_LABELS[update.mode || 'manual']}`);
+        if (!window.confirm(
+          'Changing the dimming mode converts the schedule points and moonlight of:\n\n' +
+          lines.join('\n') + '\n\nThey will give the same light. Continue?'
+        )) {
+          return;
+        }
+      }
+    }
+
     setSaving(true);
     setError(null);
     
     try {
       if (activeTab === 'channels') {
         // Save channel configurations
-        await api.updateChannelConfigs(channelConfigs);
+        if (configsChanged || dimmingUpdates.length === 0) {
+          await api.updateChannelConfigs(channelConfigs);
+          setConfigsChanged(false);
+          setNeedsReload(true);
+        }
+        // Then each changed channel's dimming. A mode change converts the
+        // channel's schedule on the device, so the schedule is reloaded below.
+        for (const update of dimmingUpdates) {
+          try {
+            await api.setChannelDimming(update);
+          } catch (err: any) {
+            throw { error: `${channelName(update.channel)}: ${err?.error || err?.message || 'failed to save dimming'}` };
+          }
+          setNeedsReload(true);
+          const form = dimmingForms[update.channel];
+          if (form) {
+            const nowSaved: ChannelDimming = {
+              mode: form.mode,
+              priority: form.priority,
+              floor_current: parseFloat(form.floor_current),
+              leds: form.leds.map(group => ({ ...group })),
+              leds_default: form.leds_default,
+            };
+            setSavedDimming(saved => saved.map((d, i) => (i === update.channel ? nowSaved : d)));
+          }
+        }
       } else if (activeTab === 'location') {
         // Save location settings
         // The backend now accepts timezone_offset_hours in the location endpoint
@@ -247,14 +471,163 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
       }
       
       setHasChanges(false);
+      setNeedsReload(false);
       await onUpdate();
       // Close modal after successful save
       onClose();
     } catch (err: any) {
-      setError(err.message || 'Failed to save settings');
+      setError(err?.error || err?.message || 'Failed to save settings');
     } finally {
       setSaving(false);
     }
+  };
+
+  // Dimming settings in a channel's card
+  const renderDimming = (index: number, maxCurrent: number) => {
+    const form = dimmingForms[index];
+    if (!form) return null;
+    const saved = savedDimming[index];
+    const lowest = characterizedCurrent(form.leds, ledModels);
+    const ledLimit = ledMaxCurrent(form.leds, ledModels);
+
+    return (
+      <div className="dimming-section">
+        <div className="dimming-title">Dimming</div>
+
+        <div className="control-group">
+          <label className="control-label">Mode</label>
+          <select
+            className="control-input"
+            value={form.mode}
+            onChange={(e) => updateDimming(index, { mode: e.target.value as DimMode })}
+          >
+            <option value="manual">{DIM_MODE_LABELS.manual}</option>
+            <option value="curve">{DIM_MODE_LABELS.curve}</option>
+          </select>
+          {saved && form.mode !== saved.mode && (
+            <div className="dimming-note">
+              Saving converts this channel's schedule points and moonlight to give the same light.
+            </div>
+          )}
+          {form.mode === 'curve' && (
+            <div className="dimming-help">Points set a level: % of the light at max current.</div>
+          )}
+        </div>
+
+        {form.mode === 'curve' && (
+          <>
+            <div className="control-group">
+              <label className="control-label">Priority</label>
+              <select
+                className="control-input"
+                value={form.priority}
+                onChange={(e) => updateDimming(index, { priority: e.target.value as DimPriority })}
+              >
+                <option value="current">{DIM_PRIORITY_LABELS.current}</option>
+                <option value="pwm">{DIM_PRIORITY_LABELS.pwm}</option>
+              </select>
+              <div className="dimming-help">
+                {form.priority === 'current'
+                  ? 'Lowers the current, then uses PWM below the floor current.'
+                  : 'Holds the current and dims with PWM only.'}
+              </div>
+            </div>
+
+            {form.priority === 'current' && (
+              <div className="control-group">
+                <label className="control-label">Floor current (A)</label>
+                <input
+                  type="number"
+                  className="control-input"
+                  value={form.floor_current}
+                  onChange={(e) => updateDimming(index, { floor_current: e.target.value })}
+                  min={MIN_FLOOR_CURRENT}
+                  max={Math.min(MAX_FLOOR_CURRENT, maxCurrent)}
+                  step="0.01"
+                />
+                {lowest !== null && (
+                  <div className="dimming-help">
+                    Never below {formatAmps(lowest)}, the lowest current the LED curves cover.
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="control-group">
+              <label className="control-label">LEDs</label>
+              <div className="led-mix">{formatLedMix(form, ledModels)}</div>
+              {ledLimit !== null && ledLimit < maxCurrent && (
+                <div className="dimming-help">Limited to {formatAmps(ledLimit)} by the LEDs' rating.</div>
+              )}
+              {editingLeds === index ? (
+                <div className="led-editor">
+                  {form.leds.map((group, row) => (
+                    <div key={row} className="led-row">
+                      <select
+                        className="control-input"
+                        value={group.model}
+                        onChange={(e) => updateLedRow(index, row, { model: e.target.value })}
+                      >
+                        {!ledModels.some(m => m.id === group.model) && (
+                          <option value={group.model}>{group.model}</option>
+                        )}
+                        {ledModels.map(model => (
+                          <option key={model.id} value={model.id}>{model.name}</option>
+                        ))}
+                      </select>
+                      <input
+                        type="number"
+                        className="control-input led-count"
+                        aria-label="Count"
+                        value={Number.isFinite(group.count) ? group.count : ''}
+                        onChange={(e) => updateLedRow(index, row, { count: parseInt(e.target.value, 10) })}
+                        min={MIN_LED_COUNT}
+                        max={MAX_LED_COUNT}
+                        step="1"
+                      />
+                      <button
+                        type="button"
+                        className="led-remove"
+                        title="Remove"
+                        onClick={() => removeLedRow(index, row)}
+                        disabled={form.leds.length <= 1}
+                      >
+                        &times;
+                      </button>
+                    </div>
+                  ))}
+                  <div className="led-editor-actions">
+                    <button
+                      type="button"
+                      className="small-button"
+                      onClick={() => addLedRow(index)}
+                      disabled={form.leds.length >= MAX_LED_KINDS || ledModels.length === 0}
+                    >
+                      Add LED
+                    </button>
+                    <button
+                      type="button"
+                      className="small-button"
+                      onClick={() => resetLedsToDefault(index)}
+                      disabled={form.leds_default}
+                    >
+                      Use emitter default
+                    </button>
+                    <button type="button" className="small-button" onClick={() => setEditingLeds(null)}>
+                      Done
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button type="button" className="small-button" onClick={() => setEditingLeds(index)}>
+                  Edit LEDs
+                </button>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -310,7 +683,7 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
           )}
 
           {activeTab === 'channels' ? (
-            <div className="dual-channel-grid">
+            <div className={`dual-channel-grid${dimmingForms.some(form => form) ? ' dimming-grid' : ''}`}>
               {channelConfigs.length === 0 ? (
                 <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '40px' }}>
                   <div className="loading">Loading channel configuration...</div>
@@ -369,6 +742,8 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
                       step="0.1"
                     />
                   </div>
+
+                  {renderDimming(index, config.max_current)}
                 </div>
               ))}
             </div>

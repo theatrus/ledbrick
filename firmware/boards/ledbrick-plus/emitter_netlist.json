@@ -1,0 +1,1113 @@
+{
+ "description": "Analysis of the LEDBrick Plus emitter and controller design files: which LEDs are in each channel's string, how the strings reach the drivers and ESP32 pins, the UV LEDs, temperature sensors and connector pinouts. Taken from the geometric netlist of the schematics and cross-checked against the PCB. This is the board as designed; channels.json has the board as built.",
+ "source": {
+  "emitter_schematic": "hardware/ledbrick_plus_led.SchDoc (geometric netlist from FileHeader records)",
+  "emitter_pcb_crosscheck": "hardware/ledbrick_plus_led.PcbDoc pad-to-net: identical partition to schematic, 0 mismatches",
+  "controller": "hardware/rv_ledbrick_top.SchDoc, rv_ledbrick_logic.SchDoc, TPS922053_ch.SchDoc, rv_ledbrick_8ch.PcbDoc; firmware/ledbrick-plus.yaml"
+ },
+ "topology": {
+  "common_anode": {
+   "emitter_pins": [
+    "JA1.1",
+    "JA1.2",
+    "JA1.3",
+    "JA1.4",
+    "JA1.5",
+    "JA1.6",
+    "JA1.7",
+    "JA1.8"
+   ],
+   "pcb_net": "NetJA1_1",
+   "controller_side": "controller J4 pins 1-10 all on VIN",
+   "note": "JA1.1-8 strapped together on the schematic with explicit junctions; JA1.9, JA1.10 unconnected"
+  },
+  "driver": "Per channel TPS922053 inverted (low-side) buck: VIN -> LED string -> LEDC/CSP -> R1 0.1 ohm sense -> CSN -> L1 10uH -> SW; D1 freewheels SW->VIN. Firmware drives EN/PWM (pwm_pin) and ADIM/HD (current_pin) per channel.",
+  "unused_pins": [
+   "JC1.9",
+   "JC1.10",
+   "JA1.9",
+   "JA1.10"
+  ],
+  "zero_ohm_jumpers": {
+   "R1": "in series at cathode end of ch6 (LED56.C -> R1 -> JC1.6)",
+   "R2": "in series mid-string in ch4 (LED33.C -> R2 -> LED34.A)"
+  }
+ },
+ "strings": [
+  {
+   "emitter_cathode_pin": "JC1.1",
+   "connected": true,
+   "emitter_anode": "JA1 pins 1-8 (common anode bus shared by all 8 strings)",
+   "pcb_cathode_net": "NetJC1_1",
+   "nets_anode_to_cathode": [
+    "NetJA1_1",
+    "NetLED73_C",
+    "NetLED74_C",
+    "NetLED75_C",
+    "NetLED76_C",
+    "NetLED77_C",
+    "NetLED78_C",
+    "NetLED79_C",
+    "NetJC1_1"
+   ],
+   "series_elements_anode_to_cathode": [
+    {
+     "designator": "LED73",
+     "part": "L1C1-MNT",
+     "pos_mm": [
+      47.0,
+      26.0
+     ]
+    },
+    {
+     "designator": "LED74",
+     "part": "L1C1-CYN",
+     "pos_mm": [
+      57.0,
+      26.0
+     ]
+    },
+    {
+     "designator": "LED75",
+     "part": "L1C1-MNT",
+     "pos_mm": [
+      68.0,
+      26.0
+     ]
+    },
+    {
+     "designator": "LED76",
+     "part": "L1C1-CYN",
+     "pos_mm": [
+      76.0,
+      31.0
+     ]
+    },
+    {
+     "designator": "LED77",
+     "part": "L1C1-MNT",
+     "pos_mm": [
+      83.0,
+      31.0
+     ]
+    },
+    {
+     "designator": "LED78",
+     "part": "L1C1-CYN",
+     "pos_mm": [
+      91.0,
+      26.0
+     ]
+    },
+    {
+     "designator": "LED79",
+     "part": "L1C1-MNT",
+     "pos_mm": [
+      102.0,
+      26.0
+     ]
+    },
+    {
+     "designator": "LED80",
+     "part": "L1C1-CYN",
+     "pos_mm": [
+      112.0,
+      26.0
+     ]
+    }
+   ],
+   "led_count": 8,
+   "composition": {
+    "L1C1-MNT": 4,
+    "L1C1-CYN": 4
+   },
+   "mixed_types": true,
+   "paralleled": false,
+   "controller": {
+    "firmware_channel": 1,
+    "owner_name": "CyMint",
+    "controller_connector_pin": "J1.1",
+    "controller_pcb_net": "CSP_A",
+    "tps922053_instance": "U1_A (sheet symbol A)",
+    "logic_nets": [
+     "LEDPWM1",
+     "LEDAO1"
+    ],
+    "esp32_pwm_gpio": "GPIO5",
+    "esp32_adim_gpio": "GPIO6",
+    "harness_assumption": "controller J1.1 <-> emitter JC1.1 (1:1; inferred from channel-name match, harness not in design files)"
+   }
+  },
+  {
+   "emitter_cathode_pin": "JC1.2",
+   "connected": true,
+   "emitter_anode": "JA1 pins 1-8 (common anode bus shared by all 8 strings)",
+   "pcb_cathode_net": "NetJC1_2",
+   "nets_anode_to_cathode": [
+    "NetJA1_1",
+    "NetLED57_C",
+    "NetLED58_C",
+    "NetLED59_C",
+    "NetLED60_C",
+    "NetLED61_C",
+    "NetLED62_C",
+    "NetLED63_C",
+    "NetJC1_2"
+   ],
+   "series_elements_anode_to_cathode": [
+    {
+     "designator": "LED57",
+     "part": "L1C1-59",
+     "pos_mm": [
+      47.0,
+      31.0
+     ]
+    },
+    {
+     "designator": "LED58",
+     "part": "L1C1-59",
+     "pos_mm": [
+      57.0,
+      31.0
+     ]
+    },
+    {
+     "designator": "LED59",
+     "part": "L1C1-59",
+     "pos_mm": [
+      68.0,
+      31.0
+     ]
+    },
+    {
+     "designator": "LED60",
+     "part": "L1C1-59",
+     "pos_mm": [
+      76.0,
+      36.0
+     ]
+    },
+    {
+     "designator": "LED61",
+     "part": "L1C1-59",
+     "pos_mm": [
+      83.0,
+      36.0
+     ]
+    },
+    {
+     "designator": "LED62",
+     "part": "L1C1-59",
+     "pos_mm": [
+      91.0,
+      31.0
+     ]
+    },
+    {
+     "designator": "LED63",
+     "part": "L1C1-59",
+     "pos_mm": [
+      102.0,
+      31.0
+     ]
+    },
+    {
+     "designator": "LED64",
+     "part": "L1C1-59",
+     "pos_mm": [
+      112.0,
+      31.0
+     ]
+    }
+   ],
+   "led_count": 8,
+   "composition": {
+    "L1C1-59": 8
+   },
+   "mixed_types": false,
+   "paralleled": false,
+   "controller": {
+    "firmware_channel": 2,
+    "owner_name": "CW",
+    "controller_connector_pin": "J1.2",
+    "controller_pcb_net": "CSP_B",
+    "tps922053_instance": "U1_B (sheet symbol B)",
+    "logic_nets": [
+     "LEDPWM2",
+     "LEDAO2"
+    ],
+    "esp32_pwm_gpio": "GPIO7",
+    "esp32_adim_gpio": "GPIO8",
+    "harness_assumption": "controller J1.2 <-> emitter JC1.2 (1:1; inferred from channel-name match, harness not in design files)"
+   }
+  },
+  {
+   "emitter_cathode_pin": "JC1.3",
+   "connected": true,
+   "emitter_anode": "JA1 pins 1-8 (common anode bus shared by all 8 strings)",
+   "pcb_cathode_net": "NetJC1_3",
+   "nets_anode_to_cathode": [
+    "NetJA1_1",
+    "NetLED65_C",
+    "NetLED66_C",
+    "NetLED67_C",
+    "NetLED68_C",
+    "NetLED69_C",
+    "NetLED70_C",
+    "NetLED71_C",
+    "NetJC1_3"
+   ],
+   "series_elements_anode_to_cathode": [
+    {
+     "designator": "LED65",
+     "part": "L1C1-39",
+     "pos_mm": [
+      47.0,
+      36.0
+     ]
+    },
+    {
+     "designator": "LED66",
+     "part": "L1C1-39",
+     "pos_mm": [
+      57.0,
+      36.0
+     ]
+    },
+    {
+     "designator": "LED67",
+     "part": "L1C1-DRD",
+     "pos_mm": [
+      68.0,
+      36.0
+     ]
+    },
+    {
+     "designator": "LED68",
+     "part": "L1C1-PCA",
+     "pos_mm": [
+      76.0,
+      41.0
+     ]
+    },
+    {
+     "designator": "LED69",
+     "part": "L1C1-PCA",
+     "pos_mm": [
+      83.0,
+      41.0
+     ]
+    },
+    {
+     "designator": "LED70",
+     "part": "L1C1-DRD",
+     "pos_mm": [
+      91.0,
+      36.0
+     ]
+    },
+    {
+     "designator": "LED71",
+     "part": "L1C1-39",
+     "pos_mm": [
+      102.0,
+      36.0
+     ]
+    },
+    {
+     "designator": "LED72",
+     "part": "L1C1-39",
+     "pos_mm": [
+      112.0,
+      36.0
+     ]
+    }
+   ],
+   "led_count": 8,
+   "composition": {
+    "L1C1-39": 4,
+    "L1C1-DRD": 2,
+    "L1C1-PCA": 2
+   },
+   "mixed_types": true,
+   "paralleled": false,
+   "controller": {
+    "firmware_channel": 3,
+    "owner_name": "WW",
+    "controller_connector_pin": "J1.3",
+    "controller_pcb_net": "CSP_C",
+    "tps922053_instance": "U1_C (sheet symbol C)",
+    "logic_nets": [
+     "LEDPWM3",
+     "LEDAO3"
+    ],
+    "esp32_pwm_gpio": "GPIO9",
+    "esp32_adim_gpio": "GPIO10",
+    "harness_assumption": "controller J1.3 <-> emitter JC1.3 (1:1; inferred from channel-name match, harness not in design files)"
+   },
+   "as_built": "Built boards have LUXEON C PC Amber (L1C1-PCA) where the schematic has Deep Red (L1C1-DRD): 4 L1C1-39 and 4 L1C1-PCA."
+  },
+  {
+   "emitter_cathode_pin": "JC1.4",
+   "connected": true,
+   "emitter_anode": "JA1 pins 1-8 (common anode bus shared by all 8 strings)",
+   "pcb_cathode_net": "NetJC1_4",
+   "nets_anode_to_cathode": [
+    "NetJA1_1",
+    "NetLED24_C",
+    "NetLED25_C",
+    "NetLED26_C",
+    "NetLED27_C",
+    "NetLED28_C",
+    "NetLED29_C",
+    "NetLED30_C",
+    "NetLED31_C",
+    "NetLED32_C",
+    "NetLED33_C",
+    "NetLED34_A",
+    "NetLED34_C",
+    "NetJC1_4"
+   ],
+   "series_elements_anode_to_cathode": [
+    {
+     "designator": "LED24",
+     "part": "L1C1-PCB",
+     "pos_mm": [
+      40.0,
+      28.0
+     ]
+    },
+    {
+     "designator": "LED25",
+     "part": "L1C1-PCB",
+     "pos_mm": [
+      33.75,
+      28.0
+     ]
+    },
+    {
+     "designator": "LED26",
+     "part": "L1C1-PCB",
+     "pos_mm": [
+      36.25,
+      58.0
+     ]
+    },
+    {
+     "designator": "LED27",
+     "part": "L1C1-PCB",
+     "pos_mm": [
+      42.25,
+      58.0
+     ]
+    },
+    {
+     "designator": "LED28",
+     "part": "L1C1-BLU",
+     "pos_mm": [
+      68.0,
+      58.0
+     ]
+    },
+    {
+     "designator": "LED29",
+     "part": "L1C1-BLU",
+     "pos_mm": [
+      72.0,
+      52.0
+     ]
+    },
+    {
+     "designator": "LED30",
+     "part": "L1C1-PCB",
+     "pos_mm": [
+      87.0,
+      52.0
+     ]
+    },
+    {
+     "designator": "LED31",
+     "part": "L1C1-PCB",
+     "pos_mm": [
+      91.0,
+      58.0
+     ]
+    },
+    {
+     "designator": "LED32",
+     "part": "L1C1-PCB",
+     "pos_mm": [
+      114.0,
+      58.0
+     ]
+    },
+    {
+     "designator": "LED33",
+     "part": "L1C1-PCB",
+     "pos_mm": [
+      120.0,
+      58.0
+     ]
+    },
+    {
+     "designator": "R2",
+     "part": "0R 1206 (0-ohm jumper, not an LED)",
+     "pos_mm": [
+      131.0,
+      21.0
+     ]
+    },
+    {
+     "designator": "LED34",
+     "part": "L1C1-BLU",
+     "pos_mm": [
+      126.0,
+      28.0
+     ]
+    },
+    {
+     "designator": "LED35",
+     "part": "L1C1-BLU",
+     "pos_mm": [
+      120.25,
+      28.0
+     ]
+    }
+   ],
+   "led_count": 12,
+   "composition": {
+    "L1C1-PCB": 8,
+    "L1C1-BLU": 4
+   },
+   "mixed_types": true,
+   "paralleled": false,
+   "controller": {
+    "firmware_channel": 4,
+    "owner_name": "PCBlue",
+    "controller_connector_pin": "J1.4",
+    "controller_pcb_net": "CSP_D",
+    "tps922053_instance": "U1_D (sheet symbol D)",
+    "logic_nets": [
+     "LEDPWM4",
+     "LEDAO4"
+    ],
+    "esp32_pwm_gpio": "GPIO11",
+    "esp32_adim_gpio": "GPIO12",
+    "harness_assumption": "controller J1.4 <-> emitter JC1.4 (1:1; inferred from channel-name match, harness not in design files)"
+   }
+  },
+  {
+   "emitter_cathode_pin": "JC1.5",
+   "connected": true,
+   "emitter_anode": "JA1 pins 1-8 (common anode bus shared by all 8 strings)",
+   "pcb_cathode_net": "NetJC1_5",
+   "nets_anode_to_cathode": [
+    "NetJA1_1",
+    "NetLED36_C",
+    "NetLED37_C",
+    "NetLED38_C",
+    "NetLED39_C",
+    "NetLED40_C",
+    "NetLED41_C",
+    "NetLED42_C",
+    "NetLED43_C",
+    "NetLED44_C",
+    "NetLED45_C",
+    "NetLED46_C",
+    "NetLED47_C",
+    "NetJC1_5"
+   ],
+   "series_elements_anode_to_cathode": [
+    {
+     "designator": "LED36",
+     "part": "L1RX-RYL1000000000",
+     "pos_mm": [
+      40.0,
+      50.0
+     ]
+    },
+    {
+     "designator": "LED37",
+     "part": "L1RX-RYL1000000000",
+     "pos_mm": [
+      46.0,
+      41.0
+     ]
+    },
+    {
+     "designator": "LED38",
+     "part": "L1RX-RYL1000000000",
+     "pos_mm": [
+      52.0,
+      50.0
+     ]
+    },
+    {
+     "designator": "LED39",
+     "part": "L1RX-RYL1000000000",
+     "pos_mm": [
+      57.075,
+      41.0
+     ]
+    },
+    {
+     "designator": "LED40",
+     "part": "L1RX-RYL1000000000",
+     "pos_mm": [
+      63.0,
+      50.0
+     ]
+    },
+    {
+     "designator": "LED41",
+     "part": "L1RX-RYL1000000000",
+     "pos_mm": [
+      69.0,
+      41.0
+     ]
+    },
+    {
+     "designator": "LED42",
+     "part": "L1RX-RYL1000000000",
+     "pos_mm": [
+      80.0,
+      50.0
+     ]
+    },
+    {
+     "designator": "LED43",
+     "part": "L1RX-RYL1000000000",
+     "pos_mm": [
+      90.0,
+      41.0
+     ]
+    },
+    {
+     "designator": "LED44",
+     "part": "L1RX-RYL1000000000",
+     "pos_mm": [
+      96.0,
+      50.0
+     ]
+    },
+    {
+     "designator": "LED45",
+     "part": "L1RX-RYL1000000000",
+     "pos_mm": [
+      102.075,
+      41.0
+     ]
+    },
+    {
+     "designator": "LED46",
+     "part": "L1RX-RYL1000000000",
+     "pos_mm": [
+      107.0,
+      50.0
+     ]
+    },
+    {
+     "designator": "LED47",
+     "part": "L1RX-RYL1000000000",
+     "pos_mm": [
+      113.0,
+      41.0
+     ]
+    },
+    {
+     "designator": "LED48",
+     "part": "L1RX-RYL1000000000",
+     "pos_mm": [
+      120.0,
+      50.0
+     ]
+    }
+   ],
+   "led_count": 13,
+   "composition": {
+    "L1RX-RYL1000000000": 13
+   },
+   "mixed_types": false,
+   "paralleled": false,
+   "controller": {
+    "firmware_channel": 5,
+    "owner_name": "RBCen",
+    "controller_connector_pin": "J1.5",
+    "controller_pcb_net": "CSP_E",
+    "tps922053_instance": "U1_E (sheet symbol E)",
+    "logic_nets": [
+     "LEDPWM5",
+     "LEDAO5"
+    ],
+    "esp32_pwm_gpio": "GPIO13",
+    "esp32_adim_gpio": "GPIO14",
+    "harness_assumption": "controller J1.5 <-> emitter JC1.5 (1:1; inferred from channel-name match, harness not in design files)"
+   }
+  },
+  {
+   "emitter_cathode_pin": "JC1.6",
+   "connected": true,
+   "emitter_anode": "JA1 pins 1-8 (common anode bus shared by all 8 strings)",
+   "pcb_cathode_net": "NetJC1_6",
+   "nets_anode_to_cathode": [
+    "NetJA1_1",
+    "NetLED49_C",
+    "NetLED50_C",
+    "NetLED51_C",
+    "NetLED52_C",
+    "NetLED53_C",
+    "NetLED54_C",
+    "NetLED55_C",
+    "NetLED56_C",
+    "NetJC1_6"
+   ],
+   "series_elements_anode_to_cathode": [
+    {
+     "designator": "LED49",
+     "part": "L1C1-VLT",
+     "pos_mm": [
+      30.0,
+      36.0
+     ]
+    },
+    {
+     "designator": "LED50",
+     "part": "L1C1-VLT",
+     "pos_mm": [
+      30.0,
+      43.5
+     ]
+    },
+    {
+     "designator": "LED51",
+     "part": "L1C1-VLT",
+     "pos_mm": [
+      30.0,
+      51.0
+     ]
+    },
+    {
+     "designator": "LED52",
+     "part": "CUN8",
+     "pos_mm": [
+      40.0,
+      37.0
+     ]
+    },
+    {
+     "designator": "LED53",
+     "part": "CUN8",
+     "pos_mm": [
+      120.0,
+      37.0
+     ]
+    },
+    {
+     "designator": "LED54",
+     "part": "L1C1-VLT",
+     "pos_mm": [
+      130.0,
+      36.0
+     ]
+    },
+    {
+     "designator": "LED55",
+     "part": "L1C1-VLT",
+     "pos_mm": [
+      130.0,
+      43.25
+     ]
+    },
+    {
+     "designator": "LED56",
+     "part": "L1C1-VLT",
+     "pos_mm": [
+      130.0,
+      50.25
+     ]
+    },
+    {
+     "designator": "R1",
+     "part": "0R 1206 (0-ohm jumper, not an LED)",
+     "pos_mm": [
+      132.0,
+      18.0
+     ]
+    }
+   ],
+   "led_count": 8,
+   "composition": {
+    "L1C1-VLT": 6,
+    "CUN8": 2
+   },
+   "mixed_types": true,
+   "paralleled": false,
+   "controller": {
+    "firmware_channel": 6,
+    "owner_name": "V",
+    "controller_connector_pin": "J1.6",
+    "controller_pcb_net": "CSP_F",
+    "tps922053_instance": "U1_F (sheet symbol F)",
+    "logic_nets": [
+     "LEDPWM6",
+     "LEDAO6"
+    ],
+    "esp32_pwm_gpio": "GPIO15",
+    "esp32_adim_gpio": "GPIO16",
+    "harness_assumption": "controller J1.6 <-> emitter JC1.6 (1:1; inferred from channel-name match, harness not in design files)"
+   }
+  },
+  {
+   "emitter_cathode_pin": "JC1.7",
+   "connected": true,
+   "emitter_anode": "JA1 pins 1-8 (common anode bus shared by all 8 strings)",
+   "pcb_cathode_net": "NetJC1_7",
+   "nets_anode_to_cathode": [
+    "NetJA1_1",
+    "NetLED14_C",
+    "NetLED15_C",
+    "NetLED16_C",
+    "NetLED17_C",
+    "NetLED18_C",
+    "NetLED19_C",
+    "NetLED20_C",
+    "NetLED21_C",
+    "NetLED22_C",
+    "NetJC1_7"
+   ],
+   "series_elements_anode_to_cathode": [
+    {
+     "designator": "LED14",
+     "part": "L1C1-59",
+     "pos_mm": [
+      25.0,
+      28.0
+     ]
+    },
+    {
+     "designator": "LED15",
+     "part": "L1C1-59",
+     "pos_mm": [
+      25.0,
+      43.5
+     ]
+    },
+    {
+     "designator": "LED16",
+     "part": "L1C1-59",
+     "pos_mm": [
+      25.0,
+      58.0
+     ]
+    },
+    {
+     "designator": "LED17",
+     "part": "L1C1-RYL",
+     "pos_mm": [
+      50.0,
+      58.0
+     ]
+    },
+    {
+     "designator": "LED18",
+     "part": "L1C1-RYL",
+     "pos_mm": [
+      58.0,
+      58.0
+     ]
+    },
+    {
+     "designator": "LED19",
+     "part": "L1C1-RYL",
+     "pos_mm": [
+      100.0,
+      58.0
+     ]
+    },
+    {
+     "designator": "LED20",
+     "part": "L1C1-RYL",
+     "pos_mm": [
+      107.0,
+      58.0
+     ]
+    },
+    {
+     "designator": "LED21",
+     "part": "L1C1-59",
+     "pos_mm": [
+      135.0,
+      58.0
+     ]
+    },
+    {
+     "designator": "LED22",
+     "part": "L1C1-59",
+     "pos_mm": [
+      135.0,
+      43.5
+     ]
+    },
+    {
+     "designator": "LED23",
+     "part": "L1C1-59",
+     "pos_mm": [
+      135.0,
+      28.25
+     ]
+    }
+   ],
+   "led_count": 10,
+   "composition": {
+    "L1C1-59": 6,
+    "L1C1-RYL": 4
+   },
+   "mixed_types": true,
+   "paralleled": false,
+   "controller": {
+    "firmware_channel": 7,
+    "owner_name": "WBl",
+    "controller_connector_pin": "J1.7",
+    "controller_pcb_net": "CSP_G",
+    "tps922053_instance": "U1_G (sheet symbol G)",
+    "logic_nets": [
+     "LEDPWM7",
+     "LEDAO7"
+    ],
+    "esp32_pwm_gpio": "GPIO17",
+    "esp32_adim_gpio": "GPIO18",
+    "harness_assumption": "controller J1.7 <-> emitter JC1.7 (1:1; inferred from channel-name match, harness not in design files)"
+   }
+  },
+  {
+   "emitter_cathode_pin": "JC1.8",
+   "connected": true,
+   "emitter_anode": "JA1 pins 1-8 (common anode bus shared by all 8 strings)",
+   "pcb_cathode_net": "NetJC1_8",
+   "nets_anode_to_cathode": [
+    "NetJA1_1",
+    "NetLED1_C",
+    "NetLED2_C",
+    "NetLED3_C",
+    "NetLED4_C",
+    "NetLED5_C",
+    "NetLED6_C",
+    "NetLED7_C",
+    "NetLED8_C",
+    "NetLED9_C",
+    "NetLED10_C",
+    "NetLED11_C",
+    "NetLED12_C",
+    "NetJC1_8"
+   ],
+   "series_elements_anode_to_cathode": [
+    {
+     "designator": "LED1",
+     "part": "L1RX-RYL1000000000",
+     "pos_mm": [
+      14.0,
+      28.0
+     ]
+    },
+    {
+     "designator": "LED2",
+     "part": "L1RX-RYL1000000000",
+     "pos_mm": [
+      14.0,
+      36.075
+     ]
+    },
+    {
+     "designator": "LED3",
+     "part": "L1RX-RYL1000000000",
+     "pos_mm": [
+      14.0,
+      43.5
+     ]
+    },
+    {
+     "designator": "LED4",
+     "part": "L1RX-RYL1000000000",
+     "pos_mm": [
+      14.0,
+      49.925
+     ]
+    },
+    {
+     "designator": "LED5",
+     "part": "L1RX-RYL1000000000",
+     "pos_mm": [
+      14.0,
+      58.075
+     ]
+    },
+    {
+     "designator": "LED6",
+     "part": "L1RX-RYL1000000000",
+     "pos_mm": [
+      40.0,
+      67.0
+     ]
+    },
+    {
+     "designator": "LED7",
+     "part": "L1RX-RYL1000000000",
+     "pos_mm": [
+      80.0,
+      60.0
+     ]
+    },
+    {
+     "designator": "LED8",
+     "part": "L1RX-RYL1000000000",
+     "pos_mm": [
+      120.0,
+      67.0
+     ]
+    },
+    {
+     "designator": "LED9",
+     "part": "L1RX-RYL1000000000",
+     "pos_mm": [
+      146.0,
+      58.0
+     ]
+    },
+    {
+     "designator": "LED10",
+     "part": "L1RX-RYL1000000000",
+     "pos_mm": [
+      146.0,
+      50.0
+     ]
+    },
+    {
+     "designator": "LED11",
+     "part": "L1RX-RYL1000000000",
+     "pos_mm": [
+      146.0,
+      43.5
+     ]
+    },
+    {
+     "designator": "LED12",
+     "part": "L1RX-RYL1000000000",
+     "pos_mm": [
+      146.0,
+      36.0
+     ]
+    },
+    {
+     "designator": "LED13",
+     "part": "L1RX-RYL1000000000",
+     "pos_mm": [
+      146.0,
+      28.0
+     ]
+    }
+   ],
+   "led_count": 13,
+   "composition": {
+    "L1RX-RYL1000000000": 13
+   },
+   "mixed_types": false,
+   "paralleled": false,
+   "controller": {
+    "firmware_channel": 8,
+    "owner_name": "RBOuter",
+    "controller_connector_pin": "J1.8",
+    "controller_pcb_net": "CSP_H",
+    "tps922053_instance": "U1_H (sheet symbol H)",
+    "logic_nets": [
+     "LEDPWM8",
+     "LEDAO8"
+    ],
+    "esp32_pwm_gpio": "GPIO33",
+    "esp32_adim_gpio": "GPIO34",
+    "harness_assumption": "controller J1.8 <-> emitter JC1.8 (1:1; inferred from channel-name match, harness not in design files)"
+   }
+  },
+  {
+   "emitter_cathode_pin": "JC1.9",
+   "connected": false
+  },
+  {
+   "emitter_cathode_pin": "JC1.10",
+   "connected": false
+  }
+ ],
+ "uv_leds": {
+  "LED52": {
+   "part": "CUN8 (VIOSYS_Z5 footprint; full part number not in design files)",
+   "firmware_channel": 6,
+   "position_in_string": "4th of 8",
+   "pos_mm": [
+    40.0,
+    37.0
+   ]
+  },
+  "LED53": {
+   "part": "CUN8",
+   "firmware_channel": 6,
+   "position_in_string": "5th of 8",
+   "pos_mm": [
+    120.0,
+    37.0
+   ]
+  },
+  "note": "Both in series in the violet string (JC1.6) between LED51 and LED54 (L1C1-VLT); placed symmetrically left/right at y=37 mm on a 160x87 mm board"
+ },
+ "temperature_sensors": {
+  "U1": {
+   "part": "MCP9808T-E/MC (DFN-8)",
+   "bus": "I2C (emitter J1.5 SDA / J1.4 SCL)",
+   "address": "A0-A2 tied to GND -> 0x18",
+   "pos_mm": [
+    91.0,
+    18.0
+   ]
+  },
+  "U3": {
+   "part": "MCP9808 (MSOP-8)",
+   "bus": "same I2C bus",
+   "address": "A0-A2 tied to GND -> 0x18 (same as U1; both are in BOM and pick-and-place)",
+   "pos_mm": [
+    96.0,
+    18.0
+   ]
+  },
+  "U2": {
+   "part": "DS18B20U (uMAX-8)",
+   "bus": "1-Wire (emitter J1.1, net 1W)",
+   "pos_mm": [
+    71.975,
+    17.9
+   ]
+  },
+  "note": "All three are in a row near the bottom edge (y~18 mm, x 72-96 mm), about 8 mm below the lowest LED row (y=26). LED thermal pads share an isolated THERM net not tied to any sensor."
+ },
+ "sensor_connector": {
+  "emitter_J1": {
+   "1": "1W",
+   "2": "GND",
+   "3": "VCC",
+   "4": "SCL",
+   "5": "SDA",
+   "6": "NC"
+  },
+  "controller_J3": {
+   "1": "NC",
+   "2": "SDA",
+   "3": "SCL",
+   "4": "3V3",
+   "5": "GND",
+   "6": "1W"
+  },
+  "note": "Pinouts are mirrored (pin n <-> pin 7-n), so the 6-pin harness has to reverse pin order, while the 10-pin LED harness must be 1:1 for the channel names to match"
+ },
+ "board_extent_mm": [
+  160,
+  87
+ ],
+ "older_pdf": "ledbrick-classic/emitter-board/pdf/emitter-schematic-composite.PDF is the 2014/2015 original LEDBrick r0 (38 LEDs: Rebel UV, XP-G2, XP-E, SSL HyperRed, etc., separate anode and cathode per channel). It is a different board and does not apply to the Plus emitter."
+}
