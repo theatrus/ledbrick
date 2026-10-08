@@ -508,7 +508,12 @@ esp_err_t LEDBrickWebServer::handle_api_preset_load(httpd_req_t *req) {
   ESP_LOGI(TAG, "Loading preset: %s", preset_name.c_str());
   auto *scheduler = self->scheduler_;
   return self->respond_from_loop_(req, [scheduler, preset_name](JsonDocument &doc) {
-    scheduler->load_preset(preset_name);
+    // Save here rather than in load_preset, so the schedule is written once and a failed save is reported
+    if (!scheduler->load_preset(preset_name, false)) {
+      doc["error"] = "Unknown preset";
+      doc["code"] = 404;
+      return 404;
+    }
     if (!scheduler->save_schedule_to_flash()) {
       return save_failed(doc);
     }

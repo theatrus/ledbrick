@@ -326,17 +326,20 @@ void LEDBrickScheduler::clear_schedule() {
   ESP_LOGD(TAG, "Cleared all schedule points");
 }
 
-void LEDBrickScheduler::load_preset(const std::string &preset_name) {
+bool LEDBrickScheduler::load_preset(const std::string &preset_name, bool save) {
   if (preset_name == "sunrise_sunset") {
     create_sunrise_sunset_preset_with_astro_data();
-  } else {
-    scheduler_.load_preset(preset_name);
+  } else if (!scheduler_.load_preset(preset_name)) {
+    ESP_LOGW(TAG, "Unknown preset '%s'; schedule unchanged", preset_name.c_str());
+    return false;
   }
-  
-  // Save to flash automatically
-  save_schedule_to_flash();
-  
+
+  if (save) {
+    save_schedule_to_flash();
+  }
+
   ESP_LOGI(TAG, "Loaded preset '%s' with %zu points", preset_name.c_str(), scheduler_.get_schedule_size());
+  return true;
 }
 
 void LEDBrickScheduler::save_preset(const std::string &preset_name) {

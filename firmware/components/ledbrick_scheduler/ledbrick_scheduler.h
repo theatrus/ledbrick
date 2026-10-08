@@ -88,7 +88,9 @@ class LEDBrickScheduler : public PollingComponent {
   void clear_schedule();
   
   // Preset management (delegates to standalone scheduler)
-  void load_preset(const std::string &preset_name);
+  // Returns false, leaving the schedule unchanged, for an unknown preset. Saves to flash
+  // unless save is false, for a caller that saves itself and reports a failed save.
+  bool load_preset(const std::string &preset_name, bool save = true);
   void save_preset(const std::string &preset_name);
   
   // Persistent storage (ESPHome-specific)

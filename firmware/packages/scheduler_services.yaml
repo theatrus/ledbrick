@@ -161,11 +161,9 @@ api:
       variables:
         preset_name: string
       then:
+        # load_preset logs the result, including an unknown name
         - lambda: |-
             id(main_scheduler).load_preset(preset_name);
-        - logger.log:
-            format: "Loaded preset: %s"
-            args: [ 'preset_name.c_str()' ]
 
     # Save current schedule as preset (custom presets saved in memory only)
     - service: save_preset

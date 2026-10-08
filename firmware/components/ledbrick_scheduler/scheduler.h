@@ -154,7 +154,8 @@ public:
     bool is_schedule_empty() const { return schedule_points_.empty(); }
     
     // Preset management
-    void load_preset(const std::string& preset_name);
+    // Returns false, leaving the schedule unchanged, for an unknown preset
+    bool load_preset(const std::string& preset_name);
     void save_preset(const std::string& preset_name);
     std::vector<std::string> get_preset_names() const;
     void clear_preset(const std::string& preset_name);

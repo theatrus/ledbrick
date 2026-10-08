@@ -67,6 +67,21 @@ void test_presets(TestRunner& runner) {
     auto preset_names = scheduler.get_preset_names();
     runner.assert_equals(1, static_cast<int>(preset_names.size()), "Only one preset available");
     runner.assert_true(preset_names[0] == "default", "Default preset name returned");
+
+    // An unknown preset is reported and leaves the schedule alone
+    size_t loaded_size = scheduler.get_schedule_size();
+    runner.assert_true(scheduler.load_preset("default"), "Known preset reports success");
+    runner.assert_false(scheduler.load_preset("no_such_preset"), "Unknown preset reports failure");
+    runner.assert_equals(static_cast<int>(loaded_size), static_cast<int>(scheduler.get_schedule_size()),
+                         "Unknown preset leaves schedule unchanged");
+
+    // A preset kept with save_preset loads back
+    scheduler.clear_schedule();
+    scheduler.add_schedule_point(LEDScheduler::SchedulePoint(600, {10.0f, 20.0f, 30.0f, 40.0f}, {0.5f, 0.5f, 0.5f, 0.5f}));
+    scheduler.save_preset("mine");
+    scheduler.load_preset("default");
+    runner.assert_true(scheduler.load_preset("mine"), "Saved preset loads");
+    runner.assert_equals(1, static_cast<int>(scheduler.get_schedule_size()), "Saved preset restores its points");
 }
 
 void test_serialization(TestRunner& runner) {

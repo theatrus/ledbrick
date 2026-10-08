@@ -697,14 +697,21 @@ LEDScheduler::InterpolationResult LEDScheduler::apply_moon_simulation(const Inte
     return result;
 }
 
-void LEDScheduler::load_preset(const std::string& preset_name) {
-    // Only one default preset - astronomical schedule
+bool LEDScheduler::load_preset(const std::string& preset_name) {
+    // One built-in preset - astronomical schedule
     if (preset_name == "default" || preset_name == "sunrise_sunset") {
         create_default_astronomical_preset();
-        return;
+        return true;
     }
-    
-    // No other presets supported
+
+    // Presets kept with save_preset()
+    auto it = presets_.find(preset_name);
+    if (it != presets_.end()) {
+        schedule_points_ = it->second;
+        return true;
+    }
+
+    return false;
 }
 
 void LEDScheduler::save_preset(const std::string& preset_name) {
