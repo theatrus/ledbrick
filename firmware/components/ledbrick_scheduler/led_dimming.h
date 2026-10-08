@@ -74,10 +74,33 @@ enum class DimPriority : uint8_t { CURRENT_FIRST = 0, PWM_FIRST };
 // What the hardware can do
 struct DriveLimits {
     float max_current_a = 1.0f;            // channel limit; also capped by the LEDs' maximum
-    float current_step_a = 2.0f / 256.0f;  // TPS922053 resolves ADIM to 8 bits of 2 A
+    float current_step_a = 2.0f / 256.0f;  // TPS922053 resolves ADIM to 8 bits of 2 A, rounding down
     float min_current_a = 0.05f;           // channel.yaml holds EN/PWM off below this
     float pwm_step = 1.0f / 16384.0f;      // one LEDC step at 14 bits
+    // Light lost per EN/PWM pulse, as a share of the PWM period. Each pulse of 8% or more
+    // loses about 19 us of light: 1.9% of the 1 kHz period. Shorter pulses lose less; the
+    // loss sets in over the tail width, which is narrower at higher currents (1.9% at
+    // 300 mA and above, 4% at 170 mA and below). Measured on a LEDBrick Plus from supply
+    // current against duty (boards/ledbrick-plus/FINDINGS.md).
+    float pwm_pulse_loss = 0.019f;
+    float pwm_tail_low_current = 0.04f;   // tail width at and below 170 mA
+    float pwm_tail_high_current = 0.019f;  // tail width at and above 300 mA
+    // Highest duty used below 100%. Shorter off-times than 2.5% of the period (25 us) were
+    // not measured, and the driver may not see a very short low pulse at all.
+    float max_pulsed_pwm = 0.975f;
+
+    // Share of full light a duty gives at a current, and the duty for a share
+    float effective_pwm(float pwm, float current_a) const;
+    float pwm_for_effective(float effective, float current_a) const;
+    float pulse_tail(float current_a) const;
 };
+
+// Share of full light a PWM duty gives. 100% has no edges, so no loss. Below that each pulse
+// loses pulse_loss of the period, setting in over the tail width:
+// d - L (1 - e^(-d/tail)). Rises with d, so pwm_for_effective inverts it.
+float effective_pwm(float pwm, float pulse_loss, float tail);
+// The duty below 100% that gives an effective share; 1 for shares no pulsed duty reaches
+float pwm_for_effective(float effective, float pulse_loss, float tail);
 
 struct Drive {
     float current_a = 0.0f;  // current to command
@@ -114,12 +137,13 @@ public:
 
     // Current and PWM for a level (0-1). Level 1 is the output at the channel's
     // maximum current at the reference temperature, so a level holds its output as the
-    // LEDs heat, until the current reaches the maximum. The current is commanded a
-    // quarter step above the driver step it should land on, so the driver gives that
-    // step whether it truncates or rounds; the PWM then trims the output to the level.
+    // LEDs heat, until the current reaches the maximum. The current is commanded half a
+    // step above the driver step it should land on, since the driver rounds down; the PWM
+    // then trims the output to the level, allowing for the light each pulse loses.
     Drive drive_for_level(float level, const DriveLimits& limits, float temp_c) const;
 
-    // Level that a manual PWM (0-1) and current give at the reference temperature
+    // Level that a manual PWM (0-1) and current give at the reference temperature,
+    // allowing for the light each pulse loses
     float level_for_drive(float pwm, float current_a, const DriveLimits& limits) const;
 
 private:

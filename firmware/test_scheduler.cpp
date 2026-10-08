@@ -1036,10 +1036,11 @@ void test_channel_dimming(TestRunner& runner) {
     runner.assert_true(scheduler.set_channel_dimming(4, DimMode::MANUAL, DimPriority::CURRENT_FIRST, 0.1f, {}, &error),
                        "Switch back to manual");
     point = scheduler.get_schedule_points()[0];
-    float light_before = 0.5f * dimmer_before.output(0.5f, 25.0f);
+    // Light from a manual PWM allows for the light each pulse loses
+    float light_before = limits.effective_pwm(0.5f, 0.5f) * dimmer_before.output(0.5f, 25.0f);
     float step = limits.current_step_a;
     float landed = std::floor(point.current_values[4] / step) * step;
-    float light_after = point.pwm_values[4] / 100.0f * dimmer_before.output(landed, 25.0f);
+    float light_after = limits.effective_pwm(point.pwm_values[4] / 100.0f, landed) * dimmer_before.output(landed, 25.0f);
     runner.assert_equals(light_before, light_after, 0.01f * light_before, "Round trip keeps the light");
     runner.assert_true(point.current_values[4] > 1.0f - 2 * step && point.current_values[4] <= 1.0f,
                        "Back in manual mode the current is the channel maximum");
