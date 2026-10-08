@@ -206,8 +206,7 @@ void LEDBrickScheduler::update() {
   }
   
   // Log status every 10 seconds (reduce log spam)
-  static uint32_t last_log_time = 0;
-  if (current_millis - last_log_time > 10000) {
+  if (current_millis - last_log_time_ms_ > 10000) {
     if (temp_hardware_.get_hardware_state().thermal_emergency) {
       ESP_LOGD(TAG, "THERMAL EMERGENCY - All outputs forced to zero");
     } else if (!enabled_) {
@@ -222,19 +221,17 @@ void LEDBrickScheduler::update() {
                scheduler_.get_moon_simulation().enabled ? "enabled" : "disabled");
       
       // Also log if we recently recovered from emergency
-      static bool was_emergency = false;
-      static uint32_t recovery_time = 0;
       bool current_emergency = temp_hardware_.get_hardware_state().thermal_emergency;
-      if (was_emergency && !current_emergency) {
-        recovery_time = current_millis;
+      if (was_emergency_ && !current_emergency) {
+        recovery_time_ms_ = current_millis;
         ESP_LOGI(TAG, "Recently recovered from thermal emergency");
       }
-      if (recovery_time > 0 && current_millis - recovery_time < 30000) {  // Log for 30 seconds after recovery
-        ESP_LOGD(TAG, "Post-emergency recovery: %" PRIu32 " seconds ago", (current_millis - recovery_time) / 1000);
+      if (recovery_time_ms_ > 0 && current_millis - recovery_time_ms_ < 30000) {  // Log for 30 seconds after recovery
+        ESP_LOGD(TAG, "Post-emergency recovery: %" PRIu32 " seconds ago", (current_millis - recovery_time_ms_) / 1000);
       }
-      was_emergency = current_emergency;
+      was_emergency_ = current_emergency;
     }
-    last_log_time = current_millis;
+    last_log_time_ms_ = current_millis;
   }
 }
 
@@ -367,8 +364,9 @@ uint16_t LEDBrickScheduler::get_current_time_minutes() const {
 }
 
 InterpolationResult LEDBrickScheduler::get_current_values() const {
+  // Same interpolation as update(), so dynamic (sunrise-relative etc.) points count
   uint16_t current_time = get_current_time_minutes();
-  return scheduler_.get_values_at_time(current_time);
+  return scheduler_.get_values_at_time_with_astro(current_time, scheduler_.get_astronomical_times());
 }
 
 InterpolationResult LEDBrickScheduler::get_actual_channel_values() const {
@@ -426,6 +424,7 @@ void LEDBrickScheduler::set_pwm_scale(float scale) {
   if (abs(pwm_scale_ - scale) > 0.001f) {
     pwm_scale_ = scale;
     ESP_LOGI(TAG, "PWM scale set to %.2f (%.0f%%)", pwm_scale_, pwm_scale_ * 100.0f);
+    save_schedule_to_flash();
     
     // Force immediate update to apply new scale
     update();
@@ -452,9 +451,6 @@ void LEDBrickScheduler::create_sunrise_sunset_preset_with_astro_data() const {
 }
 
 void LEDBrickScheduler::apply_values(const InterpolationResult &values) {
-  static std::vector<float> last_pwm_values_(num_channels_, -1.0f);
-  static std::vector<float> last_current_values_(num_channels_, -1.0f);
-  
   ESP_LOGD(TAG, "apply_values called - num_channels: %u, values_size: %zu, first_pwm: %.1f%%", 
            num_channels_, values.pwm_values.size(), 
            values.pwm_values.empty() ? 0.0f : values.pwm_values[0]);
@@ -665,11 +661,8 @@ void LEDBrickScheduler::export_schedule_json(std::string &json_output, bool for_
   } else if (astronomical_projection_) {
     // If astronomical projection is enabled, we need to update the scheduler's
     // astronomical times with projected values before exporting
-    // Get current time for calculations
-    auto dt = esphome_time_to_datetime();
-    
     // Get projected sun times (with time shift applied)
-    auto projected_sun_times = astro_calc_.get_projected_sun_rise_set_times(dt);
+    auto projected_sun_times = get_daily_astro_times_().projected_sun;
     
     // Calculate solar noon from projected times
     uint16_t solar_noon = 720;  // Default to noon
@@ -745,6 +738,7 @@ void LEDBrickScheduler::export_schedule_json(std::string &json_output, bool for_
       "\",\"timezone_offset_hours\":" + std::to_string(timezone_offset_hours_) +
       current_time_field +
       ",\"enabled\":" + std::string(enabled_ ? "true" : "false") +
+      ",\"pwm_scale\":" + std::to_string(pwm_scale_) +
       ",\"latitude\":" + std::to_string(latitude_) +
       ",\"longitude\":" + std::to_string(longitude_) +
       ",\"astronomical_projection\":" + std::string(astronomical_projection_ ? "true" : "false") +
@@ -801,8 +795,8 @@ bool LEDBrickScheduler::import_schedule_json(const std::string &json_input, std:
   bool new_enabled = enabled_, has_enabled = false;
   bool new_projection = astronomical_projection_, has_projection = false;
   double new_lat = latitude_, new_lon = longitude_, new_tz = timezone_offset_hours_;
-  double new_shift_h = time_shift_hours_, new_shift_m = time_shift_minutes_;
-  bool has_lat = false, has_lon = false, has_tz = false, has_shift_h = false, has_shift_m = false;
+  double new_shift_h = time_shift_hours_, new_shift_m = time_shift_minutes_, new_pwm_scale = pwm_scale_;
+  bool has_lat = false, has_lon = false, has_tz = false, has_shift_h = false, has_shift_m = false, has_pwm_scale = false;
   read_bool("enabled", new_enabled, has_enabled);
   read_bool("astronomical_projection", new_projection, has_projection);
   read_number("latitude", -90.0, 90.0, new_lat, has_lat);
@@ -810,6 +804,7 @@ bool LEDBrickScheduler::import_schedule_json(const std::string &json_input, std:
   read_number("timezone_offset_hours", -14.0, 14.0, new_tz, has_tz);
   read_number("time_shift_hours", -12.0, 12.0, new_shift_h, has_shift_h);
   read_number("time_shift_minutes", -59.0, 59.0, new_shift_m, has_shift_m);
+  read_number("pwm_scale", 0.0, 1.0, new_pwm_scale, has_pwm_scale);
   
   // Check the temperature control settings on a scratch controller first
   std::string temp_config_json;
@@ -853,6 +848,7 @@ bool LEDBrickScheduler::import_schedule_json(const std::string &json_input, std:
   if (has_tz) timezone_offset_hours_ = new_tz;
   if (has_shift_h) time_shift_hours_ = static_cast<int>(new_shift_h);
   if (has_shift_m) time_shift_minutes_ = static_cast<int>(new_shift_m);
+  if (has_pwm_scale) pwm_scale_ = static_cast<float>(new_pwm_scale);
   if (!temp_config_json.empty()) {
     if (is_thermal_emergency()) {
       // New limits could clear the latched emergency without a real recovery
@@ -906,26 +902,48 @@ float LEDBrickScheduler::get_moon_phase() const {
   return astro_calc_.get_moon_phase(dt);
 }
 
-AstronomicalCalculator::MoonTimes LEDBrickScheduler::get_moon_rise_set_times() const {
-  update_astro_calculator_settings();
+const LEDBrickScheduler::DailyAstroTimes &LEDBrickScheduler::get_daily_astro_times_() const {
+  // The moon search alone takes hundreds of double-precision steps, which the ESP32-S3 does
+  // in software; the results only change with the date and settings, so keep them per day
   auto dt = esphome_time_to_datetime();
-  // Use projected times if projection is enabled
-  if (is_astronomical_projection_enabled()) {
-    return astro_calc_.get_projected_moon_rise_set_times(dt);
+  DailyAstroTimes &cache = daily_astro_;
+  if (cache.valid && cache.year == dt.year && cache.month == dt.month && cache.day == dt.day &&
+      cache.latitude == latitude_ && cache.longitude == longitude_ &&
+      cache.timezone_offset == timezone_offset_hours_ && cache.projection == astronomical_projection_ &&
+      cache.shift_hours == time_shift_hours_ && cache.shift_minutes == time_shift_minutes_) {
+    return cache;
   }
-  return astro_calc_.get_moon_rise_set_times(dt);
+  
+  update_astro_calculator_settings();
+  cache.sun = astro_calc_.get_sun_rise_set_times(dt);
+  cache.moon = astro_calc_.get_moon_rise_set_times(dt);
+  // The projected versions return the real times when projection is off
+  cache.projected_sun = astro_calc_.get_projected_sun_rise_set_times(dt);
+  cache.projected_moon = astro_calc_.get_projected_moon_rise_set_times(dt);
+  cache.year = dt.year;
+  cache.month = dt.month;
+  cache.day = dt.day;
+  cache.latitude = latitude_;
+  cache.longitude = longitude_;
+  cache.timezone_offset = timezone_offset_hours_;
+  cache.projection = astronomical_projection_;
+  cache.shift_hours = time_shift_hours_;
+  cache.shift_minutes = time_shift_minutes_;
+  cache.valid = true;
+  return cache;
+}
+
+AstronomicalCalculator::MoonTimes LEDBrickScheduler::get_moon_rise_set_times() const {
+  // Use projected times if projection is enabled
+  return get_daily_astro_times_().projected_moon;
 }
 
 AstronomicalCalculator::SunTimes LEDBrickScheduler::get_sun_rise_set_times() const {
-  update_astro_calculator_settings();
-  auto dt = esphome_time_to_datetime();
-  return astro_calc_.get_sun_rise_set_times(dt);
+  return get_daily_astro_times_().sun;
 }
 
 AstronomicalCalculator::SunTimes LEDBrickScheduler::get_projected_sun_rise_set_times() const {
-  update_astro_calculator_settings();
-  auto dt = esphome_time_to_datetime();
-  return astro_calc_.get_projected_sun_rise_set_times(dt);
+  return get_daily_astro_times_().projected_sun;
 }
 
 
@@ -983,15 +1001,14 @@ void LEDBrickScheduler::update_astro_calculator_settings() const {
 }
 
 void LEDBrickScheduler::update_timezone_from_time_source() {
-  static uint32_t last_tz_update = 0;
   uint32_t current_millis = millis();
   
   // Only check every 60 seconds to reduce overhead
-  if (current_millis - last_tz_update < 60000 && last_tz_update != 0) {
+  if (current_millis - last_tz_update_ms_ < 60000 && last_tz_update_ms_ != 0) {
     return;
   }
   
-  last_tz_update = current_millis;
+  last_tz_update_ms_ = current_millis;
   
   if (!time_source_) {
     return;
@@ -1144,8 +1161,6 @@ void LEDBrickScheduler::add_color_text_sensor(uint8_t channel, text_sensor::Text
 }
 
 void LEDBrickScheduler::update_color_sensors() {
-  static std::map<uint8_t, std::string> last_colors_;
-  
   for (auto& pair : color_text_sensors_) {
     uint8_t channel = pair.first;
     text_sensor::TextSensor* sensor = pair.second;
@@ -1269,11 +1284,10 @@ void LEDBrickScheduler::set_moon_simulation(const LEDScheduler::MoonSimulation& 
 }
 
 void LEDBrickScheduler::update_astronomical_times_for_scheduler(bool force) {
-  static uint32_t last_astro_update = 0;
   uint32_t current_millis = millis();
   
   // Update astronomical times every 5 minutes (300000 ms) unless forced
-  if (!force && current_millis - last_astro_update < 300000 && last_astro_update != 0) {
+  if (!force && current_millis - last_astro_update_ms_ < 300000 && last_astro_update_ms_ != 0) {
     return; // Skip update if less than 5 minutes have passed
   }
   
@@ -1289,16 +1303,15 @@ void LEDBrickScheduler::update_astronomical_times_for_scheduler(bool force) {
     return;
   }
   
-  last_astro_update = current_millis;
+  last_astro_update_ms_ = current_millis;
   
   // Calculate current astronomical times
   update_astro_calculator_settings();
   auto dt = esphome_time_to_datetime();
   
   // Get sunrise/sunset times (with projection if enabled)
-  auto sun_times = astronomical_projection_ ? 
-    astro_calc_.get_projected_sun_rise_set_times(dt) : 
-    astro_calc_.get_sun_rise_set_times(dt);
+  const auto &daily = get_daily_astro_times_();
+  auto sun_times = daily.projected_sun;
   
   // Calculate solar noon (midpoint between sunrise and sunset)
   uint16_t solar_noon = 720; // Default noon
@@ -1342,9 +1355,7 @@ void LEDBrickScheduler::update_astronomical_times_for_scheduler(bool force) {
   astro_times.astronomical_dusk_minutes = civil_dusk < 1380 ? civil_dusk + 60 : 1439;
   
   // Get moon data (with projection if enabled)
-  auto moon_times = astronomical_projection_ ?
-    astro_calc_.get_projected_moon_rise_set_times(dt) :
-    astro_calc_.get_moon_rise_set_times(dt);
+  auto moon_times = daily.projected_moon;
   float moon_phase = astro_calc_.get_moon_phase(dt);
   
   astro_times.moonrise_minutes = moon_times.rise_valid ? moon_times.rise_minutes : 0;
@@ -1592,9 +1603,8 @@ void LEDBrickScheduler::update_temperature_sensors() {
   uint32_t now = millis();
   
   // Auto-discover temperature sensors if we don't have any yet
-  static uint32_t last_discovery_check = 0;
-  if (temp_sensors_.empty() && (now - last_discovery_check > 10000)) {  // Check every 10 seconds
-    last_discovery_check = now;
+  if (temp_sensors_.empty() && (now - last_discovery_check_ms_ > 10000)) {  // Check every 10 seconds
+    last_discovery_check_ms_ = now;
     ESP_LOGI(TAG, "Searching for temperature sensors...");
     
     // Only attempt auto-discovery after boot is complete

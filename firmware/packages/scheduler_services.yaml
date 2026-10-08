@@ -231,12 +231,11 @@ api:
         phase_scaling_current: bool
       then:
         - lambda: |-
-            LEDScheduler::MoonSimulation config;
+            // Start from the current settings so base intensity and current are kept
+            LEDScheduler::MoonSimulation config = id(main_scheduler).get_moon_simulation();
             config.enabled = enabled;
             config.phase_scaling_pwm = phase_scaling_pwm;
             config.phase_scaling_current = phase_scaling_current;
-            // Use default base_intensity values if not set
-            // The set_moon_simulation method will handle the configuration
             id(main_scheduler).set_moon_simulation(config);
             ESP_LOGI("main", "Moon simulation configured - Enabled: %s, PWM scaling: %s, Current scaling: %s",
                      enabled ? "YES" : "NO", 
@@ -296,11 +295,14 @@ api:
         json_data: string
       then:
         - lambda: |-
-            bool success = id(main_scheduler).import_schedule_json(json_data);
-            if (success) {
+            std::string error;
+            bool success = id(main_scheduler).import_schedule_json(json_data, &error);
+            if (success && id(main_scheduler).save_schedule_to_flash()) {
               ESP_LOGI("main", "Schedule JSON import successful");
+            } else if (success) {
+              ESP_LOGW("main", "Schedule JSON imported but too large to save; it will be lost on restart");
             } else {
-              ESP_LOGW("main", "Schedule JSON import failed - invalid format");
+              ESP_LOGW("main", "Schedule JSON import failed: %s", error.c_str());
             }
 
     # Force save schedule to flash

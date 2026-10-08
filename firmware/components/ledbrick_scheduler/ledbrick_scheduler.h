@@ -285,8 +285,32 @@ class LEDBrickScheduler : public PollingComponent {
   bool flash_load_failed_{false};  // A saved schedule exists but could not be loaded
   uint32_t last_time_warning_ms_{0};
   
+  // Timers and last-seen values for periodic work and logging
+  uint32_t last_log_time_ms_{0};
+  bool was_emergency_{false};
+  uint32_t recovery_time_ms_{0};
+  uint32_t last_tz_update_ms_{0};
+  uint32_t last_astro_update_ms_{0};
+  uint32_t last_discovery_check_ms_{0};
+  std::vector<float> last_pwm_values_;
+  std::vector<float> last_current_values_;
+  std::map<uint8_t, std::string> last_colors_;
+  
   // Internal methods
   void apply_values(const InterpolationResult &values);
+  
+  // Rise and set times depend only on the date and settings, so compute them once per day
+  struct DailyAstroTimes {
+    bool valid{false};
+    int year{0}, month{0}, day{0};
+    double latitude{0.0}, longitude{0.0}, timezone_offset{0.0};
+    bool projection{false};
+    int shift_hours{0}, shift_minutes{0};
+    AstronomicalCalculator::SunTimes sun, projected_sun;
+    AstronomicalCalculator::MoonTimes moon, projected_moon;
+  };
+  mutable DailyAstroTimes daily_astro_;
+  const DailyAstroTimes &get_daily_astro_times_() const;
   
   // Helper to convert ESPHome time to AstronomicalCalculator::DateTime
   AstronomicalCalculator::DateTime esphome_time_to_datetime() const;
