@@ -1149,12 +1149,13 @@ void test_custom_led_models(TestRunner& runner) {
         R"("output_vs_current":[[0.1,0.29],[0.35,1.0],[0.7,1.94]],)"
         R"("output_vs_temp":[[25,1.1],[85,1.0]],"curve_temp":25,"rth":2.8,)"
         R"("vf_vs_current":[[0.1,1.9],[0.7,2.2]]})";
+    const std::string red_list = R"({"led_models":[)" + red + "]}";
     const std::string points =
         R"("schedule_points":[{"time_minutes":600,"pwm_values":[10,10,10,10,10,10,10,10],)"
         R"("current_values":[0.5,0.5,0,0.5,0.5,0.5,0.5,0.5]}])";
     // Channel 3 runs on the custom model next to four built-in whites
-    auto settings = [&](const std::string& models, const std::string& ch3_leds) {
-        return R"({"num_channels":8,)" + models +
+    auto settings = [&](const std::string& extra, const std::string& ch3_leds) {
+        return R"({"num_channels":8,)" + extra +
                R"("channel_configs":[{"rgb_hex":"#ffffff","max_current":1,"name":"a"},)"
                R"({"rgb_hex":"#ffffff","max_current":1,"name":"b"},)"
                R"({"rgb_hex":"#ff8800","max_current":2,"name":"WW","dimming":{"mode":"curve")" + ch3_leds + "}}]," +
@@ -1164,8 +1165,8 @@ void test_custom_led_models(TestRunner& runner) {
 
     LEDScheduler scheduler(8);
     std::string error;
-    runner.assert_true(scheduler.import_json(settings(R"("led_models":[)" + red + "],", mixed_leds), &error),
-                       "Settings with a custom model import " + error);
+    runner.assert_true(scheduler.import_led_models_json(red_list, &error), "Custom model posted " + error);
+    runner.assert_true(scheduler.import_json(settings("", mixed_leds), &error), "A channel uses it " + error);
     runner.assert_equals(static_cast<size_t>(1), scheduler.get_custom_led_models().size(), "One custom model");
     const ledbrick::LedModel* model = scheduler.find_led_model("my_red");
     runner.assert_true(model != nullptr && model->name == "My deep red", "Custom model found by id");
@@ -1178,12 +1179,22 @@ void test_custom_led_models(TestRunner& runner) {
     runner.assert_equals(0.7f, scheduler.channel_dimmer(2).max_current(limits), 1e-6f,
                          "Custom model's max current caps the channel");
 
-    // Saved copy and full export both carry the models and load back the same
+    // The schedule's exports leave the models out; they have their own document
     std::string saved = scheduler.export_json_minified();
     std::string full = scheduler.export_json();
+    runner.assert_true(saved.find("led_models") == std::string::npos && saved.find("output_vs") == std::string::npos,
+                       "Saved schedule has no models");
+    runner.assert_true(full.find("led_models") == std::string::npos && full.find("output_vs") == std::string::npos,
+                       "Full schedule export has no models");
+    std::string models_saved = scheduler.export_led_models_json(true);
+    runner.assert_true(models_saved.find("\"led_models\"") == 1 && models_saved.find("\"custom\"") == std::string::npos,
+                       "Models document is the posted form");
+
+    // Boot order: models, then the schedule
     for (const std::string& json : {saved, full}) {
         LEDScheduler loaded(8);
-        runner.assert_true(loaded.import_json(json, &error), "Export with a custom model imports " + error);
+        runner.assert_true(loaded.import_led_models_json(models_saved, &error), "Saved models load " + error);
+        runner.assert_true(loaded.import_json(json, &error), "Schedule loads after them " + error);
         const ledbrick::LedModel* again = loaded.find_led_model("my_red");
         bool same = again != nullptr && model != nullptr &&
                     again->output_vs_current.size() == model->output_vs_current.size();
@@ -1195,28 +1206,42 @@ void test_custom_led_models(TestRunner& runner) {
         runner.assert_true(again != nullptr && std::fabs(again->rth_c_per_w - 2.8f) < 1e-4f, "Rth survives");
         runner.assert_true(loaded.is_curve_channel(2) && loaded.channel_dimmer(2).valid(), "Channel 3 still on it");
     }
-    LEDScheduler plain(8);
-    plain.set_schedule_point(600, std::vector<float>(8, 10.0f), std::vector<float>(8, 0.5f));
-    runner.assert_true(plain.export_json_minified().find("led_models") == std::string::npos,
-                       "Saved copy leaves out an empty model list");
-    runner.assert_true(plain.export_json().find("\"led_models\"") != std::string::npos,
-                       "Full export always shows the model list");
 
-    // Without led_models, an import keeps them
-    runner.assert_true(scheduler.import_json(R"({"num_channels":8,)" + points + "}", &error), "Import without models");
-    runner.assert_equals(static_cast<size_t>(1), scheduler.get_custom_led_models().size(), "Custom model kept");
-    runner.assert_true(scheduler.channel_dimmer(2).valid(), "Channel 3 still dims on it");
+    // A schedule import ignores led_models
+    LEDScheduler ignoring(8);
+    runner.assert_true(ignoring.import_json(settings(R"("led_models":[)" + red + "],", ""), &error),
+                       "Schedule with a led_models key imports " + error);
+    runner.assert_true(ignoring.get_custom_led_models().empty(), "Its models are ignored");
+
+    // Without the models, a schedule naming them is refused, unless it is the saved copy
+    LEDScheduler missing(8);
+    error.clear();
+    runner.assert_false(missing.import_json(saved, &error), "Schedule naming an unknown model refused");
+    runner.assert_true(error.find("channel 3") != std::string::npos, "Error names the channel: " + error);
+    runner.assert_true(missing.import_json(saved, &error, true), "Saved copy loads without its models " + error);
+    runner.assert_true(missing.is_curve_channel(2) && missing.get_channel_config(2).leds.size() == 2,
+                       "Channel keeps its mode and LED names");
+    runner.assert_false(missing.channels_have_models(&error), "Missing model reported");
+    runner.assert_true(error.find("my_red") != std::string::npos, "Report names the model: " + error);
+    runner.assert_true(missing.channel_dimmer(2).valid(), "Channel dims on the LEDs it still knows");
+    LEDScheduler lost(8);
+    lost.import_json(settings("", R"(,"leds":[{"model":"my_red","count":4}])"), nullptr, true);
+    runner.assert_false(lost.channel_dimmer(2).valid(), "With none known the channel stays dark");
+    runner.assert_true(lost.channel_dimmer(2).drive_for_level(0.5f, limits, 25.0f).current_a == 0.0f, "Dark: no current");
+    runner.assert_true(missing.import_led_models_json(R"({"led_models":[]})", &error),
+                       "Other model changes still work while a channel waits " + error);
+    runner.assert_true(missing.import_led_models_json(red_list, &error), "Posting the model back " + error);
+    runner.assert_true(missing.channels_have_models(&error), "Channel whole again");
 
     // Dropping a model a channel uses fails and changes nothing
     error.clear();
-    runner.assert_false(scheduler.import_json(R"({"num_channels":8,"led_models":[],)" + points + "}", &error),
+    runner.assert_false(scheduler.import_led_models_json(R"({"led_models":[]})", &error),
                         "Dropping an in-use model rejected");
     runner.assert_true(error.find("channel 3") != std::string::npos, "Error names the channel: " + error);
     runner.assert_false(scheduler.set_custom_led_models({}, &error), "set_custom_led_models refuses too");
     runner.assert_equals(static_cast<size_t>(1), scheduler.get_custom_led_models().size(), "Model still there");
-    runner.assert_true(scheduler.import_json(settings(R"("led_models":[],)", ""), &error),
-                       "Dropping it with the channel back on its default LEDs works " + error);
-    runner.assert_true(scheduler.get_custom_led_models().empty(), "No custom models left");
+    runner.assert_true(scheduler.import_json(settings("", ""), &error), "Channel back on its default LEDs " + error);
+    runner.assert_true(scheduler.set_custom_led_models({}, &error), "Then the model can go " + error);
 
     // A custom model with a built-in's id replaces it, for channels on their default LEDs too
     float before = scheduler.channel_dimmer(2).output(0.35f, 25.0f);
@@ -1278,13 +1303,17 @@ void test_custom_led_models(TestRunner& runner) {
     unchanged.import_led_models_json("{nope", nullptr);
     runner.assert_true(unchanged.get_custom_led_models().empty(), "Failed post changes nothing");
 
-    // Four custom models with 16-point curves fit in the 8 KB flash slot with a day's schedule
-    LEDScheduler roomy(8);
-    for (int p = 0; p < 10; p++) {
-        roomy.set_schedule_point(static_cast<uint16_t>(p * 120), std::vector<float>(8, 33.3f), std::vector<float>(8, 0.666f));
-    }
-    std::vector<ledbrick::LedModel> four;
-    for (int i = 0; i < 4; i++) {
+    // The size limit for the saved record is checked before anything changes
+    LEDScheduler limited(8);
+    error.clear();
+    runner.assert_false(limited.import_led_models_json(red_list, &error, 100), "Set over the size limit refused");
+    runner.assert_true(error.find("bytes to save") != std::string::npos && limited.get_custom_led_models().empty(),
+                       "Refused before applying: " + error);
+    runner.assert_true(limited.import_led_models_json(red_list, &error, 12287), "Under the limit accepted " + error);
+
+    // Eight models with 24-point curves fit the 12 KB record
+    std::vector<ledbrick::LedModel> eight;
+    for (int i = 0; i < 8; i++) {
         ledbrick::LedModel m;
         m.id = "custom_part_" + std::to_string(i);
         m.name = "Custom part number " + std::to_string(i);
@@ -1292,16 +1321,17 @@ void test_custom_led_models(TestRunner& runner) {
         m.max_current_a = 1.4f;
         m.curve_temp_c = 25.0f;
         m.rth_c_per_w = 2.5f;
-        for (int k = 0; k < 16; k++) {
-            m.output_vs_current.push_back({0.1f + 0.0933f * k, 0.3123f + 0.2717f * k});
-            m.output_vs_temp.push_back({-20.0f + 10.33f * k, 1.123f - 0.0217f * k});
-            m.vf_vs_current.push_back({0.1f + 0.0933f * k, 2.612f + 0.0213f * k});
+        for (int k = 0; k < 24; k++) {
+            m.output_vs_current.push_back({0.1f + 0.0567f * k, 0.3123f + 0.1717f * k});
+            m.output_vs_temp.push_back({-20.0f + 7.33f * k, 1.123f - 0.0217f * k});
+            m.vf_vs_current.push_back({0.1f + 0.0567f * k, 2.612f + 0.0213f * k});
         }
-        four.push_back(m);
+        eight.push_back(m);
     }
-    runner.assert_true(roomy.set_custom_led_models(four, &error), "Four 16-point models accepted " + error);
-    runner.assert_true(roomy.export_json_minified().size() < 7000, "They fit the flash slot with room for settings: " +
-                                                                      std::to_string(roomy.export_json_minified().size()));
+    LEDScheduler roomy(8);
+    runner.assert_true(roomy.set_custom_led_models(eight, &error), "Eight 24-point models accepted " + error);
+    size_t eight_size = roomy.export_led_models_json(true).size();
+    runner.assert_true(eight_size < 12287, "They fit the 12 KB record: " + std::to_string(eight_size) + " bytes");
 }
 
 void test_json_export_size(TestRunner& runner) {

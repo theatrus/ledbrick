@@ -29,6 +29,7 @@ void LEDBrickScheduler::setup() {
   
   // Initialize persistent storage
   schedule_pref_ = global_preferences->make_preference<ScheduleStorage>(SCHEDULE_HASH);
+  led_models_pref_ = global_preferences->make_preference<LedModelsStorage>(LED_MODELS_HASH);
   emergency_pref_ = global_preferences->make_preference<bool>(EMERGENCY_HASH);
   
   // Set up temperature hardware callbacks (moved from controller to hardware manager)
@@ -51,8 +52,15 @@ void LEDBrickScheduler::setup() {
     temp_control_.update_hardware_state(temp_hardware_.get_hardware_state());
   }
   
-  // Load schedule from flash storage (includes all settings in JSON)
+  // Load schedule from flash storage (includes all settings in JSON). The custom LED
+  // models come first, since channels name them.
+  load_led_models_from_flash();
   load_schedule_from_flash();
+  std::string model_error;
+  if (!scheduler_.channels_have_models(&model_error)) {
+    ESP_LOGE(TAG, "%s; that channel skips those LEDs until the model is posted to /api/led_models",
+             model_error.c_str());
+  }
   
   // Initialize temperature control
   temp_control_.set_config(temp_config_);
@@ -415,22 +423,20 @@ bool LEDBrickScheduler::set_channel_dimming(uint8_t channel, ledbrick::DimMode m
   return true;
 }
 
-bool LEDBrickScheduler::set_led_models_json(const std::string &json, std::string *error, bool *too_large) {
-  *too_large = false;
-  std::vector<ledbrick::LedModel> previous = scheduler_.get_custom_led_models();
-  if (!scheduler_.import_led_models_json(json, error)) {
-    return false;
-  }
-  if (!save_schedule_to_flash()) {
-    // Models that would be lost at the next restart would change the light then
-    scheduler_.set_custom_led_models(previous);
-    if (error) *error = "LED models too large to save with the schedule";
-    *too_large = true;
+bool LEDBrickScheduler::set_led_models_json(const std::string &json, std::string *error, bool *save_failed) {
+  *save_failed = false;
+  // A set too large for its record is refused before anything changes
+  if (!scheduler_.import_led_models_json(json, error, sizeof(LedModelsStorage::json_data) - 1)) {
     return false;
   }
   ESP_LOGI(TAG, "Custom LED models: %zu", scheduler_.get_custom_led_models().size());
   // Curve channels pick up the new curves at the next update
   force_next_update_ = true;
+  if (!save_led_models_to_flash()) {
+    if (error) *error = "LED models applied but not saved; they will be lost on restart";
+    *save_failed = true;
+    return false;
+  }
   return true;
 }
 
@@ -716,11 +722,61 @@ bool LEDBrickScheduler::save_schedule_to_flash() {
     // ESPHome holds preference writes for up to a minute, so a power cut soon after a change
     // lost it although the change had been reported saved. Write it out a quarter second
     // after the last save; a burst of saves (one per channel, say) is written once.
-    this->set_timeout("flush_schedule", 250, []() { global_preferences->sync(); });
+    this->set_timeout("flush_settings", 250, []() { global_preferences->sync(); });
   } else {
     ESP_LOGW(TAG, "Failed to save schedule to flash");
   }
   return success;
+}
+
+bool LEDBrickScheduler::save_led_models_to_flash() {
+  std::string json = scheduler_.export_led_models_json(true);
+  std::unique_ptr<LedModelsStorage> storage(new (std::nothrow) LedModelsStorage);
+  if (!storage) {
+    ESP_LOGE(TAG, "Failed to allocate memory for LED model storage");
+    return false;
+  }
+  if (json.length() >= sizeof(storage->json_data)) {
+    ESP_LOGE(TAG, "LED models too large to save (%zu bytes, limit %zu)", json.length(),
+             sizeof(storage->json_data) - 1);
+    return false;
+  }
+  memset(storage.get(), 0, sizeof(LedModelsStorage));
+  storage->version = 1;
+  storage->json_length = static_cast<uint32_t>(json.length());
+  std::memcpy(storage->json_data, json.c_str(), storage->json_length);
+
+  if (!led_models_pref_.save(storage.get())) {
+    ESP_LOGW(TAG, "Failed to save LED models to flash");
+    return false;
+  }
+  ESP_LOGD(TAG, "Saved LED models to flash (%" PRIu32 " bytes)", storage->json_length);
+  // Shares the schedule's flush, so changes to both are written together
+  this->set_timeout("flush_settings", 250, []() { global_preferences->sync(); });
+  return true;
+}
+
+void LEDBrickScheduler::load_led_models_from_flash() {
+  std::unique_ptr<LedModelsStorage> storage(new (std::nothrow) LedModelsStorage);
+  if (!storage) {
+    ESP_LOGE(TAG, "Failed to allocate memory for LED model storage");
+    return;
+  }
+  if (!led_models_pref_.load(storage.get())) {
+    ESP_LOGD(TAG, "No custom LED models in flash");
+    return;
+  }
+  if (storage->version != 1 || storage->json_length >= sizeof(storage->json_data)) {
+    ESP_LOGW(TAG, "Saved LED models have version %" PRIu32 ", length %" PRIu32 "; ignoring them",
+             storage->version, storage->json_length);
+    return;
+  }
+  std::string error;
+  if (scheduler_.import_led_models_json(std::string(storage->json_data, storage->json_length), &error)) {
+    ESP_LOGI(TAG, "Loaded %zu custom LED models", scheduler_.get_custom_led_models().size());
+  } else {
+    ESP_LOGE(TAG, "Saved LED models could not be loaded: %s", error.c_str());
+  }
 }
 
 void LEDBrickScheduler::load_schedule_from_flash() {
@@ -973,7 +1029,8 @@ bool LEDBrickScheduler::import_schedule_json(const std::string &json_input, std:
   
   // The standalone import replaces the schedule only when it succeeds
   std::string import_error;
-  if (!scheduler_.import_json(json_input, &import_error)) {
+  // A saved channel naming a lost LED model keeps its schedule; the model can be posted again
+  if (!scheduler_.import_json(json_input, &import_error, from_flash)) {
     return fail(import_error.empty() ? "schedule_points missing or invalid" : import_error);
   }
   

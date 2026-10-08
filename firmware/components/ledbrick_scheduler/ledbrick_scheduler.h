@@ -97,6 +97,10 @@ class LEDBrickScheduler : public PollingComponent {
   // Returns false when the schedule is too large to store; the previous copy is kept
   bool save_schedule_to_flash();
   void load_schedule_from_flash();
+  // Custom LED models have their own record: they change rarely, and the schedule's
+  // record and API stay small without them
+  bool save_led_models_to_flash();
+  void load_led_models_from_flash();
   // for_storage writes compact JSON without volatile fields such as the current time
   void export_schedule_json(std::string &json_output, bool for_storage = false) const;
   // Nothing changes unless the whole document is valid. from_flash skips invalid
@@ -171,10 +175,13 @@ class LEDBrickScheduler : public PollingComponent {
   bool set_channel_dimming(uint8_t channel, ledbrick::DimMode mode, ledbrick::DimPriority priority,
                            float floor_current, const std::vector<ledbrick::LedGroup> &leds, std::string *error);
   bool is_curve_channel(uint8_t channel) const { return scheduler_.is_curve_channel(channel); }
-  // Replaces the custom LED models from {"led_models":[...]} and saves them. When they do not
-  // fit in flash, the previous models come back and too_large is set.
-  bool set_led_models_json(const std::string &json, std::string *error, bool *too_large);
-  std::string get_led_models_json() const { return scheduler_.export_led_models_json(); }
+  // Replaces the custom LED models from {"led_models":[...]} and saves them. False with
+  // save_failed clear: rejected, nothing changed. With save_failed set: applied, not saved.
+  bool set_led_models_json(const std::string &json, std::string *error, bool *save_failed);
+  // Every model with its curves, or with custom_only the custom ones as {"led_models":[...]}
+  std::string get_led_models_json(bool custom_only = false) const {
+    return scheduler_.export_led_models_json(custom_only);
+  }
   size_t get_custom_led_model_count() const { return scheduler_.get_custom_led_models().size(); }
   // Level (0-1) a curve-mode channel was last driven at; negative for manual channels
   float get_channel_level(uint8_t channel) const;
@@ -268,6 +275,15 @@ class LEDBrickScheduler : public PollingComponent {
     uint32_t version;  // Storage format version
     uint32_t json_length;  // Length of JSON data
     char json_data[8192];  // JSON storage (8KB should be enough)
+  };
+
+  ESPPreferenceObject led_models_pref_;
+  static constexpr uint32_t LED_MODELS_HASH = 0x4C45444D;  // 'LEDM'
+  // The custom models as {"led_models":[...]}. Written only when they change.
+  struct LedModelsStorage {
+    uint32_t version;
+    uint32_t json_length;
+    char json_data[12288];
   };
   
   

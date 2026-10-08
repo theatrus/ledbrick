@@ -96,6 +96,27 @@ cJSON* led_models_json(const std::vector<ledbrick::LedModel>& models) {
     return array;
 }
 
+// Unformatted JSON of root, which is deleted; "{}" when out of memory
+std::string print_and_delete(cJSON* root) {
+    char* printed = root ? cJSON_PrintUnformatted(root) : nullptr;
+    cJSON_Delete(root);
+    if (!printed) {
+        return "{}";
+    }
+    std::string result(printed);
+    cJSON_free(printed);
+    return result;
+}
+
+// {"led_models":[...]}: how custom models are posted and saved
+std::string custom_models_document(const std::vector<ledbrick::LedModel>& models) {
+    cJSON* root = cJSON_CreateObject();
+    if (root) {
+        cJSON_AddItemToObject(root, "led_models", led_models_json(models));
+    }
+    return print_and_delete(root);
+}
+
 // [[x,y],...]; validate_led_model checks the values
 bool parse_curve_json(const cJSON* item, const char* name, std::vector<ledbrick::CurvePoint>& curve,
                       std::string* error) {
@@ -1109,9 +1130,6 @@ std::string LEDScheduler::export_json() const {
         }
         cJSON_AddItemToObject(root, "channel_configs", channels_array);
     }
-
-    // Always present, even empty, so the place for custom LED models is easy to find
-    cJSON_AddItemToObject(root, "led_models", led_models_json(custom_led_models_));
     
     // Create schedule_points array
     cJSON* points_array = cJSON_CreateArray();
@@ -1234,10 +1252,6 @@ std::string LEDScheduler::export_json_minified() const {
         }
         cJSON_AddItemToObject(root, "channel_configs", channels_array);
     }
-
-    if (!custom_led_models_.empty()) {
-        cJSON_AddItemToObject(root, "led_models", led_models_json(custom_led_models_));
-    }
     
     // Create schedule_points array
     cJSON* points_array = cJSON_CreateArray();
@@ -1338,17 +1352,17 @@ std::string LEDScheduler::export_json_minified() const {
     return result;
 }
 
-bool LEDScheduler::import_json(const std::string& json_str, std::string* error) {
+bool LEDScheduler::import_json(const std::string& json_str, std::string* error, bool allow_unknown_models) {
     // Build the new state in a copy so a failed import leaves this one untouched
     LEDScheduler staged(*this);
-    if (!staged.import_json_into_(json_str, error)) {
+    if (!staged.import_json_into_(json_str, error, allow_unknown_models)) {
         return false;
     }
     *this = std::move(staged);
     return true;
 }
 
-bool LEDScheduler::import_json_into_(const std::string& json_str, std::string* error) {
+bool LEDScheduler::import_json_into_(const std::string& json_str, std::string* error, bool allow_unknown_models) {
     // Parse JSON using cJSON library
     cJSON* root = cJSON_Parse(json_str.c_str());
     if (!root) {
@@ -1375,13 +1389,6 @@ bool LEDScheduler::import_json_into_(const std::string& json_str, std::string* e
             return false;
         }
         set_num_channels(static_cast<uint8_t>(num_channels_item->valueint));
-    }
-
-    // Custom LED models come before the channels that use them. Without the key, the
-    // current ones stay.
-    cJSON* models_array = cJSON_GetObjectItem(root, "led_models");
-    if (models_array != nullptr && !parse_led_models_json(models_array, custom_led_models_, error)) {
-        return false;
     }
 
     // Parse channel_configs array
@@ -1411,7 +1418,7 @@ bool LEDScheduler::import_json_into_(const std::string& json_str, std::string* e
             }
 
             if (!parse_channel_dimming_json(cJSON_GetObjectItem(channel_item, "dimming"),
-                                            static_cast<uint8_t>(channel_idx), config)) {
+                                            static_cast<uint8_t>(channel_idx), config, allow_unknown_models)) {
                 return fail_with(error, "channel " + std::to_string(channel_idx + 1) +
                                             ": invalid dimming settings or unknown LED model");
             }
@@ -1561,11 +1568,6 @@ bool LEDScheduler::import_json_into_(const std::string& json_str, std::string* e
         set_moon_simulation(moon_config);
     }
 
-    // Channels left out of channel_configs keep their LEDs, which may name a dropped model
-    if (!channels_have_models(error)) {
-        return false;
-    }
-
     if (schedule_points_.empty()) {
         return fail_with(error, "schedule_points missing or invalid");
     }
@@ -1640,12 +1642,17 @@ const ledbrick::LedModel* LEDScheduler::find_led_model(const std::string& id) co
     return ledbrick::find_led_model(id, custom_led_models_);
 }
 
-bool LEDScheduler::valid_led_groups(const std::vector<ledbrick::LedGroup>& leds, std::string* error) const {
+bool LEDScheduler::valid_led_groups(const std::vector<ledbrick::LedGroup>& leds, std::string* error,
+                                    bool allow_unknown) const {
     if (leds.size() > 8) {
         return fail_with(error, "at most 8 LED models per channel");
     }
     for (const auto& group : leds) {
-        if (find_led_model(group.model) == nullptr) {
+        if (group.model.empty() || group.model.size() > ledbrick::MAX_LED_MODEL_ID) {
+            return fail_with(error, "LED model ids are 1-" + std::to_string(ledbrick::MAX_LED_MODEL_ID) +
+                                        " characters");
+        }
+        if (!allow_unknown && find_led_model(group.model) == nullptr) {
             return fail_with(error, "unknown LED model " + group.model);
         }
         if (group.count < 1 || group.count > 100) {
@@ -1655,15 +1662,22 @@ bool LEDScheduler::valid_led_groups(const std::vector<ledbrick::LedGroup>& leds,
     return true;
 }
 
+bool LEDScheduler::channel_has_models(uint8_t channel, std::string* error) const {
+    const std::string where = "channel " + std::to_string(channel + 1) + ": ";
+    std::string led_error;
+    if (!valid_led_groups(channel_configs_[channel].leds, &led_error)) {
+        return fail_with(error, where + led_error);
+    }
+    if (is_curve_channel(channel) && !channel_dimmer(channel).valid()) {
+        return fail_with(error, where + "curve mode needs LEDs with curves");
+    }
+    return true;
+}
+
 bool LEDScheduler::channels_have_models(std::string* error) const {
     for (uint8_t channel = 0; channel < channel_configs_.size(); channel++) {
-        const std::string where = "channel " + std::to_string(channel + 1) + ": ";
-        std::string led_error;
-        if (!valid_led_groups(channel_configs_[channel].leds, &led_error)) {
-            return fail_with(error, where + led_error);
-        }
-        if (is_curve_channel(channel) && !channel_dimmer(channel).valid()) {
-            return fail_with(error, where + "curve mode needs LEDs with curves");
+        if (!channel_has_models(channel, error)) {
+            return false;
         }
     }
     return true;
@@ -1673,21 +1687,29 @@ bool LEDScheduler::set_custom_led_models(const std::vector<ledbrick::LedModel>& 
     if (!valid_custom_models(models, error)) {
         return false;
     }
+    // Refuse to break a channel. One already naming a missing model (its model was lost)
+    // does not block the change; posting that model back is how it recovers.
+    std::vector<bool> had_models(channel_configs_.size());
+    for (uint8_t channel = 0; channel < channel_configs_.size(); channel++) {
+        had_models[channel] = channel_has_models(channel, nullptr);
+    }
     std::vector<ledbrick::LedModel> previous = std::move(custom_led_models_);
     custom_led_models_ = models;
-    if (!channels_have_models(error)) {
-        custom_led_models_ = std::move(previous);
-        return false;
+    for (uint8_t channel = 0; channel < channel_configs_.size(); channel++) {
+        if (had_models[channel] && !channel_has_models(channel, error)) {
+            custom_led_models_ = std::move(previous);
+            return false;
+        }
     }
     return true;
 }
 
-std::string LEDScheduler::export_led_models_json() const {
-    cJSON* root = cJSON_CreateObject();
-    if (!root) {
-        return "{}";
+std::string LEDScheduler::export_led_models_json(bool custom_only) const {
+    if (custom_only) {
+        return custom_models_document(custom_led_models_);
     }
-    cJSON* array = cJSON_AddArrayToObject(root, "models");
+    cJSON* root = cJSON_CreateObject();
+    cJSON* array = root ? cJSON_AddArrayToObject(root, "models") : nullptr;
     // Custom models first, then the built-ins they do not replace
     for (int pass = 0; array && pass < 2; pass++) {
         const bool custom = pass == 0;
@@ -1704,17 +1726,10 @@ std::string LEDScheduler::export_led_models_json() const {
             }
         }
     }
-    char* printed = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
-    if (!printed) {
-        return "{}";
-    }
-    std::string result(printed);
-    cJSON_free(printed);
-    return result;
+    return print_and_delete(root);
 }
 
-bool LEDScheduler::import_led_models_json(const std::string& json_str, std::string* error) {
+bool LEDScheduler::import_led_models_json(const std::string& json_str, std::string* error, size_t max_saved_size) {
     cJSON* root = cJSON_Parse(json_str.c_str());
     if (!root) {
         return fail_with(error, "invalid JSON");
@@ -1722,7 +1737,17 @@ bool LEDScheduler::import_led_models_json(const std::string& json_str, std::stri
     std::vector<ledbrick::LedModel> models;
     bool ok = parse_led_models_json(cJSON_GetObjectItemCaseSensitive(root, "led_models"), models, error);
     cJSON_Delete(root);
-    return ok && set_custom_led_models(models, error);
+    if (!ok) {
+        return false;
+    }
+    if (max_saved_size > 0) {
+        size_t size = custom_models_document(models).size();
+        if (size > max_saved_size) {
+            return fail_with(error, "LED models take " + std::to_string(size) + " bytes to save; the limit is " +
+                                        std::to_string(max_saved_size));
+        }
+    }
+    return set_custom_led_models(models, error);
 }
 
 bool LEDScheduler::set_channel_dimming(uint8_t channel, ledbrick::DimMode mode, ledbrick::DimPriority priority,
@@ -1836,7 +1861,8 @@ void LEDScheduler::add_channel_config_json(cJSON* channels_array, uint8_t channe
     cJSON_AddItemToArray(channels_array, channel_obj);
 }
 
-bool LEDScheduler::parse_channel_dimming_json(const cJSON* item, uint8_t channel, ChannelConfig& config) const {
+bool LEDScheduler::parse_channel_dimming_json(const cJSON* item, uint8_t channel, ChannelConfig& config,
+                                              bool allow_unknown_models) const {
     if (item == nullptr) {
         // Clients that predate dimming leave it out: keep the channel's settings
         if (channel < channel_configs_.size()) {
@@ -1901,11 +1927,12 @@ bool LEDScheduler::parse_channel_dimming_json(const cJSON* item, uint8_t channel
             }
             config.leds.push_back({model->valuestring, static_cast<uint16_t>(count->valuedouble)});
         }
-        if (!valid_led_groups(config.leds, nullptr)) return false;
+        if (!valid_led_groups(config.leds, nullptr, allow_unknown_models)) return false;
     }
 
-    // Curve mode needs LEDs with known curves
-    if (config.dim_mode == ledbrick::DimMode::CURVE) {
+    // Curve mode needs LEDs with known curves. A saved channel whose models were lost stays
+    // dark until they are back, rather than fail the whole schedule.
+    if (config.dim_mode == ledbrick::DimMode::CURVE && !allow_unknown_models) {
         std::vector<ledbrick::LedGroup> in_use =
             config.leds.empty() ? ledbrick::default_channel_leds(channel, num_channels_) : config.leds;
         if (!ledbrick::ChannelDimmer(in_use, custom_led_models_, config.dim_priority, config.floor_current).valid()) {

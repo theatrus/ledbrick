@@ -1429,10 +1429,19 @@ esp_err_t LEDBrickWebServer::handle_api_led_models_get(httpd_req_t *req) {
   auto *self = get_instance(req);
   if (!self->check_auth(req)) return ESP_OK;
 
+  // ?custom=true gives just the custom models, as {"led_models": [...]}, ready to post back
+  bool custom_only = false;
+  char query[48];
+  char value[8];
+  if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK &&
+      httpd_query_key_value(query, "custom", value, sizeof(value)) == ESP_OK) {
+    custom_only = strcmp(value, "true") == 0 || strcmp(value, "1") == 0;
+  }
+
   // Custom models change at runtime, so read them on the main loop
   auto json = std::make_shared<std::string>();
   auto *scheduler = self->scheduler_;
-  if (!self->run_in_loop_([scheduler, json]() { *json = scheduler->get_led_models_json(); })) {
+  if (!self->run_in_loop_([scheduler, json, custom_only]() { *json = scheduler->get_led_models_json(custom_only); })) {
     self->send_error(req, 503, "Device busy, try again");
     return ESP_OK;
   }
@@ -1453,9 +1462,9 @@ esp_err_t LEDBrickWebServer::handle_api_led_models_post(httpd_req_t *req) {
   auto *scheduler = self->scheduler_;
   return self->respond_from_loop_(req, [scheduler, body](JsonDocument &doc) {
     std::string error;
-    bool too_large = false;
-    if (!scheduler->set_led_models_json(*body, &error, &too_large)) {
-      int code = too_large ? 500 : 400;
+    bool save_failed = false;
+    if (!scheduler->set_led_models_json(*body, &error, &save_failed)) {
+      int code = save_failed ? 500 : 400;
       doc["error"] = error;
       doc["code"] = code;
       return code;

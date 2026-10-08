@@ -187,8 +187,12 @@ public:
     std::string export_json_minified() const;  // Compact JSON without formatting
     // Replaces the schedule, channel configs and moon settings. On failure nothing changes.
     // PWM and current values are clamped to their valid ranges; bad times or types fail.
-    // error, when given, may say why an import failed.
-    bool import_json(const std::string& json_str, std::string* error = nullptr);
+    // error, when given, may say why an import failed. Custom LED models are not part of
+    // the schedule (see import_led_models_json). A channel naming a model that is not
+    // known fails the import, unless allow_unknown_models is set: then the channel keeps the
+    // name and skips those LEDs until the model is back (for the saved copy, so a lost model
+    // cannot lose the whole schedule).
+    bool import_json(const std::string& json_str, std::string* error = nullptr, bool allow_unknown_models = false);
     
     // Built-in preset (only one default)
     void create_default_astronomical_preset();
@@ -212,7 +216,7 @@ public:
                              float floor_current, const std::vector<ledbrick::LedGroup>& leds,
                              std::string* error = nullptr);
 
-    // LED models the user added (the "led_models" settings). One with a built-in's id
+    // LED models the user added, kept apart from the schedule. One with a built-in's id
     // replaces the built-in, for every channel that uses it.
     const std::vector<ledbrick::LedModel>& get_custom_led_models() const { return custom_led_models_; }
     // Replaces the custom models. Returns false and changes nothing when a model is invalid,
@@ -220,10 +224,16 @@ public:
     bool set_custom_led_models(const std::vector<ledbrick::LedModel>& models, std::string* error = nullptr);
     // A model by id: custom first, then built-in
     const ledbrick::LedModel* find_led_model(const std::string& id) const;
-    // {"models":[...]}: every model in effect, with its curves; custom ones have "custom": true
-    std::string export_led_models_json() const;
-    // Replaces the custom models from {"led_models":[...]}; see set_custom_led_models
-    bool import_led_models_json(const std::string& json_str, std::string* error = nullptr);
+    // {"models":[...]}: every model in effect, with its curves; custom ones have "custom": true.
+    // custom_only: {"led_models":[...]} with just the custom models, as import takes them.
+    std::string export_led_models_json(bool custom_only = false) const;
+    // Replaces the custom models from {"led_models":[...]}; see set_custom_led_models.
+    // With max_saved_size, a set whose export_led_models_json(true) is larger is refused.
+    bool import_led_models_json(const std::string& json_str, std::string* error = nullptr,
+                                size_t max_saved_size = 0);
+    // Every channel's LEDs are known, and curve channels have curves; error names the first
+    // channel that is not
+    bool channels_have_models(std::string* error = nullptr) const;
 
     void set_channel_color(uint8_t channel, const std::string& rgb_hex);
     void set_channel_max_current(uint8_t channel, float max_current);
@@ -249,16 +259,18 @@ private:
     void sort_schedule_points();
     void sort_schedule_points_with_astro(const AstronomicalTimes& astro_times);
     bool validate_point(const SchedulePoint& point) const;
-    bool import_json_into_(const std::string& json_str, std::string* error);
-    // Known models, 1-100 of each, at most 8 kinds in a string
-    bool valid_led_groups(const std::vector<ledbrick::LedGroup>& leds, std::string* error) const;
-    // Every channel's LEDs are known, and curve channels have curves
-    bool channels_have_models(std::string* error) const;
+    bool import_json_into_(const std::string& json_str, std::string* error, bool allow_unknown_models);
+    // Known models (any name with allow_unknown), 1-100 of each, at most 8 kinds in a string
+    bool valid_led_groups(const std::vector<ledbrick::LedGroup>& leds, std::string* error,
+                          bool allow_unknown = false) const;
+    // The channel's LEDs are known, and it has curves if in curve mode
+    bool channel_has_models(uint8_t channel, std::string* error) const;
     // JSON for one channel config; full adds the dimming defaults the saved copy leaves out
     void add_channel_config_json(struct cJSON* channels_array, uint8_t channel, bool full) const;
     // Dimming settings from a channel config's "dimming" object; false when invalid.
     // Without one, the channel keeps its current settings.
-    bool parse_channel_dimming_json(const struct cJSON* item, uint8_t channel, ChannelConfig& config) const;
+    bool parse_channel_dimming_json(const struct cJSON* item, uint8_t channel, ChannelConfig& config,
+                                    bool allow_unknown_models) const;
     std::vector<SchedulePoint> resolve_dynamic_points(const AstronomicalTimes& astro_times) const;
     
     // Serialization helpers

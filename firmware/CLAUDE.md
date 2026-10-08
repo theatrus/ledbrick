@@ -218,7 +218,7 @@ The project follows a clean separation between core algorithms and ESPHome integ
 - `GET /api/temperature/status` - Get temperature control status
 - `GET /api/temperature/fan-curve` - Get current fan curve points
 - `POST /api/temperature/reset-emergency` - Clear a latched thermal emergency (409 while a sensor is still hot)
-- `GET /api/led_models` - Every LED model in effect, with its curves (`models`; custom ones have `"custom": true`)
+- `GET /api/led_models` - Every LED model in effect, with its curves (`models`; custom ones have `"custom": true`). `?custom=true` returns only the custom ones as `{"led_models": [...]}`
 - `POST /api/led_models` - Replace the custom LED models: `{"led_models": [...]}`
 - `POST /api/channel/dimming` - Set a channel's dimming mode, priority, floor current and LEDs (converts its schedule when the mode changes)
 
@@ -258,11 +258,14 @@ LED data:
 - `tools/led_curves/lumileds_curves.json` holds the Lumileds curves (DS144 LUXEON C, DS309 LUXEON Rubix) with the figure and page each came from. Run `python3 tools/led_curves/gen_led_models.py` from `firmware/` to regenerate `led_models.cpp` after changing it.
 
 Custom LED models:
-- Add your own curves in the settings JSON, as a top-level `led_models` list. Import them with the schedule (`POST /api/schedule`), or post just the list to `POST /api/led_models`. Either way they are saved to flash with the schedule.
+- Post your own curves to `POST /api/led_models` as `{"led_models": [...]}`. The list replaces the custom set.
+- They have their own flash record, apart from the schedule: they change rarely, and the schedule's record, `GET /api/schedule` and schedule imports stay small. A schedule import ignores `led_models`.
+- Back up both: `GET /api/schedule` and `GET /api/led_models?custom=true`. Restore the models first, since a schedule naming an unknown model is refused.
 - A model with a built-in's id replaces the built-in on every channel that uses it, including channels on their default LEDs. Other ids are new parts: list them in a channel's `dimming.leds`.
 - `GET /api/led_models` returns every model with its curves. Copy one as a starting point; extra fields such as `custom` are ignored on import.
-- An import without `led_models` keeps the current models. A list that drops a model a channel still uses is rejected.
-- Up to 8 models. Everything shares the 8 KB settings slot, so a set too large to save is refused (`POST /api/led_models` returns 500 and keeps the old models).
+- A list that drops a model a channel still uses is rejected.
+- If the saved models are lost, the saved schedule still loads: a channel skips the LEDs it can't find, and a curve channel with none left stays dark until the model is posted again. The boot log names the channel.
+- Up to 8 models in a 12 KB record; eight models with 24-point curves take about 10 KB. A set too large to save is refused before anything changes.
 
 ```jsonc
 "led_models": [{
