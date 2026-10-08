@@ -908,3 +908,120 @@ body {
   background: #6bb4ff;
   transform: scale(1.1);
 }
+
+/* Per-channel dimming (settings) */
+.dual-channel-grid.dimming-grid {
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+}
+
+.dimming-section {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #444;
+}
+
+.dimming-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e0e0e0;
+  margin-bottom: 8px;
+}
+
+.dimming-help {
+  font-size: 11px;
+  color: #999;
+  line-height: 1.4;
+}
+
+.dimming-note {
+  font-size: 11px;
+  color: #ff9800;
+  line-height: 1.4;
+  margin-bottom: 4px;
+}
+
+.led-mix {
+  font-size: 12px;
+  color: #e0e0e0;
+  line-height: 1.4;
+  margin-bottom: 6px;
+}
+
+.led-editor {
+  margin-top: 6px;
+}
+
+.led-row {
+  display: flex;
+  gap: 4px;
+  align-items: flex-start;
+}
+
+.led-row select {
+  flex: 1;
+  min-width: 0;
+}
+
+.led-row .led-count {
+  width: 52px;
+  flex: none;
+}
+
+.led-remove {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: #444;
+  border: 1px solid #555;
+  border-radius: 3px;
+  color: #e0e0e0;
+  cursor: pointer;
+}
+
+.led-remove:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.led-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.small-button {
+  padding: 4px 8px;
+  background: #444;
+  border: 1px solid #666;
+  border-radius: 3px;
+  color: #e0e0e0;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.small-button:hover:not(:disabled) {
+  background: #555;
+}
+
+.small-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Curve-mode values: a level instead of PWM and current */
+.level-value {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.level-detail {
+  white-space: nowrap;
+}
+
+.chart-note {
+  font-size: 12px;
+  color: #999;
+  margin: -0.5rem 0 0.5rem;
+}

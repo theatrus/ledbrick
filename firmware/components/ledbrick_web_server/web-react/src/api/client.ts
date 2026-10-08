@@ -1,4 +1,4 @@
-import type { Schedule, Status } from '../types';
+import type { Schedule, Status, LedModel, ChannelDimmingUpdate } from '../types';
 
 class LEDBrickAPI {
   private baseUrl: string;
@@ -149,6 +149,22 @@ class LEDBrickAPI {
 
   async setChannelManualControl(channel: number, pwm: number, current: number): Promise<any> {
     return this.request('POST', '/api/channel/control', { channel, pwm, current });
+  }
+
+  // Manual control of a curve-mode channel: level 0-100 % of its light at max current
+  async setChannelManualLevel(channel: number, level: number): Promise<any> {
+    return this.request('POST', '/api/channel/control', { channel, level });
+  }
+
+  async getLedModels(): Promise<LedModel[]> {
+    const response = await this.request<{ models?: LedModel[] }>('GET', '/api/led_models');
+    return response.models || [];
+  }
+
+  // Changing a channel's mode converts its schedule points and moonlight on the
+  // device, so reload the schedule afterwards
+  async setChannelDimming(params: ChannelDimmingUpdate): Promise<any> {
+    return this.request('POST', '/api/channel/dimming', params);
   }
 
   async updateChannelConfigs(configs: Array<{name: string, rgb_hex: string, max_current: number}>): Promise<any> {

@@ -3,6 +3,7 @@ import type { Schedule, SchedulePoint } from '../types';
 import { SchedulePointEditor } from './SchedulePointEditor';
 import { api } from '../api/client';
 import { DEFAULT_CHANNEL_COLORS } from '../constants/colors';
+import { isCurveChannel } from '../utils/dimming';
 
 interface ScheduleTableProps {
   schedule: Schedule;
@@ -121,7 +122,7 @@ export function ScheduleTable({ schedule, onUpdate }: ScheduleTableProps) {
     if (editingIndex !== undefined) {
       // Update existing point
       const originalIndex = schedule.schedule_points.findIndex(
-        (p, i) => sortedPoints[editingIndex] === p
+        (p) => sortedPoints[editingIndex] === p
       );
       newSchedule.schedule_points[originalIndex] = point;
     } else {
@@ -148,7 +149,7 @@ export function ScheduleTable({ schedule, onUpdate }: ScheduleTableProps) {
     }
 
     const originalIndex = schedule.schedule_points.findIndex(
-      (p, i) => sortedPoints[index] === p
+      (p) => sortedPoints[index] === p
     );
 
     const newSchedule = { ...schedule };
@@ -200,6 +201,8 @@ export function ScheduleTable({ schedule, onUpdate }: ScheduleTableProps) {
               {(point.pwm_values || []).map((pwm, i) => {
                 const channelConfig = schedule.channel_configs?.[i];
                 const channelColor = channelConfig?.rgb_hex || DEFAULT_CHANNEL_COLORS[i % DEFAULT_CHANNEL_COLORS.length];
+                // A curve channel holds one level (% of its light at max current) and no current
+                const curve = isCurveChannel(schedule, i);
                 return (
                   <td 
                     key={i}
@@ -209,9 +212,10 @@ export function ScheduleTable({ schedule, onUpdate }: ScheduleTableProps) {
                       fontSize: '11px',
                       borderLeft: `2px solid ${channelColor}20`
                     }}
+                    title={curve ? 'LED curve level' : undefined}
                   >
-                    {pwm?.toFixed(1) ?? '--'}%
-                    {point.current_values && point.current_values[i] !== undefined && point.current_values[i] !== null && (
+                    {curve && 'Lv '}{pwm?.toFixed(1) ?? '--'}%
+                    {!curve && point.current_values && point.current_values[i] !== undefined && point.current_values[i] !== null && (
                       <>{'\n'}{point.current_values[i].toFixed(2)}A</>
                     )}
                   </td>

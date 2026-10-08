@@ -4,6 +4,7 @@ import { api } from '../api/client';
 import { StatusBarControls } from './StatusBarControls';
 import { ChannelControl } from './ChannelControl';
 import { DEFAULT_CHANNEL_COLORS } from '../constants/colors';
+import { isCurveChannel } from '../utils/dimming';
 
 interface StatusBarProps {
   status: Status | null;
@@ -29,6 +30,12 @@ export function StatusBar({ status, schedule, onUpdate }: StatusBarProps) {
     } catch (err: any) {
       alert('Reset refused: ' + (err?.error || 'unknown error'));
     }
+  };
+
+  // Curve channels report a level (% of the light at max current) besides the PWM and current
+  const isCurve = (channelIndex: number) => {
+    const mode = status.channels?.[channelIndex]?.mode;
+    return mode ? mode === 'curve' : isCurveChannel(schedule, channelIndex);
   };
 
   const handleChannelClick = (channelIndex: number) => {
@@ -130,6 +137,8 @@ export function StatusBar({ status, schedule, onUpdate }: StatusBarProps) {
             {status.channels.map((channel, index) => {
               const color = schedule?.channel_configs?.[index]?.rgb_hex || 
                             DEFAULT_CHANNEL_COLORS[index % DEFAULT_CHANNEL_COLORS.length];
+              const curve = isCurve(index);
+              const level = channel.level;
               return (
                 <div 
                   key={channel.id} 
@@ -139,14 +148,26 @@ export function StatusBar({ status, schedule, onUpdate }: StatusBarProps) {
                     cursor: !status.enabled ? 'pointer' : 'default'
                   }}
                   onClick={() => handleChannelClick(index)}
-                  title={!status.enabled ? 'Click to control manually' : ''}
+                  title={!status.enabled ? 'Click to control manually' : (curve ? 'LED curve: level (PWM, current)' : '')}
                 >
                   <span className="channel-label" style={{ color }}>
                     Ch{channel.id}:
                   </span>
-                  <span className="channel-value">
-                    {Math.round(channel.pwm || 0)}% ({(channel.current || 0).toFixed(2)}A)
-                  </span>
+                  {curve ? (
+                    <span className="channel-value">
+                      <span className="level-value">
+                        Lv {level !== undefined && level !== null ? level.toFixed(1) : '--'}%
+                      </span>
+                      {' '}
+                      <span className="level-detail">
+                        ({(channel.pwm || 0).toFixed(1)}% {(channel.current || 0).toFixed(2)}A)
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="channel-value">
+                      {Math.round(channel.pwm || 0)}% ({(channel.current || 0).toFixed(2)}A)
+                    </span>
+                  )}
                 </div>
               );
             })}
@@ -178,8 +199,10 @@ export function StatusBar({ status, schedule, onUpdate }: StatusBarProps) {
           />
           <ChannelControl
             channel={selectedChannel}
-            currentPwm={status.channels[selectedChannel]?.pwm || 0}
-            currentAmperage={status.channels[selectedChannel]?.current || 0}
+            mode={isCurve(selectedChannel) ? 'curve' : 'manual'}
+            currentLevel={status.channels?.[selectedChannel]?.level}
+            currentPwm={status.channels?.[selectedChannel]?.pwm || 0}
+            currentAmperage={status.channels?.[selectedChannel]?.current || 0}
             maxCurrent={schedule?.channel_configs?.[selectedChannel]?.max_current || 2.0}
             channelName={schedule?.channel_configs?.[selectedChannel]?.name || `Channel ${selectedChannel + 1}`}
             channelColor={schedule?.channel_configs?.[selectedChannel]?.rgb_hex || DEFAULT_CHANNEL_COLORS[selectedChannel % DEFAULT_CHANNEL_COLORS.length]}

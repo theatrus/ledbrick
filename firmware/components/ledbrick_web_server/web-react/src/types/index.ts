@@ -6,10 +6,51 @@ export interface SchedulePoint {
   offset_minutes?: number;
 }
 
+// How a channel is dimmed. manual: each point sets PWM % and current.
+// curve: each point sets one level (% of the light at max current) and the
+// device picks the current and PWM from the LEDs' datasheet curves.
+export type DimMode = 'manual' | 'curve';
+
+// curve mode: lower the current first (PWM below the floor current), or hold
+// the current and dim with PWM only
+export type DimPriority = 'current' | 'pwm';
+
+export interface LedGroup {
+  model: string;  // LedModel id
+  count: number;
+}
+
+export interface ChannelDimming {
+  mode: DimMode;
+  priority: DimPriority;
+  floor_current: number;  // A
+  leds: LedGroup[];       // LEDs in use
+  leds_default?: boolean; // true: the emitter's own LEDs for this channel
+}
+
+// POST /api/channel/dimming. Fields left out keep their values.
+export interface ChannelDimmingUpdate {
+  channel: number;  // 0-based
+  mode?: DimMode;
+  priority?: DimPriority;
+  floor_current?: number;
+  leds?: LedGroup[];
+  leds_default?: true;
+}
+
+export interface LedModel {
+  id: string;
+  name: string;
+  test_current: number;        // A
+  max_current: number;         // A
+  characterized_from: number;  // A, lowest current the datasheet curve covers
+}
+
 export interface ChannelConfig {
   rgb_hex: string;
   max_current: number;
   name?: string;
+  dimming?: ChannelDimming;  // left out by firmware without curve dimming
 }
 
 export interface MoonSimulation {
@@ -42,6 +83,8 @@ export interface Channel {
   id: number;
   pwm: number;
   current: number;
+  mode?: DimMode;
+  level?: number;  // curve mode: 0-100
 }
 
 export interface TemperatureSensor {
@@ -61,6 +104,7 @@ export interface Status {
   time_shift_hours: number;
   time_shift_minutes: number;
   moon_phase?: number;
+  led_temp_c?: number;
   moon_simulation?: MoonSimulation;
   sunrise_time?: string;
   sunset_time?: string;

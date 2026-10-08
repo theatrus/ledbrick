@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { api } from '../api/client';
-import type { Schedule } from '../types';
+import type { DimMode } from '../types';
 
 interface ChannelControlProps {
   channel: number;
+  mode?: DimMode;          // curve: set a level instead of PWM and current
+  currentLevel?: number;   // curve: 0-100
   currentPwm: number;
   currentAmperage: number;
   maxCurrent: number;
@@ -15,14 +17,17 @@ interface ChannelControlProps {
 
 export function ChannelControl({
   channel,
+  mode = 'manual',
+  currentLevel,
   currentPwm,
   currentAmperage,
   maxCurrent,
   channelName,
   channelColor,
-  onClose,
-  onUpdate
+  onClose
 }: ChannelControlProps) {
+  const curve = mode === 'curve';
+  const [level, setLevel] = useState(currentLevel ?? 0);
   const [pwm, setPwm] = useState(currentPwm);
   const [current, setCurrent] = useState(currentAmperage);
   const [isSaving, setIsSaving] = useState(false);
@@ -33,7 +38,11 @@ export function ChannelControl({
     setError(null);
     
     try {
-      await api.setChannelManualControl(channel, pwm, current);
+      if (curve) {
+        await api.setChannelManualLevel(channel, level);
+      } else {
+        await api.setChannelManualControl(channel, pwm, current);
+      }
       // Don't call onUpdate - let the status polling handle it
       onClose();
     } catch (err: any) {
@@ -98,42 +107,82 @@ export function ChannelControl({
         </div>
       )}
 
-      <div style={{ marginBottom: '20px' }}>
-        <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px' }}>
-          Brightness: <strong>{pwm.toFixed(0)}%</strong>
-        </label>
-        <input
-          type="range"
-          min="0"
-          max="100"
-          step="1"
-          value={pwm}
-          onChange={(e) => setPwm(Number(e.target.value))}
-          disabled={isSaving}
-          style={{ width: '100%' }}
-          className="control-slider"
-        />
-      </div>
+      {curve ? (
+        <div style={{ marginBottom: '20px' }}>
+          <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px' }}>
+            Level: <strong>{level.toFixed(1)}%</strong>
+            <span style={{ color: '#999', marginLeft: '10px' }}>
+              (of the light at max current)
+            </span>
+          </label>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              step="0.1"
+              value={level}
+              onChange={(e) => setLevel(Number(e.target.value))}
+              disabled={isSaving}
+              style={{ flex: 1 }}
+              className="control-slider"
+            />
+            <input
+              type="number"
+              min="0"
+              max="100"
+              step="0.1"
+              value={level}
+              onChange={(e) => setLevel(Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
+              disabled={isSaving}
+              style={{ width: '70px', marginBottom: 0 }}
+              className="control-input"
+            />
+          </div>
+          <div style={{ marginTop: '8px', fontSize: '12px', color: '#999' }}>
+            Now: PWM {currentPwm.toFixed(1)}%, {currentAmperage.toFixed(2)}A (LED curve)
+          </div>
+        </div>
+      ) : (
+        <>
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px' }}>
+              Brightness: <strong>{pwm.toFixed(0)}%</strong>
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              value={pwm}
+              onChange={(e) => setPwm(Number(e.target.value))}
+              disabled={isSaving}
+              style={{ width: '100%' }}
+              className="control-slider"
+            />
+          </div>
 
-      <div style={{ marginBottom: '20px' }}>
-        <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px' }}>
-          Current: <strong>{current.toFixed(2)}A</strong>
-          <span style={{ color: '#999', marginLeft: '10px' }}>
-            (max: {maxCurrent.toFixed(1)}A)
-          </span>
-        </label>
-        <input
-          type="range"
-          min="0"
-          max={maxCurrent}
-          step="0.05"
-          value={current}
-          onChange={(e) => setCurrent(Number(e.target.value))}
-          disabled={isSaving}
-          style={{ width: '100%' }}
-          className="control-slider"
-        />
-      </div>
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px' }}>
+              Current: <strong>{current.toFixed(2)}A</strong>
+              <span style={{ color: '#999', marginLeft: '10px' }}>
+                (max: {maxCurrent.toFixed(1)}A)
+              </span>
+            </label>
+            <input
+              type="range"
+              min="0"
+              max={maxCurrent}
+              step="0.05"
+              value={current}
+              onChange={(e) => setCurrent(Number(e.target.value))}
+              disabled={isSaving}
+              style={{ width: '100%' }}
+              className="control-slider"
+            />
+          </div>
+        </>
+      )}
 
       <div style={{ 
         display: 'flex', 
