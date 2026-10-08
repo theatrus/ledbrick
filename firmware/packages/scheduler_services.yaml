@@ -4,6 +4,8 @@
 api:
   services:
     # === Schedule Point Management ===
+    # For a channel in curve mode (LED curve dimming), its PWM value is the channel's
+    # level (0-100% of its light output) and its current value is ignored.
     
     # Set a schedule point for all 8 channels
     - service: set_schedule_point_8ch
