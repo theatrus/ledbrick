@@ -80,6 +80,7 @@ class LEDBrickWebServer : public Component {
   static esp_err_t handle_api_channel_configs(httpd_req_t *req);
   static esp_err_t handle_api_channel_dimming(httpd_req_t *req);
   static esp_err_t handle_api_led_models_get(httpd_req_t *req);
+  static esp_err_t handle_api_led_models_post(httpd_req_t *req);
   static esp_err_t handle_api_temperature_config_get(httpd_req_t *req);
   static esp_err_t handle_api_temperature_config_post(httpd_req_t *req);
   static esp_err_t handle_api_temperature_status_get(httpd_req_t *req);

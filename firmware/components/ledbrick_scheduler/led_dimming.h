@@ -31,6 +31,20 @@ struct LedModel {
 // Models for the LEDs on LEDBrick emitters (led_models.cpp)
 const std::vector<LedModel>& builtin_led_models();
 const LedModel* find_led_model(const std::string& id);
+// Looks in custom first, so a custom model with a built-in's id replaces it
+const LedModel* find_led_model(const std::string& id, const std::vector<LedModel>& custom);
+
+// Limits for user-supplied models
+constexpr size_t MAX_CUSTOM_LED_MODELS = 8;
+constexpr size_t MAX_CURVE_POINTS = 32;
+constexpr size_t MAX_LED_MODEL_ID = 32;
+constexpr size_t MAX_LED_MODEL_NAME = 48;
+
+// Checks a user-supplied model. The id is 1-32 of a-z, 0-9 and _. Currents are 0-3 A.
+// output_vs_current is required: 2-32 points, currents increasing, output never falling,
+// reaching max_current. output_vs_temp (with curve_temp) and vf_vs_current are optional.
+// On failure, error says why.
+bool validate_led_model(const LedModel& model, std::string* error);
 
 struct LedGroup {
     std::string model;  // LedModel id
@@ -72,6 +86,10 @@ public:
     // Unknown model ids are skipped; valid() is false when none are known
     ChannelDimmer(const std::vector<LedGroup>& leds, DimPriority priority, float floor_current_a,
                   float reference_temp_c = 25.0f);
+    // Looks the models up in custom first, then the built-in table. The dimmer points into
+    // custom, so it must not outlive a change to it.
+    ChannelDimmer(const std::vector<LedGroup>& leds, const std::vector<LedModel>& custom, DimPriority priority,
+                  float floor_current_a, float reference_temp_c = 25.0f);
     // For tests and custom parts: models given directly
     ChannelDimmer(const std::vector<std::pair<const LedModel*, uint16_t>>& leds, DimPriority priority,
                   float floor_current_a, float reference_temp_c = 25.0f);

@@ -4,6 +4,7 @@
 #include <sstream>
 #include <iomanip>
 #include <cstring>
+#include <cstdio>
 
 // Use cJSON for lightweight JSON parsing
 // cJSON is a single-file library perfect for embedded systems
@@ -39,23 +40,174 @@ const char* dim_priority_name(ledbrick::DimPriority priority) {
     return priority == ledbrick::DimPriority::PWM_FIRST ? "pwm" : "current";
 }
 
-// Known models, 1-100 of each, at most 8 kinds in a string
-bool valid_led_groups(const std::vector<ledbrick::LedGroup>& leds, std::string* error) {
-    if (leds.size() > 8) {
-        if (error) *error = "at most 8 LED models per channel";
+bool fail_with(std::string* error, const std::string& message) {
+    if (error) *error = message;
+    return false;
+}
+
+// A curve as [[x,y],...], added raw: a number node for every point would take a lot of
+// heap, and 4 digits keep the saved settings small
+cJSON* curve_json(const std::vector<ledbrick::CurvePoint>& curve) {
+    std::string text = "[";
+    char point[48];
+    for (size_t i = 0; i < curve.size(); i++) {
+        snprintf(point, sizeof(point), "%s[%.4g,%.4g]", i > 0 ? "," : "", curve[i].x, curve[i].y);
+        text += point;
+    }
+    text += "]";
+    return cJSON_CreateRaw(text.c_str());
+}
+
+cJSON* led_model_json(const ledbrick::LedModel& model) {
+    cJSON* obj = cJSON_CreateObject();
+    if (!obj) {
+        return nullptr;
+    }
+    cJSON_AddStringToObject(obj, "id", model.id.c_str());
+    cJSON_AddStringToObject(obj, "name", model.name.c_str());
+    if (model.test_current_a > 0.0f) {
+        cJSON_AddNumberToObject(obj, "test_current", json_number(model.test_current_a));
+    }
+    cJSON_AddNumberToObject(obj, "max_current", json_number(model.max_current_a));
+    cJSON_AddItemToObject(obj, "output_vs_current", curve_json(model.output_vs_current));
+    if (!model.output_vs_temp.empty()) {
+        cJSON_AddNumberToObject(obj, "curve_temp", json_number(model.curve_temp_c));
+        cJSON_AddItemToObject(obj, "output_vs_temp", curve_json(model.output_vs_temp));
+    }
+    if (model.rth_c_per_w > 0.0f) {
+        cJSON_AddNumberToObject(obj, "rth", json_number(model.rth_c_per_w));
+    }
+    if (!model.vf_vs_current.empty()) {
+        cJSON_AddItemToObject(obj, "vf_vs_current", curve_json(model.vf_vs_current));
+    }
+    return obj;
+}
+
+cJSON* led_models_json(const std::vector<ledbrick::LedModel>& models) {
+    cJSON* array = cJSON_CreateArray();
+    if (array) {
+        for (const auto& model : models) {
+            cJSON* item = led_model_json(model);
+            if (item) {
+                cJSON_AddItemToArray(array, item);
+            }
+        }
+    }
+    return array;
+}
+
+// [[x,y],...]; validate_led_model checks the values
+bool parse_curve_json(const cJSON* item, const char* name, std::vector<ledbrick::CurvePoint>& curve,
+                      std::string* error) {
+    curve.clear();
+    if (!cJSON_IsArray(item)) {
+        return fail_with(error, std::string(name) + " must be a list of [x, y] points");
+    }
+    const cJSON* point = nullptr;
+    cJSON_ArrayForEach(point, item) {
+        if (curve.size() >= ledbrick::MAX_CURVE_POINTS) {
+            return fail_with(error, std::string(name) + " has over " +
+                                        std::to_string(ledbrick::MAX_CURVE_POINTS) + " points");
+        }
+        const cJSON* x = cJSON_GetArrayItem(point, 0);
+        const cJSON* y = cJSON_GetArrayItem(point, 1);
+        if (!cJSON_IsArray(point) || cJSON_GetArraySize(point) != 2 || !cJSON_IsNumber(x) || !cJSON_IsNumber(y)) {
+            return fail_with(error, std::string(name) + " must be a list of [x, y] points");
+        }
+        curve.push_back({static_cast<float>(x->valuedouble), static_cast<float>(y->valuedouble)});
+    }
+    return true;
+}
+
+bool parse_led_model_json(const cJSON* item, ledbrick::LedModel& model, std::string* error) {
+    if (!cJSON_IsObject(item)) {
+        return fail_with(error, "each LED model must be an object");
+    }
+    const cJSON* id = cJSON_GetObjectItemCaseSensitive(item, "id");
+    if (!cJSON_IsString(id) || id->valuestring[0] == '\0' || strlen(id->valuestring) > ledbrick::MAX_LED_MODEL_ID) {
+        return fail_with(error, "each LED model needs an id of 1-" + std::to_string(ledbrick::MAX_LED_MODEL_ID) +
+                                    " characters");
+    }
+    model = ledbrick::LedModel();
+    model.id = id->valuestring;
+    const std::string where = "LED model " + model.id + ": ";
+
+    const cJSON* name = cJSON_GetObjectItemCaseSensitive(item, "name");
+    if (name != nullptr && !cJSON_IsString(name)) {
+        return fail_with(error, where + "name must be text");
+    }
+    model.name = cJSON_IsString(name) && name->valuestring[0] != '\0' ? name->valuestring : model.id;
+
+    // Optional values keep their defaults when left out
+    auto read_number = [&](const char* key, bool required, float& out) {
+        const cJSON* value = cJSON_GetObjectItemCaseSensitive(item, key);
+        if (value == nullptr) {
+            return required ? fail_with(error, where + key + " is required") : true;
+        }
+        if (!cJSON_IsNumber(value)) {
+            return fail_with(error, where + key + " must be a number");
+        }
+        out = static_cast<float>(value->valuedouble);
+        return true;
+    };
+    auto read_curve = [&](const char* key, bool required, std::vector<ledbrick::CurvePoint>& out) {
+        const cJSON* value = cJSON_GetObjectItemCaseSensitive(item, key);
+        if (value == nullptr) {
+            return required ? fail_with(error, where + key + " is required") : true;
+        }
+        std::string curve_error;
+        if (!parse_curve_json(value, key, out, &curve_error)) {
+            return fail_with(error, where + curve_error);
+        }
+        return true;
+    };
+    if (!read_number("test_current", false, model.test_current_a) ||
+        !read_number("max_current", true, model.max_current_a) ||
+        !read_curve("output_vs_current", true, model.output_vs_current) ||
+        !read_curve("output_vs_temp", false, model.output_vs_temp) ||
+        !read_number("curve_temp", !model.output_vs_temp.empty(), model.curve_temp_c) ||
+        !read_number("rth", false, model.rth_c_per_w) ||
+        !read_curve("vf_vs_current", false, model.vf_vs_current)) {
         return false;
     }
-    for (const auto& group : leds) {
-        if (ledbrick::find_led_model(group.model) == nullptr) {
-            if (error) *error = "unknown LED model " + group.model;
+    return ledbrick::validate_led_model(model, error);
+}
+
+// At most MAX_CUSTOM_LED_MODELS valid models, each id once
+bool valid_custom_models(const std::vector<ledbrick::LedModel>& models, std::string* error) {
+    if (models.size() > ledbrick::MAX_CUSTOM_LED_MODELS) {
+        return fail_with(error, "at most " + std::to_string(ledbrick::MAX_CUSTOM_LED_MODELS) + " custom LED models");
+    }
+    for (size_t i = 0; i < models.size(); i++) {
+        if (!ledbrick::validate_led_model(models[i], error)) {
             return false;
         }
-        if (group.count < 1 || group.count > 100) {
-            if (error) *error = "LED count must be 1-100";
-            return false;
+        for (size_t j = 0; j < i; j++) {
+            if (models[j].id == models[i].id) {
+                return fail_with(error, "LED model " + models[i].id + " is listed twice");
+            }
         }
     }
     return true;
+}
+
+bool parse_led_models_json(const cJSON* array, std::vector<ledbrick::LedModel>& models, std::string* error) {
+    models.clear();
+    if (!cJSON_IsArray(array)) {
+        return fail_with(error, "led_models must be a list");
+    }
+    if (cJSON_GetArraySize(array) > static_cast<int>(ledbrick::MAX_CUSTOM_LED_MODELS)) {
+        return fail_with(error, "at most " + std::to_string(ledbrick::MAX_CUSTOM_LED_MODELS) + " custom LED models");
+    }
+    const cJSON* item = nullptr;
+    cJSON_ArrayForEach(item, array) {
+        ledbrick::LedModel model;
+        if (!parse_led_model_json(item, model, error)) {
+            return false;
+        }
+        models.push_back(std::move(model));
+    }
+    return valid_custom_models(models, error);
 }
 
 }  // namespace
@@ -957,6 +1109,9 @@ std::string LEDScheduler::export_json() const {
         }
         cJSON_AddItemToObject(root, "channel_configs", channels_array);
     }
+
+    // Always present, even empty, so the place for custom LED models is easy to find
+    cJSON_AddItemToObject(root, "led_models", led_models_json(custom_led_models_));
     
     // Create schedule_points array
     cJSON* points_array = cJSON_CreateArray();
@@ -1079,6 +1234,10 @@ std::string LEDScheduler::export_json_minified() const {
         }
         cJSON_AddItemToObject(root, "channel_configs", channels_array);
     }
+
+    if (!custom_led_models_.empty()) {
+        cJSON_AddItemToObject(root, "led_models", led_models_json(custom_led_models_));
+    }
     
     // Create schedule_points array
     cJSON* points_array = cJSON_CreateArray();
@@ -1179,17 +1338,17 @@ std::string LEDScheduler::export_json_minified() const {
     return result;
 }
 
-bool LEDScheduler::import_json(const std::string& json_str) {
+bool LEDScheduler::import_json(const std::string& json_str, std::string* error) {
     // Build the new state in a copy so a failed import leaves this one untouched
     LEDScheduler staged(*this);
-    if (!staged.import_json_into_(json_str)) {
+    if (!staged.import_json_into_(json_str, error)) {
         return false;
     }
     *this = std::move(staged);
     return true;
 }
 
-bool LEDScheduler::import_json_into_(const std::string& json_str) {
+bool LEDScheduler::import_json_into_(const std::string& json_str, std::string* error) {
     // Parse JSON using cJSON library
     cJSON* root = cJSON_Parse(json_str.c_str());
     if (!root) {
@@ -1217,7 +1376,14 @@ bool LEDScheduler::import_json_into_(const std::string& json_str) {
         }
         set_num_channels(static_cast<uint8_t>(num_channels_item->valueint));
     }
-    
+
+    // Custom LED models come before the channels that use them. Without the key, the
+    // current ones stay.
+    cJSON* models_array = cJSON_GetObjectItem(root, "led_models");
+    if (models_array != nullptr && !parse_led_models_json(models_array, custom_led_models_, error)) {
+        return false;
+    }
+
     // Parse channel_configs array
     cJSON* channels_array = cJSON_GetObjectItem(root, "channel_configs");
     if (cJSON_IsArray(channels_array)) {
@@ -1246,7 +1412,8 @@ bool LEDScheduler::import_json_into_(const std::string& json_str) {
 
             if (!parse_channel_dimming_json(cJSON_GetObjectItem(channel_item, "dimming"),
                                             static_cast<uint8_t>(channel_idx), config)) {
-                return false;
+                return fail_with(error, "channel " + std::to_string(channel_idx + 1) +
+                                            ": invalid dimming settings or unknown LED model");
             }
 
             // set_channel_config clamps max_current to the hardware limit
@@ -1393,8 +1560,16 @@ bool LEDScheduler::import_json_into_(const std::string& json_str) {
         // Apply moon simulation configuration
         set_moon_simulation(moon_config);
     }
-    
-    return !schedule_points_.empty();
+
+    // Channels left out of channel_configs keep their LEDs, which may name a dropped model
+    if (!channels_have_models(error)) {
+        return false;
+    }
+
+    if (schedule_points_.empty()) {
+        return fail_with(error, "schedule_points missing or invalid");
+    }
+    return true;
 }
 
 void LEDScheduler::write_uint16(std::vector<uint8_t>& data, size_t& pos, uint16_t value) const {
@@ -1457,8 +1632,97 @@ ledbrick::ChannelDimmer LEDScheduler::channel_dimmer(uint8_t channel, float refe
         return ledbrick::ChannelDimmer();
     }
     const ChannelConfig& config = channel_configs_[channel];
-    return ledbrick::ChannelDimmer(channel_leds(channel), config.dim_priority, config.floor_current,
-                                   reference_temp_c);
+    return ledbrick::ChannelDimmer(channel_leds(channel), custom_led_models_, config.dim_priority,
+                                   config.floor_current, reference_temp_c);
+}
+
+const ledbrick::LedModel* LEDScheduler::find_led_model(const std::string& id) const {
+    return ledbrick::find_led_model(id, custom_led_models_);
+}
+
+bool LEDScheduler::valid_led_groups(const std::vector<ledbrick::LedGroup>& leds, std::string* error) const {
+    if (leds.size() > 8) {
+        return fail_with(error, "at most 8 LED models per channel");
+    }
+    for (const auto& group : leds) {
+        if (find_led_model(group.model) == nullptr) {
+            return fail_with(error, "unknown LED model " + group.model);
+        }
+        if (group.count < 1 || group.count > 100) {
+            return fail_with(error, "LED count must be 1-100");
+        }
+    }
+    return true;
+}
+
+bool LEDScheduler::channels_have_models(std::string* error) const {
+    for (uint8_t channel = 0; channel < channel_configs_.size(); channel++) {
+        const std::string where = "channel " + std::to_string(channel + 1) + ": ";
+        std::string led_error;
+        if (!valid_led_groups(channel_configs_[channel].leds, &led_error)) {
+            return fail_with(error, where + led_error);
+        }
+        if (is_curve_channel(channel) && !channel_dimmer(channel).valid()) {
+            return fail_with(error, where + "curve mode needs LEDs with curves");
+        }
+    }
+    return true;
+}
+
+bool LEDScheduler::set_custom_led_models(const std::vector<ledbrick::LedModel>& models, std::string* error) {
+    if (!valid_custom_models(models, error)) {
+        return false;
+    }
+    std::vector<ledbrick::LedModel> previous = std::move(custom_led_models_);
+    custom_led_models_ = models;
+    if (!channels_have_models(error)) {
+        custom_led_models_ = std::move(previous);
+        return false;
+    }
+    return true;
+}
+
+std::string LEDScheduler::export_led_models_json() const {
+    cJSON* root = cJSON_CreateObject();
+    if (!root) {
+        return "{}";
+    }
+    cJSON* array = cJSON_AddArrayToObject(root, "models");
+    // Custom models first, then the built-ins they do not replace
+    for (int pass = 0; array && pass < 2; pass++) {
+        const bool custom = pass == 0;
+        for (const auto& model : custom ? custom_led_models_ : ledbrick::builtin_led_models()) {
+            if (!custom && find_led_model(model.id) != &model) {
+                continue;
+            }
+            cJSON* item = led_model_json(model);
+            if (item) {
+                cJSON_AddBoolToObject(item, "custom", custom);
+                // The floor current never goes below this
+                cJSON_AddNumberToObject(item, "characterized_from", json_number(model.output_vs_current.front().x));
+                cJSON_AddItemToArray(array, item);
+            }
+        }
+    }
+    char* printed = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    if (!printed) {
+        return "{}";
+    }
+    std::string result(printed);
+    cJSON_free(printed);
+    return result;
+}
+
+bool LEDScheduler::import_led_models_json(const std::string& json_str, std::string* error) {
+    cJSON* root = cJSON_Parse(json_str.c_str());
+    if (!root) {
+        return fail_with(error, "invalid JSON");
+    }
+    std::vector<ledbrick::LedModel> models;
+    bool ok = parse_led_models_json(cJSON_GetObjectItemCaseSensitive(root, "led_models"), models, error);
+    cJSON_Delete(root);
+    return ok && set_custom_led_models(models, error);
 }
 
 bool LEDScheduler::set_channel_dimming(uint8_t channel, ledbrick::DimMode mode, ledbrick::DimPriority priority,
@@ -1481,11 +1745,11 @@ bool LEDScheduler::set_channel_dimming(uint8_t channel, ledbrick::DimMode mode, 
 
     // Back to manual, the level becomes a PWM at the channel's maximum current, the way
     // manual schedules are usually written, rather than the current-first split
-    const ledbrick::ChannelDimmer old_dimmer(channel_leds(channel), ledbrick::DimPriority::PWM_FIRST,
-                                             channel_configs_[channel].floor_current);
+    const ledbrick::ChannelDimmer old_dimmer(channel_leds(channel), custom_led_models_,
+                                             ledbrick::DimPriority::PWM_FIRST, channel_configs_[channel].floor_current);
     const std::vector<ledbrick::LedGroup> new_leds =
         leds.empty() ? ledbrick::default_channel_leds(channel, num_channels_) : leds;
-    const ledbrick::ChannelDimmer new_dimmer(new_leds, priority, floor_current);
+    const ledbrick::ChannelDimmer new_dimmer(new_leds, custom_led_models_, priority, floor_current);
     if (mode == ledbrick::DimMode::CURVE && !new_dimmer.valid()) {
         return fail("curve mode needs the channel's LEDs");
     }
@@ -1644,7 +1908,7 @@ bool LEDScheduler::parse_channel_dimming_json(const cJSON* item, uint8_t channel
     if (config.dim_mode == ledbrick::DimMode::CURVE) {
         std::vector<ledbrick::LedGroup> in_use =
             config.leds.empty() ? ledbrick::default_channel_leds(channel, num_channels_) : config.leds;
-        if (!ledbrick::ChannelDimmer(in_use, config.dim_priority, config.floor_current).valid()) {
+        if (!ledbrick::ChannelDimmer(in_use, custom_led_models_, config.dim_priority, config.floor_current).valid()) {
             return false;
         }
     }

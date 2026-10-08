@@ -218,7 +218,8 @@ The project follows a clean separation between core algorithms and ESPHome integ
 - `GET /api/temperature/status` - Get temperature control status
 - `GET /api/temperature/fan-curve` - Get current fan curve points
 - `POST /api/temperature/reset-emergency` - Clear a latched thermal emergency (409 while a sensor is still hot)
-- `GET /api/led_models` - LED models with their test and maximum currents
+- `GET /api/led_models` - Every LED model in effect, with its curves (`models`; custom ones have `"custom": true`)
+- `POST /api/led_models` - Replace the custom LED models: `{"led_models": [...]}`
 - `POST /api/channel/dimming` - Set a channel's dimming mode, priority, floor current and LEDs (converts its schedule when the mode changes)
 
 ## Hardware Integration
@@ -255,6 +256,30 @@ How the dimmer works:
 LED data:
 - `default_channel_leds()` (led_dimming.cpp) lists each channel's LEDs on the LEDBrick Plus emitter, from its schematic, except WW: built boards have PC ambers where the schematic has deep reds, so WW is 4 LUXEON C 3900K whites and 4 PC ambers. Five strings mix parts: CyMint, WW, PCBlue, V and WBl. The two VIOSYS UV LEDs in the violet string have no curve and are left out. A channel's LEDs can be changed in the web UI.
 - `tools/led_curves/lumileds_curves.json` holds the Lumileds curves (DS144 LUXEON C, DS309 LUXEON Rubix) with the figure and page each came from. Run `python3 tools/led_curves/gen_led_models.py` from `firmware/` to regenerate `led_models.cpp` after changing it.
+
+Custom LED models:
+- Add your own curves in the settings JSON, as a top-level `led_models` list. Import them with the schedule (`POST /api/schedule`), or post just the list to `POST /api/led_models`. Either way they are saved to flash with the schedule.
+- A model with a built-in's id replaces the built-in on every channel that uses it, including channels on their default LEDs. Other ids are new parts: list them in a channel's `dimming.leds`.
+- `GET /api/led_models` returns every model with its curves. Copy one as a starting point; extra fields such as `custom` are ignored on import.
+- An import without `led_models` keeps the current models. A list that drops a model a channel still uses is rejected.
+- Up to 8 models. Everything shares the 8 KB settings slot, so a set too large to save is refused (`POST /api/led_models` returns 500 and keeps the old models).
+
+```jsonc
+"led_models": [{
+  "id": "my_red",                 // 1-32 of a-z, 0-9 and _
+  "name": "My deep red",          // optional
+  "test_current": 0.35,           // A, optional, for reference
+  "max_current": 0.7,             // A, required; caps the channel's current
+  "output_vs_current": [[0.1, 0.29], [0.35, 1.0], [0.7, 1.94]],
+  "curve_temp": 25,               // junction C of output_vs_current; required with output_vs_temp
+  "output_vs_temp": [[25, 1.1], [85, 1.0]],
+  "rth": 2.8,                     // junction to pad, C/W; optional
+  "vf_vs_current": [[0.1, 1.9], [0.7, 2.2]]
+}]
+```
+- `output_vs_current` is required: 2-32 `[A, output]` points, currents rising, output never falling, reaching `max_current`. Output is relative to the part's output at its test current, the same scale as the built-ins, so mixed strings weigh each part the same. Below the first point the curve runs linearly to zero; the floor current never goes below that point.
+- `output_vs_temp` (`[junction C, output]`, any scale) adds thermal compensation. `rth` with `vf_vs_current` (`[A, V]`) adds self-heating. Without them the part's output does not change with temperature.
+- Curves are saved with 4 significant digits.
 
 ## Common Issues and Solutions
 

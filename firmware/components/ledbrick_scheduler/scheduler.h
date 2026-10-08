@@ -187,7 +187,8 @@ public:
     std::string export_json_minified() const;  // Compact JSON without formatting
     // Replaces the schedule, channel configs and moon settings. On failure nothing changes.
     // PWM and current values are clamped to their valid ranges; bad times or types fail.
-    bool import_json(const std::string& json_str);
+    // error, when given, may say why an import failed.
+    bool import_json(const std::string& json_str, std::string* error = nullptr);
     
     // Built-in preset (only one default)
     void create_default_astronomical_preset();
@@ -210,6 +211,20 @@ public:
     bool set_channel_dimming(uint8_t channel, ledbrick::DimMode mode, ledbrick::DimPriority priority,
                              float floor_current, const std::vector<ledbrick::LedGroup>& leds,
                              std::string* error = nullptr);
+
+    // LED models the user added (the "led_models" settings). One with a built-in's id
+    // replaces the built-in, for every channel that uses it.
+    const std::vector<ledbrick::LedModel>& get_custom_led_models() const { return custom_led_models_; }
+    // Replaces the custom models. Returns false and changes nothing when a model is invalid,
+    // ids repeat, or a channel uses a model the new set drops.
+    bool set_custom_led_models(const std::vector<ledbrick::LedModel>& models, std::string* error = nullptr);
+    // A model by id: custom first, then built-in
+    const ledbrick::LedModel* find_led_model(const std::string& id) const;
+    // {"models":[...]}: every model in effect, with its curves; custom ones have "custom": true
+    std::string export_led_models_json() const;
+    // Replaces the custom models from {"led_models":[...]}; see set_custom_led_models
+    bool import_led_models_json(const std::string& json_str, std::string* error = nullptr);
+
     void set_channel_color(uint8_t channel, const std::string& rgb_hex);
     void set_channel_max_current(uint8_t channel, float max_current);
     std::string get_channel_color(uint8_t channel) const;
@@ -223,7 +238,8 @@ private:
     AstronomicalTimes astronomical_times_;
     MoonSimulation moon_simulation_;
     std::vector<ChannelConfig> channel_configs_;
-    
+    std::vector<ledbrick::LedModel> custom_led_models_;
+
     // Internal methods
     InterpolationResult interpolate_values(uint16_t current_time) const;
     InterpolationResult interpolate_values_with_astro(float current_time, const AstronomicalTimes& astro_times) const;
@@ -233,7 +249,11 @@ private:
     void sort_schedule_points();
     void sort_schedule_points_with_astro(const AstronomicalTimes& astro_times);
     bool validate_point(const SchedulePoint& point) const;
-    bool import_json_into_(const std::string& json_str);
+    bool import_json_into_(const std::string& json_str, std::string* error);
+    // Known models, 1-100 of each, at most 8 kinds in a string
+    bool valid_led_groups(const std::vector<ledbrick::LedGroup>& leds, std::string* error) const;
+    // Every channel's LEDs are known, and curve channels have curves
+    bool channels_have_models(std::string* error) const;
     // JSON for one channel config; full adds the dimming defaults the saved copy leaves out
     void add_channel_config_json(struct cJSON* channels_array, uint8_t channel, bool full) const;
     // Dimming settings from a channel config's "dimming" object; false when invalid.

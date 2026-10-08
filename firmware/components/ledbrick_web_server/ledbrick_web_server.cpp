@@ -70,6 +70,7 @@ void LEDBrickWebServer::setup() {
     {"/api/channel/configs", HTTP_POST, handle_api_channel_configs},
     {"/api/channel/dimming", HTTP_POST, handle_api_channel_dimming},
     {"/api/led_models", HTTP_GET, handle_api_led_models_get},
+    {"/api/led_models", HTTP_POST, handle_api_led_models_post},
     {"/api/temperature/config", HTTP_GET, handle_api_temperature_config_get},
     {"/api/temperature/config", HTTP_POST, handle_api_temperature_config_post},
     {"/api/temperature/status", HTTP_GET, handle_api_temperature_status_get},
@@ -1428,19 +1429,41 @@ esp_err_t LEDBrickWebServer::handle_api_led_models_get(httpd_req_t *req) {
   auto *self = get_instance(req);
   if (!self->check_auth(req)) return ESP_OK;
 
-  // The table is constant, so it is safe to read from the httpd task
-  JsonDocument doc;
-  JsonArray models = doc["models"].to<JsonArray>();
-  for (const auto &model : ledbrick::builtin_led_models()) {
-    JsonObject item = models.add<JsonObject>();
-    item["id"] = model.id;
-    item["name"] = model.name;
-    item["test_current"] = model.test_current_a;
-    item["max_current"] = model.max_current_a;
-    item["characterized_from"] = model.output_vs_current.front().x;
+  // Custom models change at runtime, so read them on the main loop
+  auto json = std::make_shared<std::string>();
+  auto *scheduler = self->scheduler_;
+  if (!self->run_in_loop_([scheduler, json]() { *json = scheduler->get_led_models_json(); })) {
+    self->send_error(req, 503, "Device busy, try again");
+    return ESP_OK;
   }
-  self->send_json_response(req, 200, doc);
+
+  httpd_resp_set_type(req, "application/json");
+  httpd_resp_send(req, json->c_str(), json->length());
   return ESP_OK;
+}
+
+esp_err_t LEDBrickWebServer::handle_api_led_models_post(httpd_req_t *req) {
+  auto *self = get_instance(req);
+  if (!self->check_auth(req)) return ESP_OK;
+
+  auto buf = read_request_body(req);
+  if (!buf) return ESP_OK;  // Error already sent
+
+  auto body = std::make_shared<std::string>(buf.get());
+  auto *scheduler = self->scheduler_;
+  return self->respond_from_loop_(req, [scheduler, body](JsonDocument &doc) {
+    std::string error;
+    bool too_large = false;
+    if (!scheduler->set_led_models_json(*body, &error, &too_large)) {
+      int code = too_large ? 500 : 400;
+      doc["error"] = error;
+      doc["code"] = code;
+      return code;
+    }
+    doc["success"] = true;
+    doc["custom_models"] = scheduler->get_custom_led_model_count();
+    return 200;
+  });
 }
 
 esp_err_t LEDBrickWebServer::handle_api_channel_dimming(httpd_req_t *req) {

@@ -171,6 +171,11 @@ class LEDBrickScheduler : public PollingComponent {
   bool set_channel_dimming(uint8_t channel, ledbrick::DimMode mode, ledbrick::DimPriority priority,
                            float floor_current, const std::vector<ledbrick::LedGroup> &leds, std::string *error);
   bool is_curve_channel(uint8_t channel) const { return scheduler_.is_curve_channel(channel); }
+  // Replaces the custom LED models from {"led_models":[...]} and saves them. When they do not
+  // fit in flash, the previous models come back and too_large is set.
+  bool set_led_models_json(const std::string &json, std::string *error, bool *too_large);
+  std::string get_led_models_json() const { return scheduler_.export_led_models_json(); }
+  size_t get_custom_led_model_count() const { return scheduler_.get_custom_led_models().size(); }
   // Level (0-1) a curve-mode channel was last driven at; negative for manual channels
   float get_channel_level(uint8_t channel) const;
   // Temperature used for the LED curves: the board sensors' filtered average, or the

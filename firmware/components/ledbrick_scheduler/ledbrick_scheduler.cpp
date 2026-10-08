@@ -415,6 +415,25 @@ bool LEDBrickScheduler::set_channel_dimming(uint8_t channel, ledbrick::DimMode m
   return true;
 }
 
+bool LEDBrickScheduler::set_led_models_json(const std::string &json, std::string *error, bool *too_large) {
+  *too_large = false;
+  std::vector<ledbrick::LedModel> previous = scheduler_.get_custom_led_models();
+  if (!scheduler_.import_led_models_json(json, error)) {
+    return false;
+  }
+  if (!save_schedule_to_flash()) {
+    // Models that would be lost at the next restart would change the light then
+    scheduler_.set_custom_led_models(previous);
+    if (error) *error = "LED models too large to save with the schedule";
+    *too_large = true;
+    return false;
+  }
+  ESP_LOGI(TAG, "Custom LED models: %zu", scheduler_.get_custom_led_models().size());
+  // Curve channels pick up the new curves at the next update
+  force_next_update_ = true;
+  return true;
+}
+
 bool LEDBrickScheduler::set_channel_manual_level(uint8_t channel, float level) {
   if (!scheduler_.is_curve_channel(channel)) {
     ESP_LOGW(TAG, "Manual level rejected - channel %u is not in curve mode", channel);
@@ -953,8 +972,9 @@ bool LEDBrickScheduler::import_schedule_json(const std::string &json_input, std:
   }
   
   // The standalone import replaces the schedule only when it succeeds
-  if (!scheduler_.import_json(json_input)) {
-    return fail("schedule_points missing or invalid");
+  std::string import_error;
+  if (!scheduler_.import_json(json_input, &import_error)) {
+    return fail(import_error.empty() ? "schedule_points missing or invalid" : import_error);
   }
   
   // Apply the settings now that the whole document is accepted

@@ -59,11 +59,109 @@ const LedModel* find_led_model(const std::string& id) {
     return nullptr;
 }
 
+const LedModel* find_led_model(const std::string& id, const std::vector<LedModel>& custom) {
+    for (const auto& model : custom) {
+        if (model.id == id) {
+            return &model;
+        }
+    }
+    return find_led_model(id);
+}
+
+namespace {
+
+bool fail(std::string* error, const std::string& message) {
+    if (error) *error = message;
+    return false;
+}
+
+// 2 to MAX_CURVE_POINTS points, x increasing within [x_low, x_high], y within [y_low, y_high]
+bool valid_curve(const std::vector<CurvePoint>& curve, const char* name, float x_low, float x_high, float y_low,
+                 float y_high, std::string* error) {
+    if (curve.size() < 2 || curve.size() > MAX_CURVE_POINTS) {
+        return fail(error, std::string(name) + " needs 2-" + std::to_string(MAX_CURVE_POINTS) + " points");
+    }
+    for (size_t i = 0; i < curve.size(); i++) {
+        const CurvePoint& p = curve[i];
+        if (!(p.x >= x_low && p.x <= x_high) || !(p.y >= y_low && p.y <= y_high)) {
+            return fail(error, std::string(name) + " has a point out of range");
+        }
+        if (i > 0 && !(p.x > curve[i - 1].x)) {
+            return fail(error, std::string(name) + " must have increasing x");
+        }
+    }
+    return true;
+}
+
+}  // namespace
+
+bool validate_led_model(const LedModel& model, std::string* error) {
+    constexpr float MAX_CURRENT_A = 3.0f;
+    if (model.id.empty() || model.id.size() > MAX_LED_MODEL_ID) {
+        return fail(error, "LED model id must be 1-" + std::to_string(MAX_LED_MODEL_ID) + " characters");
+    }
+    for (char c : model.id) {
+        if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_')) {
+            return fail(error, "LED model id may only use a-z, 0-9 and _");
+        }
+    }
+    const std::string where = "LED model " + model.id + ": ";
+    if (model.name.size() > MAX_LED_MODEL_NAME) {
+        return fail(error, where + "name is over " + std::to_string(MAX_LED_MODEL_NAME) + " characters");
+    }
+    if (!(model.max_current_a > 0.0f && model.max_current_a <= MAX_CURRENT_A)) {
+        return fail(error, where + "max_current must be over 0 and at most 3 A");
+    }
+    if (!(model.test_current_a >= 0.0f && model.test_current_a <= MAX_CURRENT_A)) {
+        return fail(error, where + "test_current must be 0-3 A");
+    }
+
+    std::string curve_error;
+    const auto& current = model.output_vs_current;
+    // The curve runs linearly to zero below its first current, so that must be above zero
+    if (!valid_curve(current, "output_vs_current", 1e-3f, MAX_CURRENT_A, 0.0f, 1000.0f, &curve_error)) {
+        return fail(error, where + curve_error);
+    }
+    for (size_t i = 1; i < current.size(); i++) {
+        if (current[i].y < current[i - 1].y) {
+            return fail(error, where + "output_vs_current must not fall as the current rises");
+        }
+    }
+    if (!(current.back().y > 0.0f)) {
+        return fail(error, where + "output_vs_current must end above zero");
+    }
+    // Past its last point the curve is flat, which would understate the output
+    if (current.back().x < model.max_current_a - 1e-4f) {
+        return fail(error, where + "output_vs_current must reach max_current");
+    }
+
+    if (!model.output_vs_temp.empty()) {
+        if (!valid_curve(model.output_vs_temp, "output_vs_temp", -40.0f, 200.0f, 1e-3f, 1000.0f, &curve_error)) {
+            return fail(error, where + curve_error);
+        }
+        if (!(model.curve_temp_c >= -40.0f && model.curve_temp_c <= 200.0f)) {
+            return fail(error, where + "curve_temp must be -40 to 200 C");
+        }
+    }
+    if (!(model.rth_c_per_w >= 0.0f && model.rth_c_per_w <= 100.0f)) {
+        return fail(error, where + "rth must be 0-100 C/W");
+    }
+    if (!model.vf_vs_current.empty() &&
+        !valid_curve(model.vf_vs_current, "vf_vs_current", 1e-3f, MAX_CURRENT_A, 0.1f, 10.0f, &curve_error)) {
+        return fail(error, where + curve_error);
+    }
+    return true;
+}
+
 ChannelDimmer::ChannelDimmer(const std::vector<LedGroup>& leds, DimPriority priority, float floor_current_a,
                              float reference_temp_c)
+    : ChannelDimmer(leds, std::vector<LedModel>(), priority, floor_current_a, reference_temp_c) {}
+
+ChannelDimmer::ChannelDimmer(const std::vector<LedGroup>& leds, const std::vector<LedModel>& custom,
+                             DimPriority priority, float floor_current_a, float reference_temp_c)
     : priority_(priority), floor_current_a_(floor_current_a), reference_temp_c_(reference_temp_c) {
     for (const auto& group : leds) {
-        const LedModel* model = find_led_model(group.model);
+        const LedModel* model = find_led_model(group.model, custom);
         if (model != nullptr && group.count > 0 && !model->output_vs_current.empty()) {
             leds_.push_back({model, static_cast<float>(group.count)});
         }

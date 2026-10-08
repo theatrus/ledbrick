@@ -291,6 +291,73 @@ void test_builtin_models(TestRunner& runner) {
     runner.assert_true(rubix.characterized_current() > 0.15f, "Rubix floor at its characterized current");
 }
 
+void test_custom_models(TestRunner& runner) {
+    runner.start_suite("Custom Model Tests");
+
+    // The built-in models pass the checks custom ones get
+    for (const auto& model : builtin_led_models()) {
+        std::string error;
+        runner.assert_true(validate_led_model(model, &error), model.id + " passes validation " + error);
+    }
+
+    LedModel blue = make_blue();
+    std::string error;
+    runner.assert_true(validate_led_model(blue, &error), "A complete model is valid");
+    LedModel minimal;
+    minimal.id = "minimal";
+    minimal.max_current_a = 0.5f;
+    minimal.output_vs_current = {{0.05f, 0.1f}, {0.5f, 1.0f}};
+    runner.assert_true(validate_led_model(minimal, &error), "Only the current curve is required");
+
+    auto rejects = [&](void (*change)(LedModel&), const std::string& what) {
+        LedModel m = make_blue();
+        change(m);
+        std::string why;
+        bool valid = validate_led_model(m, &why);
+        runner.assert_true(!valid && !why.empty(), what + " rejected: " + why);
+    };
+    rejects([](LedModel& m) { m.id = ""; }, "Empty id");
+    rejects([](LedModel& m) { m.id = "Blue LED"; }, "Id with capitals and a space");
+    rejects([](LedModel& m) { m.id = std::string(33, 'a'); }, "Id over 32 characters");
+    rejects([](LedModel& m) { m.name = std::string(49, 'a'); }, "Name over 48 characters");
+    rejects([](LedModel& m) { m.max_current_a = 0.0f; }, "Zero max current");
+    rejects([](LedModel& m) { m.max_current_a = 3.5f; }, "Max current over 3 A");
+    rejects([](LedModel& m) { m.max_current_a = NAN; }, "NaN max current");
+    rejects([](LedModel& m) { m.test_current_a = -0.1f; }, "Negative test current");
+    rejects([](LedModel& m) { m.output_vs_current.resize(1); }, "One-point current curve");
+    rejects([](LedModel& m) { m.output_vs_current.assign(33, {0.5f, 1.0f}); }, "33-point current curve");
+    rejects([](LedModel& m) { m.output_vs_current[0].x = 0.0f; }, "Current curve starting at 0 A");
+    rejects([](LedModel& m) { std::swap(m.output_vs_current[1], m.output_vs_current[2]); }, "Currents out of order");
+    rejects([](LedModel& m) { m.output_vs_current[1].x = m.output_vs_current[0].x; }, "Repeated current");
+    rejects([](LedModel& m) { m.output_vs_current[3].y = 0.5f; }, "Output falling as current rises");
+    rejects([](LedModel& m) { m.output_vs_current.pop_back(); }, "Current curve short of max current");
+    rejects([](LedModel& m) { m.output_vs_current[2].y = INFINITY; }, "Infinite output");
+    rejects([](LedModel& m) { m.output_vs_temp = {{25.0f, 1.0f}}; }, "One-point temperature curve");
+    rejects([](LedModel& m) { m.output_vs_temp = {{25.0f, 1.0f}, {85.0f, 0.0f}}; }, "Zero output at temperature");
+    rejects([](LedModel& m) { m.output_vs_temp = {{-50.0f, 1.0f}, {85.0f, 0.9f}}; }, "Temperature below -40 C");
+    rejects([](LedModel& m) { m.curve_temp_c = 250.0f; }, "Curve temperature over 200 C");
+    rejects([](LedModel& m) { m.rth_c_per_w = -1.0f; }, "Negative thermal resistance");
+    rejects([](LedModel& m) { m.vf_vs_current = {{0.1f, 2.8f}, {0.5f, 12.0f}}; }, "Vf over 10 V");
+
+    // Custom models are found first, so one can replace a built-in
+    const std::string builtin_id = builtin_led_models()[0].id;
+    LedModel replacement = make_blue();
+    replacement.id = builtin_id;
+    std::vector<LedModel> custom = {replacement, make_red()};
+    runner.assert_true(find_led_model(builtin_id, custom) == &custom[0], "Custom model replaces the built-in");
+    runner.assert_true(find_led_model("test_red", custom) == &custom[1], "Custom-only model found");
+    runner.assert_true(find_led_model("luxeon_c_blue", custom) == find_led_model("luxeon_c_blue"), "Other built-ins still found");
+    runner.assert_true(find_led_model("test_red") == nullptr, "Built-in lookup ignores custom models");
+
+    ChannelDimmer dimmer({{"test_red", 4}}, custom, DimPriority::CURRENT_FIRST, 0.1f);
+    runner.assert_true(dimmer.valid(), "Dimmer built from a custom model");
+    runner.assert_equals(1.0f, dimmer.output(0.35f, 25.0f), 1e-4f, "Dimmer uses the custom curve");
+    ChannelDimmer replaced({{builtin_id, 4}}, custom, DimPriority::CURRENT_FIRST, 0.1f);
+    runner.assert_equals(1.0f, replaced.output(0.35f, 25.0f), 1e-4f, "Dimmer uses the replacement curve");
+    runner.assert_false(ChannelDimmer({{"test_red", 4}}, DimPriority::CURRENT_FIRST, 0.1f).valid(),
+                        "Without the custom list the model is unknown");
+}
+
 int main() {
     TestResults results;
     TestRunner runner;
@@ -322,6 +389,9 @@ int main() {
     results.add_suite_results(runner);
 
     test_builtin_models(runner);
+    results.add_suite_results(runner);
+
+    test_custom_models(runner);
     results.add_suite_results(runner);
 
     results.print_final_summary("LED Dimming");
