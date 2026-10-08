@@ -40,7 +40,7 @@ std::vector<LedGroup> default_channel_leds(uint8_t channel, uint8_t num_channels
     switch (channel) {
         case 0: return {{"luxeon_c_mint", 4}, {"luxeon_c_cyan", 4}};                                      // CyMint
         case 1: return {{"luxeon_c_white_5900k", 8}};                                                     // CW
-        case 2: return {{"luxeon_c_white_3900k", 8}};                                                     // WW
+        case 2: return {{"luxeon_c_white_3900k", 4}, {"luxeon_c_pc_amber", 4}};                           // WW
         case 3: return {{"luxeon_c_pc_blue", 8}, {"luxeon_c_blue", 4}};                                   // PC blue
         case 4: return {{"luxeon_rubix_royal_blue", 13}};                                                 // Royal blue, centre
         case 5: return {{"luxeon_c_violet", 6}};                                                          // Violet (+2 UV)

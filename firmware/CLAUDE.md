@@ -253,7 +253,7 @@ How the dimmer works:
 - The PWM scale multiplies the level.
 
 LED data:
-- `default_channel_leds()` (led_dimming.cpp) lists each channel's LEDs on the LEDBrick Plus emitter, from its schematic, except WW: built boards carry 8 LUXEON C 3900K whites there, not the schematic's whites, deep reds and PC ambers. Four strings mix parts: CyMint, PCBlue, V and WBl. The two VIOSYS UV LEDs in the violet string have no curve and are left out. A channel's LEDs can be changed in the web UI.
+- `default_channel_leds()` (led_dimming.cpp) lists each channel's LEDs on the LEDBrick Plus emitter, from its schematic, except WW: built boards have PC ambers where the schematic has deep reds, so WW is 4 LUXEON C 3900K whites and 4 PC ambers. Five strings mix parts: CyMint, WW, PCBlue, V and WBl. The two VIOSYS UV LEDs in the violet string have no curve and are left out. A channel's LEDs can be changed in the web UI.
 - `tools/led_curves/lumileds_curves.json` holds the Lumileds curves (DS144 LUXEON C, DS309 LUXEON Rubix) with the figure and page each came from. Run `python3 tools/led_curves/gen_led_models.py` from `firmware/` to regenerate `led_models.cpp` after changing it.
 
 ## Common Issues and Solutions

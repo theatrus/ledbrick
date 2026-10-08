@@ -256,10 +256,13 @@ void test_builtin_models(TestRunner& runner) {
     }
     runner.assert_true(default_channel_leds(0, 4).empty(), "No defaults for other channel counts");
 
-    // WW is all LUXEON C 3900K whites
+    // WW is 3900K whites and PC ambers, no deep reds
     auto ww_leds = default_channel_leds(2, 8);
-    runner.assert_true(ww_leds.size() == 1 && ww_leds[0].model == "luxeon_c_white_3900k" && ww_leds[0].count == 8,
-                       "WW is 8 LUXEON C 3900K whites");
+    runner.assert_true(ww_leds.size() == 2 && ww_leds[0].model == "luxeon_c_white_3900k" && ww_leds[0].count == 4 &&
+                       ww_leds[1].model == "luxeon_c_pc_amber" && ww_leds[1].count == 4,
+                       "WW is 4 LUXEON C 3900K whites and 4 PC ambers");
+    ChannelDimmer ww(ww_leds, DimPriority::CURRENT_FIRST, 0.1f);
+    runner.assert_equals(1.0f, ww.max_current(limits(1.0f)), 1e-6f, "WW is not held to a deep red's 700 mA");
 
     // A string with deep reds (rated 700 mA) cannot go above 700 mA, whatever the channel limit
     ChannelDimmer with_red(std::vector<LedGroup>{{"luxeon_c_white_3900k", 4}, {"luxeon_c_deep_red", 2}},
