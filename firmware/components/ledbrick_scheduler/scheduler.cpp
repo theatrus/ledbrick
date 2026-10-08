@@ -1,5 +1,6 @@
 #include "scheduler.h"
 #include <algorithm>
+#include <cmath>
 #include <sstream>
 #include <iomanip>
 #include <cstring>
@@ -9,6 +10,25 @@
 extern "C" {
     #include "cJSON.h"
 }
+
+constexpr float LEDScheduler::MAX_CHANNEL_CURRENT;
+
+namespace {
+
+// Clamp to [low, high]; NaN becomes low
+float clamp_value(float value, float low, float high) {
+    if (!(value >= low)) return low;
+    if (value > high) return high;
+    return value;
+}
+
+// Round to 3 decimals for JSON output. A float widened to double prints with 17 digits
+// (0.65f becomes 0.64999997615814209), which bloats the schedule saved to flash.
+double json_number(float value) {
+    return std::round(static_cast<double>(value) * 1000.0) / 1000.0;
+}
+
+}  // namespace
 
 LEDScheduler::LEDScheduler(uint8_t num_channels) 
     : num_channels_(num_channels) {
@@ -427,7 +447,6 @@ LEDScheduler::InterpolationResult LEDScheduler::interpolate_values_with_astro(ui
         return result;
     }
     
-    // Handle single point case
     if (resolved_points.size() == 1) {
         // Safety check - ensure vectors have correct size
         if (resolved_points[0].pwm_values.size() != num_channels_ || 
@@ -436,56 +455,33 @@ LEDScheduler::InterpolationResult LEDScheduler::interpolate_values_with_astro(ui
         }
         result.pwm_values = resolved_points[0].pwm_values;
         result.current_values = resolved_points[0].current_values;
-        // Clamp current values to max current
-        for (size_t i = 0; i < num_channels_; i++) {
-            if (result.current_values[i] > channel_configs_[i].max_current) {
-                result.current_values[i] = channel_configs_[i].max_current;
+        result.valid = true;
+    } else {
+        // Find interpolation points
+        const SchedulePoint* before = nullptr;
+        const SchedulePoint* after = nullptr;
+        
+        // Find the points before and after current time
+        for (size_t i = 0; i < resolved_points.size(); i++) {
+            if (resolved_points[i].time_minutes <= current_time) {
+                before = &resolved_points[i];
+            }
+            if (resolved_points[i].time_minutes >= current_time && !after) {
+                after = &resolved_points[i];
+                break;
             }
         }
-        result.valid = true;
-        return result;
-    }
-    
-    // Find interpolation points
-    const SchedulePoint* before = nullptr;
-    const SchedulePoint* after = nullptr;
-    
-    // Find the points before and after current time
-    for (size_t i = 0; i < resolved_points.size(); i++) {
-        if (resolved_points[i].time_minutes <= current_time) {
-            before = &resolved_points[i];
+        
+        // If current time is before first point, wrap to use last point as 'before'
+        if (!before) {
+            before = &resolved_points.back();
         }
-        if (resolved_points[i].time_minutes >= current_time && !after) {
-            after = &resolved_points[i];
-            break;
+        
+        // If current time is after last point, wrap to use first point as 'after'
+        if (!after) {
+            after = &resolved_points.front();
         }
-    }
-    
-    // If current time is before first point, wrap to use last point as 'before'
-    if (!before && resolved_points.size() >= 2) {
-        before = &resolved_points.back();
-    }
-    
-    // If current time is after last point, wrap to use first point as 'after'
-    if (!after && resolved_points.size() >= 2) {
-        after = &resolved_points.front();
-    }
-    
-    // Handle exact match
-    if (before && after && before->time_minutes == current_time) {
-        // Safety check - ensure vectors have correct size
-        if (before->pwm_values.size() != num_channels_ || 
-            before->current_values.size() != num_channels_) {
-            return result;  // Return zeros if data is invalid
-        }
-        result.pwm_values = before->pwm_values;
-        result.current_values = before->current_values;
-        result.valid = true;
-        return result;
-    }
-    
-    // Interpolate
-    if (before && after) {
+        
         // Safety check - ensure vectors have correct size
         if (before->pwm_values.size() != num_channels_ || 
             before->current_values.size() != num_channels_ ||
@@ -494,6 +490,8 @@ LEDScheduler::InterpolationResult LEDScheduler::interpolate_values_with_astro(ui
             return result;  // Return zeros if data is invalid
         }
         
+        // An exact match on a point gives elapsed = 0, so the same path handles it
+        // and still gets the current clamp and moon simulation below
         uint16_t time_span = after->time_minutes > before->time_minutes ? 
             after->time_minutes - before->time_minutes :
             (1440 - before->time_minutes) + after->time_minutes; // Handle wrap-around
@@ -507,12 +505,15 @@ LEDScheduler::InterpolationResult LEDScheduler::interpolate_values_with_astro(ui
         for (size_t i = 0; i < num_channels_; i++) {
             result.pwm_values[i] = before->pwm_values[i] + ratio * (after->pwm_values[i] - before->pwm_values[i]);
             result.current_values[i] = before->current_values[i] + ratio * (after->current_values[i] - before->current_values[i]);
-            // Clamp to max current
-            if (result.current_values[i] > channel_configs_[i].max_current) {
-                result.current_values[i] = channel_configs_[i].max_current;
-            }
         }
         result.valid = true;
+    }
+    
+    // Clamp to each channel's max current
+    for (size_t i = 0; i < num_channels_ && i < channel_configs_.size(); i++) {
+        if (result.current_values[i] > channel_configs_[i].max_current) {
+            result.current_values[i] = channel_configs_[i].max_current;
+        }
     }
     
     // Apply moon simulation if enabled
@@ -696,14 +697,21 @@ LEDScheduler::InterpolationResult LEDScheduler::apply_moon_simulation(const Inte
     return result;
 }
 
-void LEDScheduler::load_preset(const std::string& preset_name) {
-    // Only one default preset - astronomical schedule
+bool LEDScheduler::load_preset(const std::string& preset_name) {
+    // One built-in preset - astronomical schedule
     if (preset_name == "default" || preset_name == "sunrise_sunset") {
         create_default_astronomical_preset();
-        return;
+        return true;
     }
-    
-    // No other presets supported
+
+    // Presets kept with save_preset()
+    auto it = presets_.find(preset_name);
+    if (it != presets_.end()) {
+        schedule_points_ = it->second;
+        return true;
+    }
+
+    return false;
 }
 
 void LEDScheduler::save_preset(const std::string& preset_name) {
@@ -909,7 +917,7 @@ std::string LEDScheduler::export_json() const {
             cJSON* channel_obj = cJSON_CreateObject();
             if (channel_obj) {
                 cJSON_AddStringToObject(channel_obj, "rgb_hex", channel_configs_[i].rgb_hex.c_str());
-                cJSON_AddNumberToObject(channel_obj, "max_current", channel_configs_[i].max_current);
+                cJSON_AddNumberToObject(channel_obj, "max_current", json_number(channel_configs_[i].max_current));
                 cJSON_AddStringToObject(channel_obj, "name", channel_configs_[i].name.c_str());
                 cJSON_AddItemToArray(channels_array, channel_obj);
             }
@@ -946,7 +954,7 @@ std::string LEDScheduler::export_json() const {
         cJSON_AddNumberToObject(point_obj, "time_minutes", actual_time);
         
         // Add time_formatted
-        char time_str[6];
+        char time_str[8];
         snprintf(time_str, sizeof(time_str), "%02d:%02d", 
                  actual_time / 60, actual_time % 60);
         cJSON_AddStringToObject(point_obj, "time_formatted", time_str);
@@ -955,7 +963,7 @@ std::string LEDScheduler::export_json() const {
         cJSON* pwm_array = cJSON_CreateArray();
         if (pwm_array) {
             for (float value : point.pwm_values) {
-                cJSON* number = cJSON_CreateNumber(value);
+                cJSON* number = cJSON_CreateNumber(json_number(value));
                 if (number) cJSON_AddItemToArray(pwm_array, number);
             }
             cJSON_AddItemToObject(point_obj, "pwm_values", pwm_array);
@@ -965,7 +973,7 @@ std::string LEDScheduler::export_json() const {
         cJSON* current_array = cJSON_CreateArray();
         if (current_array) {
             for (float value : point.current_values) {
-                cJSON* number = cJSON_CreateNumber(value);
+                cJSON* number = cJSON_CreateNumber(json_number(value));
                 if (number) cJSON_AddItemToArray(current_array, number);
             }
             cJSON_AddItemToObject(point_obj, "current_values", current_array);
@@ -981,13 +989,13 @@ std::string LEDScheduler::export_json() const {
         cJSON_AddBoolToObject(moon_obj, "enabled", moon_simulation_.enabled);
         cJSON_AddBoolToObject(moon_obj, "phase_scaling_pwm", moon_simulation_.phase_scaling_pwm);
         cJSON_AddBoolToObject(moon_obj, "phase_scaling_current", moon_simulation_.phase_scaling_current);
-        cJSON_AddNumberToObject(moon_obj, "min_current_threshold", moon_simulation_.min_current_threshold);
+        cJSON_AddNumberToObject(moon_obj, "min_current_threshold", json_number(moon_simulation_.min_current_threshold));
         
         // Add base_intensity array
         cJSON* intensity_array = cJSON_CreateArray();
         if (intensity_array) {
             for (float intensity : moon_simulation_.base_intensity) {
-                cJSON* number = cJSON_CreateNumber(intensity);
+                cJSON* number = cJSON_CreateNumber(json_number(intensity));
                 if (number) cJSON_AddItemToArray(intensity_array, number);
             }
             cJSON_AddItemToObject(moon_obj, "base_intensity", intensity_array);
@@ -997,7 +1005,7 @@ std::string LEDScheduler::export_json() const {
         cJSON* current_array = cJSON_CreateArray();
         if (current_array) {
             for (float current : moon_simulation_.base_current) {
-                cJSON* number = cJSON_CreateNumber(current);
+                cJSON* number = cJSON_CreateNumber(json_number(current));
                 if (number) cJSON_AddItemToArray(current_array, number);
             }
             cJSON_AddItemToObject(moon_obj, "base_current", current_array);
@@ -1037,7 +1045,7 @@ std::string LEDScheduler::export_json_minified() const {
             cJSON* channel_obj = cJSON_CreateObject();
             if (channel_obj) {
                 cJSON_AddStringToObject(channel_obj, "rgb_hex", channel_configs_[i].rgb_hex.c_str());
-                cJSON_AddNumberToObject(channel_obj, "max_current", channel_configs_[i].max_current);
+                cJSON_AddNumberToObject(channel_obj, "max_current", json_number(channel_configs_[i].max_current));
                 cJSON_AddStringToObject(channel_obj, "name", channel_configs_[i].name.c_str());
                 cJSON_AddItemToArray(channels_array, channel_obj);
             }
@@ -1074,7 +1082,7 @@ std::string LEDScheduler::export_json_minified() const {
         cJSON_AddNumberToObject(point_obj, "time_minutes", actual_time);
         
         // Add time_formatted
-        char time_str[6];
+        char time_str[8];
         snprintf(time_str, sizeof(time_str), "%02d:%02d", 
                  actual_time / 60, actual_time % 60);
         cJSON_AddStringToObject(point_obj, "time_formatted", time_str);
@@ -1083,7 +1091,7 @@ std::string LEDScheduler::export_json_minified() const {
         cJSON* pwm_array = cJSON_CreateArray();
         if (pwm_array) {
             for (float value : point.pwm_values) {
-                cJSON* number = cJSON_CreateNumber(value);
+                cJSON* number = cJSON_CreateNumber(json_number(value));
                 if (number) cJSON_AddItemToArray(pwm_array, number);
             }
             cJSON_AddItemToObject(point_obj, "pwm_values", pwm_array);
@@ -1093,7 +1101,7 @@ std::string LEDScheduler::export_json_minified() const {
         cJSON* current_array = cJSON_CreateArray();
         if (current_array) {
             for (float value : point.current_values) {
-                cJSON* number = cJSON_CreateNumber(value);
+                cJSON* number = cJSON_CreateNumber(json_number(value));
                 if (number) cJSON_AddItemToArray(current_array, number);
             }
             cJSON_AddItemToObject(point_obj, "current_values", current_array);
@@ -1109,13 +1117,13 @@ std::string LEDScheduler::export_json_minified() const {
         cJSON_AddBoolToObject(moon_obj, "enabled", moon_simulation_.enabled);
         cJSON_AddBoolToObject(moon_obj, "phase_scaling_pwm", moon_simulation_.phase_scaling_pwm);
         cJSON_AddBoolToObject(moon_obj, "phase_scaling_current", moon_simulation_.phase_scaling_current);
-        cJSON_AddNumberToObject(moon_obj, "min_current_threshold", moon_simulation_.min_current_threshold);
+        cJSON_AddNumberToObject(moon_obj, "min_current_threshold", json_number(moon_simulation_.min_current_threshold));
         
         // Add base_intensity array
         cJSON* intensity_array = cJSON_CreateArray();
         if (intensity_array) {
             for (float intensity : moon_simulation_.base_intensity) {
-                cJSON* number = cJSON_CreateNumber(intensity);
+                cJSON* number = cJSON_CreateNumber(json_number(intensity));
                 if (number) cJSON_AddItemToArray(intensity_array, number);
             }
             cJSON_AddItemToObject(moon_obj, "base_intensity", intensity_array);
@@ -1125,7 +1133,7 @@ std::string LEDScheduler::export_json_minified() const {
         cJSON* current_array = cJSON_CreateArray();
         if (current_array) {
             for (float current : moon_simulation_.base_current) {
-                cJSON* number = cJSON_CreateNumber(current);
+                cJSON* number = cJSON_CreateNumber(json_number(current));
                 if (number) cJSON_AddItemToArray(current_array, number);
             }
             cJSON_AddItemToObject(moon_obj, "base_current", current_array);
@@ -1145,6 +1153,16 @@ std::string LEDScheduler::export_json_minified() const {
 }
 
 bool LEDScheduler::import_json(const std::string& json_str) {
+    // Build the new state in a copy so a failed import leaves this one untouched
+    LEDScheduler staged(*this);
+    if (!staged.import_json_into_(json_str)) {
+        return false;
+    }
+    *this = std::move(staged);
+    return true;
+}
+
+bool LEDScheduler::import_json_into_(const std::string& json_str) {
     // Parse JSON using cJSON library
     cJSON* root = cJSON_Parse(json_str.c_str());
     if (!root) {
@@ -1157,12 +1175,19 @@ bool LEDScheduler::import_json(const std::string& json_str) {
         ~JSONDeleter() { if (json) cJSON_Delete(json); }
     } deleter{root};
     
+    if (!cJSON_IsObject(root)) {
+        return false;
+    }
+    
     // Clear existing schedule
     clear_schedule();
     
     // Parse num_channels
     cJSON* num_channels_item = cJSON_GetObjectItem(root, "num_channels");
     if (cJSON_IsNumber(num_channels_item)) {
+        if (num_channels_item->valuedouble < 1 || num_channels_item->valuedouble > 16) {
+            return false;
+        }
         set_num_channels(static_cast<uint8_t>(num_channels_item->valueint));
     }
     
@@ -1192,6 +1217,7 @@ bool LEDScheduler::import_json(const std::string& json_str) {
                 config.name = name_item->valuestring;
             }
             
+            // set_channel_config clamps max_current to the hardware limit
             set_channel_config(channel_idx, config);
             channel_idx++;
         }
@@ -1212,12 +1238,19 @@ bool LEDScheduler::import_json(const std::string& json_str) {
         cJSON* time_type_item = cJSON_GetObjectItem(point_item, "time_type");
         if (cJSON_IsString(time_type_item)) {
             time_type = string_to_dynamic_time_type(time_type_item->valuestring);
+            if (time_type == DynamicTimeType::FIXED && strcmp(time_type_item->valuestring, "fixed") != 0) {
+                return false;  // Unknown time type
+            }
         }
         
         // Parse offset_minutes (for dynamic points)
         int offset_minutes = 0;
         cJSON* offset_item = cJSON_GetObjectItem(point_item, "offset_minutes");
         if (cJSON_IsNumber(offset_item)) {
+            if (time_type != DynamicTimeType::FIXED &&
+                (offset_item->valuedouble < -1439 || offset_item->valuedouble > 1439)) {
+                return false;
+            }
             offset_minutes = offset_item->valueint;
         }
         
@@ -1225,29 +1258,35 @@ bool LEDScheduler::import_json(const std::string& json_str) {
         uint16_t time_minutes = 0;
         cJSON* time_item = cJSON_GetObjectItem(point_item, "time_minutes");
         if (cJSON_IsNumber(time_item)) {
+            if (time_type == DynamicTimeType::FIXED &&
+                (time_item->valuedouble < 0 || time_item->valuedouble >= 1440)) {
+                return false;
+            }
             time_minutes = static_cast<uint16_t>(time_item->valueint);
         }
         
-        // Parse pwm_values array
+        // Parse pwm_values array, clamped to 0-100%
         std::vector<float> pwm_values;
         cJSON* pwm_array = cJSON_GetObjectItem(point_item, "pwm_values");
         if (cJSON_IsArray(pwm_array)) {
             cJSON* value = NULL;
             cJSON_ArrayForEach(value, pwm_array) {
                 if (cJSON_IsNumber(value)) {
-                    pwm_values.push_back(static_cast<float>(value->valuedouble));
+                    pwm_values.push_back(clamp_value(static_cast<float>(value->valuedouble), 0.0f, 100.0f));
                 }
             }
         }
         
-        // Parse current_values array
+        // Parse current_values array, clamped to each channel's max current
         std::vector<float> current_values;
         cJSON* current_array = cJSON_GetObjectItem(point_item, "current_values");
         if (cJSON_IsArray(current_array)) {
             cJSON* value = NULL;
             cJSON_ArrayForEach(value, current_array) {
                 if (cJSON_IsNumber(value)) {
-                    current_values.push_back(static_cast<float>(value->valuedouble));
+                    float max_current = get_channel_max_current(static_cast<uint8_t>(
+                        std::min<size_t>(current_values.size(), 255)));
+                    current_values.push_back(clamp_value(static_cast<float>(value->valuedouble), 0.0f, max_current));
                 }
             }
         }
@@ -1257,7 +1296,7 @@ bool LEDScheduler::import_json(const std::string& json_str) {
             if (time_type == DynamicTimeType::FIXED) {
                 set_schedule_point(time_minutes, pwm_values, current_values);
             } else {
-                add_dynamic_schedule_point(time_type, offset_minutes, pwm_values, current_values);
+                add_dynamic_schedule_point(time_type, static_cast<int16_t>(offset_minutes), pwm_values, current_values);
             }
         }
     }
@@ -1287,29 +1326,34 @@ bool LEDScheduler::import_json(const std::string& json_str) {
         // Parse min_current_threshold
         cJSON* min_current_item = cJSON_GetObjectItem(moon_obj, "min_current_threshold");
         if (cJSON_IsNumber(min_current_item)) {
-            moon_config.min_current_threshold = static_cast<float>(min_current_item->valuedouble);
+            moon_config.min_current_threshold = clamp_value(
+                static_cast<float>(min_current_item->valuedouble), 0.0f, MAX_CHANNEL_CURRENT);
         }
         
-        // Parse base_intensity array
+        // Parse base_intensity array, clamped to 0-100%
         cJSON* intensity_array = cJSON_GetObjectItem(moon_obj, "base_intensity");
         if (cJSON_IsArray(intensity_array)) {
             moon_config.base_intensity.clear();
             cJSON* intensity_item = NULL;
             cJSON_ArrayForEach(intensity_item, intensity_array) {
                 if (cJSON_IsNumber(intensity_item)) {
-                    moon_config.base_intensity.push_back(static_cast<float>(intensity_item->valuedouble));
+                    moon_config.base_intensity.push_back(
+                        clamp_value(static_cast<float>(intensity_item->valuedouble), 0.0f, 100.0f));
                 }
             }
         }
         
-        // Parse base_current array
+        // Parse base_current array, clamped to each channel's max current
         cJSON* current_array = cJSON_GetObjectItem(moon_obj, "base_current");
         if (cJSON_IsArray(current_array)) {
             moon_config.base_current.clear();
             cJSON* current_item = NULL;
             cJSON_ArrayForEach(current_item, current_array) {
                 if (cJSON_IsNumber(current_item)) {
-                    moon_config.base_current.push_back(static_cast<float>(current_item->valuedouble));
+                    float max_current = get_channel_max_current(static_cast<uint8_t>(
+                        std::min<size_t>(moon_config.base_current.size(), 255)));
+                    moon_config.base_current.push_back(
+                        clamp_value(static_cast<float>(current_item->valuedouble), 0.0f, max_current));
                 }
             }
         }
@@ -1358,6 +1402,7 @@ float LEDScheduler::read_float(const std::vector<uint8_t>& data, size_t& pos) co
 void LEDScheduler::set_channel_config(uint8_t channel, const ChannelConfig& config) {
     if (channel < num_channels_) {
         channel_configs_[channel] = config;
+        channel_configs_[channel].max_current = clamp_value(config.max_current, 0.0f, MAX_CHANNEL_CURRENT);
     }
 }
 
@@ -1376,10 +1421,7 @@ void LEDScheduler::set_channel_color(uint8_t channel, const std::string& rgb_hex
 
 void LEDScheduler::set_channel_max_current(uint8_t channel, float max_current) {
     if (channel < num_channels_) {
-        // Clamp to valid range
-        if (max_current < 0.1f) max_current = 0.1f;
-        if (max_current > 2.0f) max_current = 2.0f;
-        channel_configs_[channel].max_current = max_current;
+        channel_configs_[channel].max_current = clamp_value(max_current, 0.0f, MAX_CHANNEL_CURRENT);
     }
 }
 

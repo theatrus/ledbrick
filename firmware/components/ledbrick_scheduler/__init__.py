@@ -16,7 +16,7 @@ from esphome.cpp_generator import MockObj
 CODEOWNERS = ["@theatrus"]
 
 ledbrick_scheduler_ns = cg.esphome_ns.namespace("ledbrick_scheduler")
-LEDBrickScheduler = ledbrick_scheduler_ns.class_("LEDBrickScheduler", cg.Component)
+LEDBrickScheduler = ledbrick_scheduler_ns.class_("LEDBrickScheduler", cg.PollingComponent)
 
 # Actions
 SetSchedulePointAction = ledbrick_scheduler_ns.class_("SetSchedulePointAction", automation.Action)
@@ -56,6 +56,10 @@ CONFIG_SCHEMA = cv.Schema({
 async def to_code(config):
     # Add the astronomical calculator source file
     cg.add_define("LEDBRICK_ASTRONOMICAL_CALCULATOR")
+
+    # cJSON recurses once per nesting level; request bodies are parsed on tasks with
+    # 8 KB stacks, so cap the depth well below cJSON's default of 1000
+    cg.add_build_flag("-DCJSON_NESTING_LIMIT=32")
     
     var = cg.new_Pvariable(config[CONF_ID], config[CONF_UPDATE_INTERVAL])
     await cg.register_component(var, config)
@@ -75,7 +79,8 @@ async def to_code(config):
 SET_SCHEDULE_POINT_SCHEMA = cv.Schema({
     cv.GenerateID(): cv.use_id(LEDBrickScheduler),
     cv.Required(CONF_TIMEPOINT): cv.templatable(cv.int_range(min=0, max=1439)),  # 0-1439 minutes
-    cv.Required(CONF_PWM_VALUES): cv.templatable(cv.All(cv.ensure_list(cv.percentage), cv.Length(min=1, max=16))),
+    # PWM values are percentages 0-100, as everywhere else in the scheduler
+    cv.Required(CONF_PWM_VALUES): cv.templatable(cv.All(cv.ensure_list(cv.float_range(min=0.0, max=100.0)), cv.Length(min=1, max=16))),
     cv.Required(CONF_CURRENT_VALUES): cv.templatable(cv.All(cv.ensure_list(cv.float_range(min=0.0, max=5.0)), cv.Length(min=1, max=16))),
 })
 
@@ -90,7 +95,9 @@ SET_ENABLED_SCHEMA = cv.Schema({
 })
 
 
-@automation.register_action("ledbrick_scheduler.set_schedule_point", SetSchedulePointAction, SET_SCHEDULE_POINT_SCHEMA)
+@automation.register_action(
+    "ledbrick_scheduler.set_schedule_point", SetSchedulePointAction, SET_SCHEDULE_POINT_SCHEMA, synchronous=True
+)
 async def set_schedule_point_to_code(config, action_id, template_arg, args):
     var = cg.new_Pvariable(action_id, template_arg)
     await cg.register_parented(var, config[CONF_ID])
@@ -107,7 +114,9 @@ async def set_schedule_point_to_code(config, action_id, template_arg, args):
     return var
 
 
-@automation.register_action("ledbrick_scheduler.load_preset", LoadPresetAction, LOAD_PRESET_SCHEMA)
+@automation.register_action(
+    "ledbrick_scheduler.load_preset", LoadPresetAction, LOAD_PRESET_SCHEMA, synchronous=True
+)
 async def load_preset_to_code(config, action_id, template_arg, args):
     var = cg.new_Pvariable(action_id, template_arg)
     await cg.register_parented(var, config[CONF_ID])
@@ -118,7 +127,9 @@ async def load_preset_to_code(config, action_id, template_arg, args):
     return var
 
 
-@automation.register_action("ledbrick_scheduler.set_enabled", SetEnabledAction, SET_ENABLED_SCHEMA)
+@automation.register_action(
+    "ledbrick_scheduler.set_enabled", SetEnabledAction, SET_ENABLED_SCHEMA, synchronous=True
+)
 async def set_enabled_to_code(config, action_id, template_arg, args):
     var = cg.new_Pvariable(action_id, template_arg)
     await cg.register_parented(var, config[CONF_ID])

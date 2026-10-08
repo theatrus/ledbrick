@@ -69,7 +69,11 @@ class LEDBrickAPI {
       },
       body: jsonStr,
     });
-    return response.json();
+    const result = await response.json().catch(() => ({ error: response.statusText, code: response.status }));
+    if (!response.ok) {
+      throw result;
+    }
+    return result;
   }
 
   async getStatus(): Promise<Status> {
@@ -177,6 +181,12 @@ class LEDBrickAPI {
 
   async updateTemperatureConfig(config: any): Promise<any> {
     return this.request('POST', '/api/temperature/config', config);
+  }
+
+  // Clears a latched thermal emergency, e.g. after a sensor failed. The device
+  // refuses (409) while a working sensor reads above the recovery temperature.
+  async resetThermalEmergency(): Promise<any> {
+    return this.request('POST', '/api/temperature/reset-emergency');
   }
 
   async getTemperatureStatus(): Promise<any> {

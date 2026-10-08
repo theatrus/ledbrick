@@ -1,5 +1,6 @@
 #include "astronomical_calculator.h"
 #include <algorithm>
+#include <cmath>
 #include <vector>
 
 #ifndef M_PI
@@ -611,17 +612,21 @@ AstronomicalCalculator::SunTimes AstronomicalCalculator::get_sun_rise_set_times(
         
         // Check for horizon crossings at the appropriate altitude for rise/set
         if (prev_altitude != -90.0) {  // Skip first iteration
+            // Interpolate between the two samples to place the crossing within about a minute
+            auto crossing_minutes = [&]() {
+                double fraction = (SUN_RISE_SET_ALTITUDE - prev_altitude) / (altitude - prev_altitude);
+                int crossing = (minutes - 15) + static_cast<int>(std::lround(15.0 * fraction));
+                return static_cast<uint16_t>(((crossing % 1440) + 1440) % 1440);
+            };
             if (prev_altitude < SUN_RISE_SET_ALTITUDE && altitude >= SUN_RISE_SET_ALTITUDE && !found_rise) {
                 // Sun rise detected - upper limb at horizon with refraction
-                result.rise_minutes = minutes - 7;  // Approximate midpoint of 15-minute interval
-                if (result.rise_minutes < 0) result.rise_minutes += 1440;
+                result.rise_minutes = crossing_minutes();
                 result.rise_valid = true;
                 found_rise = true;
             }
             else if (prev_altitude >= SUN_RISE_SET_ALTITUDE && altitude < SUN_RISE_SET_ALTITUDE && !found_set) {
                 // Sun set detected - upper limb at horizon with refraction
-                result.set_minutes = minutes - 7;  // Approximate midpoint of 15-minute interval
-                if (result.set_minutes < 0) result.set_minutes += 1440;
+                result.set_minutes = crossing_minutes();
                 result.set_valid = true;
                 found_set = true;
             }
@@ -708,16 +713,11 @@ double AstronomicalCalculator::get_projected_julian_day(const DateTime& dt) cons
         return jd;
     }
     
-    // Apply time shift
+    // Projected rise/set times are the real ones moved later by the shift, so the sky
+    // shown at local time t is the real sky at t - shift. Longitude is already part of
+    // the position calculation and must not be applied again here.
     double shift_hours = time_shift_hours_ + time_shift_minutes_ / 60.0;
-    jd += shift_hours / 24.0;  // Convert hours to days
-    
-    // Calculate timezone offset between our local time and the target location
-    // Rough approximation: 15 degrees longitude = 1 hour time difference
-    double longitude_offset_hours = longitude_ / 15.0;  // Target location offset from GMT
-    
-    // Apply the longitude-based time offset to synchronize local solar times
-    jd -= longitude_offset_hours / 24.0;
+    jd -= shift_hours / 24.0;  // Convert hours to days
     
     return jd;
 }
@@ -764,7 +764,7 @@ float AstronomicalCalculator::calculate_moon_intensity_from_position(const Celes
     float base_intensity = static_cast<float>(sin(altitude_rad));
     
     // Factor in moon phase - new moon is dim, full moon is bright
-    float phase_brightness = 0.1f + 0.9f * (1.0f - abs(phase - 0.5f) * 2.0f);  // Peak at 0.5 (full moon)
+    float phase_brightness = 0.1f + 0.9f * (1.0f - std::fabs(phase - 0.5f) * 2.0f);  // Peak at 0.5 (full moon)
     
     float intensity = base_intensity * phase_brightness;
     

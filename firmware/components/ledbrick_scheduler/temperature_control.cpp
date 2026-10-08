@@ -1,4 +1,5 @@
 #include "temperature_control.h"
+#include "cJSON.h"
 #include <algorithm>
 #include <cmath>
 #include <sstream>
@@ -21,9 +22,9 @@ namespace ledbrick {
 // Temperature Control Implementation
 TemperatureControl::TemperatureControl()
     : pid_controller_(2.0f, 0.1f, 0.5f, 0.0f, 100.0f),
-      emergency_cooldown_(false), emergency_triggered_ms_(0),
+      emergency_countdown_active_(false), emergency_triggered_ms_(0),
       last_update_ms_(0), last_fan_update_ms_(0),
-      last_valid_temp_ms_(0), last_pid_compute_temp_ms_(0),
+      last_valid_temp_ms_(0), last_pid_compute_temp_ms_(0), pid_has_computed_(false),
       filtered_temperature_(0.0f), ever_had_valid_temp_(false) {
 
     status_.enabled = false;
@@ -61,7 +62,9 @@ void TemperatureControl::add_temperature_sensor(const std::string& name) {
     sensor.temperature_c = 0.0f;
     sensor.valid = false;
     sensor.last_update_ms = 0;
-    
+    sensor.last_report_ms = 0;
+    sensor.failed_readings = 0;
+
     sensors_.push_back(sensor);
     LOG_INFO("Added temperature sensor: %s", name.c_str());
 }
@@ -72,10 +75,30 @@ void TemperatureControl::update_temperature_sensor(const std::string& name, floa
             sensor.temperature_c = temp_c;
             sensor.valid = true;
             sensor.last_update_ms = timestamp_ms;
+            sensor.last_report_ms = timestamp_ms;
+            sensor.failed_readings = 0;
             return;
         }
     }
-    
+
+    LOG_WARN("Temperature sensor '%s' not found for update", name.c_str());
+}
+
+void TemperatureControl::report_failed_reading(const std::string& name, uint32_t timestamp_ms) {
+    for (auto& sensor : sensors_) {
+        if (sensor.name == name) {
+            sensor.last_report_ms = timestamp_ms;
+            if (sensor.failed_readings <= MAX_FAILED_READINGS) {
+                sensor.failed_readings++;
+                if (sensor.failed_readings > MAX_FAILED_READINGS && sensor.valid) {
+                    LOG_WARN("Temperature sensor '%s' failed %u readings in a row; ignoring it until it reads again",
+                             name.c_str(), static_cast<unsigned>(sensor.failed_readings));
+                }
+            }
+            return;
+        }
+    }
+
     LOG_WARN("Temperature sensor '%s' not found for update", name.c_str());
 }
 
@@ -93,7 +116,7 @@ void TemperatureControl::enable(bool enabled) {
     if (enabled) {
         LOG_INFO("Temperature control enabled");
         pid_controller_.reset();
-        emergency_cooldown_ = false;
+        pid_has_computed_ = false;
         // Note: We don't reset ever_had_valid_temp_ or last_valid_temp_ms_
         // to maintain safety state across enable/disable cycles
     } else {
@@ -104,16 +127,14 @@ void TemperatureControl::enable(bool enabled) {
 }
 
 TemperatureControlCommand TemperatureControl::compute_control_command(uint32_t current_time_ms) {
-    TemperatureControlCommand command;
-    
-    if (!status_.enabled) {
-        command.fan_enabled = false;
-        command.fan_pwm_percent = 0.0f;
-        command.emergency_state = false;
-        command.override_normal_control = true;
-        command.reason = "Temperature control disabled";
-        return command;
-    }
+    // "Disabled" turns off fan control only. Thermal shutdown keeps running, so an
+    // emergency can still start, and an active one ends only on a confirmed recovery.
+    TemperatureControlCommand disabled_command;
+    disabled_command.fan_enabled = false;
+    disabled_command.fan_pwm_percent = 0.0f;
+    disabled_command.emergency_state = false;
+    disabled_command.override_normal_control = true;
+    disabled_command.reason = "Temperature control disabled";
     
     // Update timestamp
     last_update_ms_ = current_time_ms;
@@ -131,6 +152,12 @@ TemperatureControlCommand TemperatureControl::compute_control_command(uint32_t c
         last_valid_temp_ms_, status_.sensors_valid_count, current_time_ms);
         
     if (safety_command.override_normal_control) {
+        // Losing sensors must not end an active emergency; only a confirmed
+        // temperature at or below recovery_temp_c clears it
+        safety_command.emergency_state = status_.hardware.thermal_emergency;
+        if (!status_.enabled && !safety_command.emergency_state) {
+            return disabled_command;
+        }
         return safety_command;
     }
     
@@ -140,8 +167,19 @@ TemperatureControlCommand TemperatureControl::compute_control_command(uint32_t c
         return emergency_command;
     }
     
+    // No emergency (or it just cleared)
+    if (!status_.enabled) {
+        return disabled_command;
+    }
+    
     // Normal PID control
     return compute_fan_control(current_time_ms);
+}
+
+bool TemperatureControl::emergency_reset_allowed() const {
+    // A manual reset is for a latch that cannot clear itself (no working sensor). While a
+    // working sensor still reads above the recovery temperature, it must not relight the LEDs.
+    return status_.sensors_valid_count == 0 || status_.max_temp_c <= config_.recovery_temp_c;
 }
 
 void TemperatureControl::update_hardware_state(const TemperatureHardwareState& hardware_state) {
@@ -153,21 +191,35 @@ float TemperatureControl::get_average_temperature(uint32_t current_time_ms) {
     uint32_t valid_count = 0;
     uint32_t total_count = 0;
     uint32_t newest_sensor_time = 0;  // Track the most recent sensor reading time
+    float max_temp = 0.0f;
 
     for (auto& sensor : sensors_) {
         total_count++;
 
-        // Check if sensor data is recent and temperature is valid (> 0°C)
+        // Signed difference so a reading stamped slightly after current_time_ms, or one
+        // taken across a millis() wrap, does not look about 49 days old
+        int32_t age_ms = static_cast<int32_t>(current_time_ms - sensor.last_report_ms);
+        if (age_ms < 0) {
+            age_ms = 0;
+        }
+
+        // The sensor must still be reporting, and a few failed reads in a row only hold its
+        // last good value; the temperature must be valid (> 0°C)
         if (sensor.valid &&
-            (current_time_ms - sensor.last_update_ms) <= config_.sensor_timeout_ms &&
+            static_cast<uint32_t>(age_ms) <= config_.sensor_timeout_ms &&
+            sensor.failed_readings <= MAX_FAILED_READINGS &&
             sensor.temperature_c > 0.0f) {  // Reject 0°C or lower (catches NaN too)
             temp_sum += sensor.temperature_c;
-            valid_count++;
+            if (valid_count == 0 || sensor.temperature_c > max_temp) {
+                max_temp = sensor.temperature_c;
+            }
 
             // Track the newest sensor reading timestamp
-            if (sensor.last_update_ms > newest_sensor_time) {
+            if (valid_count == 0 ||
+                static_cast<int32_t>(sensor.last_update_ms - newest_sensor_time) > 0) {
                 newest_sensor_time = sensor.last_update_ms;
             }
+            valid_count++;
         } else {
             sensor.valid = false; // Mark as invalid if too old or invalid value
         }
@@ -180,6 +232,7 @@ float TemperatureControl::get_average_temperature(uint32_t current_time_ms) {
         LOG_WARN("No valid temperature sensors available");
         return status_.current_temp_c; // Return last known temperature
     }
+    status_.max_temp_c = max_temp;
 
     // We have at least one valid temperature - update tracking
     // Use the actual sensor reading time (newest sensor), not processing time
@@ -225,7 +278,7 @@ TemperatureControlCommand TemperatureControl::evaluate_safety_conditions(
         return command;
     }
     
-    if ((current_time_ms - last_valid_temp_ms) > 60000) {  // 60 seconds
+    if (static_cast<int32_t>(current_time_ms - last_valid_temp_ms) > 60000) {  // 60 seconds
         command.fan_enabled = true;
         command.fan_pwm_percent = 100.0f;
         command.emergency_state = false;
@@ -247,28 +300,30 @@ TemperatureControlCommand TemperatureControl::evaluate_emergency_state(uint32_t 
     
     if (!status_.hardware.thermal_emergency) {
         // Check for emergency condition
-        if (status_.current_temp_c >= config_.emergency_temp_c) {
-            if (emergency_triggered_ms_ == 0) {
+        // Judge the emergency on the hottest sensor, so one hot spot is not averaged away
+        if (status_.max_temp_c >= config_.emergency_temp_c) {
+            if (!emergency_countdown_active_) {
+                emergency_countdown_active_ = true;
                 emergency_triggered_ms_ = current_time_ms;
                 LOG_WARN("Temperature %.1f°C exceeds emergency threshold %.1f°C - starting countdown",
-                         status_.current_temp_c, config_.emergency_temp_c);
+                         status_.max_temp_c, config_.emergency_temp_c);
             } else if (current_time_ms - emergency_triggered_ms_ >= config_.emergency_delay_ms) {
                 should_trigger_emergency = true;
             }
         } else {
-            emergency_triggered_ms_ = 0; // Reset countdown if temperature drops
+            emergency_countdown_active_ = false; // Reset countdown if temperature drops
         }
     } else {
         // Check for recovery condition
-        if (status_.current_temp_c <= config_.recovery_temp_c) {
+        // Every working sensor must be at or below recovery, so losing the hottest
+        // one cannot clear the emergency while it is still hot
+        if (status_.max_temp_c <= config_.recovery_temp_c && status_.sensors_valid_count == status_.sensors_total_count) {
             should_clear_emergency = true;
         }
     }
     
     if (should_trigger_emergency) {
-        emergency_cooldown_ = true;
-        
-        LOG_ERROR("THERMAL EMERGENCY ACTIVATED - Temperature: %.1f°C", status_.current_temp_c);
+        LOG_ERROR("THERMAL EMERGENCY ACTIVATED - Temperature: %.1f°C", status_.max_temp_c);
         
         command.fan_enabled = true;
         command.fan_pwm_percent = 100.0f;
@@ -279,13 +334,14 @@ TemperatureControlCommand TemperatureControl::evaluate_emergency_state(uint32_t 
     }
     
     if (should_clear_emergency) {
-        emergency_cooldown_ = false;
-        emergency_triggered_ms_ = 0;
+        emergency_countdown_active_ = false;
         
-        LOG_INFO("Thermal emergency cleared - Temperature: %.1f°C", status_.current_temp_c);
+        LOG_INFO("Thermal emergency cleared - Temperature: %.1f°C", status_.max_temp_c);
         
-        // Reset PID controller
+        // Reset PID controller; the next compute uses the normal interval, not the
+        // time spent in emergency
         pid_controller_.reset();
+        pid_has_computed_ = false;
         
         command.fan_enabled = false;  // Let normal control take over
         command.fan_pwm_percent = 0.0f;
@@ -326,8 +382,9 @@ TemperatureControlCommand TemperatureControl::compute_fan_control(uint32_t curre
     last_fan_update_ms_ = current_time_ms;
 
     // Only compute PID when we have NEW temperature data
-    // This prevents feeding the same temperature to PID multiple times
-    bool have_new_temp_data = (last_valid_temp_ms_ > last_pid_compute_temp_ms_);
+    // This prevents feeding the same temperature to PID multiple times.
+    // Compare with != so the check keeps working when millis() wraps.
+    bool have_new_temp_data = !pid_has_computed_ || (last_valid_temp_ms_ != last_pid_compute_temp_ms_);
 
     if (!have_new_temp_data) {
         // No new temperature data - maintain current fan state without recomputing PID
@@ -340,7 +397,7 @@ TemperatureControlCommand TemperatureControl::compute_fan_control(uint32_t curre
     }
 
     // We have new temperature data - compute PID with proper time delta
-    uint32_t dt_ms = (last_pid_compute_temp_ms_ == 0) ?
+    uint32_t dt_ms = !pid_has_computed_ ?
         config_.fan_update_interval_ms :
         (last_valid_temp_ms_ - last_pid_compute_temp_ms_);
 
@@ -348,6 +405,7 @@ TemperatureControlCommand TemperatureControl::compute_fan_control(uint32_t curre
 
     // Update the timestamp of the temperature data we just used for PID
     last_pid_compute_temp_ms_ = last_valid_temp_ms_;
+    pid_has_computed_ = true;
 
     status_.pid_error = pid_controller_.get_error();
     status_.pid_output = pid_output;
@@ -457,57 +515,142 @@ std::string TemperatureControl::export_config_json() const {
     return json.str();
 }
 
-bool TemperatureControl::import_config_json(const std::string& json) {
-    // Simple JSON parsing - in production would use a proper JSON library
-        TemperatureControlConfig new_config = config_;
-        
-        // Parse each field using simple string searching
-        // Helper lambda to extract float value
-        auto extract_float = [&json](const std::string& key) -> float {
-            size_t key_pos = json.find("\"" + key + "\":");
-            if (key_pos == std::string::npos) return -1.0f;
-            
-            size_t value_start = json.find(":", key_pos) + 1;
-            size_t value_end = json.find_first_of(",}", value_start);
-            
-            std::string value_str = json.substr(value_start, value_end - value_start);
-            return std::stof(value_str);
-        };
-        
-        // Extract values
-        float val;
-        if ((val = extract_float("target_temp_c")) > 0) new_config.target_temp_c = val;
-        if ((val = extract_float("kp")) > 0) new_config.kp = val;
-        if ((val = extract_float("ki")) >= 0) new_config.ki = val;
-        if ((val = extract_float("kd")) >= 0) new_config.kd = val;
-        if ((val = extract_float("min_fan_pwm")) >= 0) new_config.min_fan_pwm = val;
-        if ((val = extract_float("max_fan_pwm")) > 0) new_config.max_fan_pwm = val;
-        if ((val = extract_float("emergency_temp_c")) > 0) new_config.emergency_temp_c = val;
-        if ((val = extract_float("recovery_temp_c")) > 0) new_config.recovery_temp_c = val;
-        
-        uint32_t ms_val;
-        if ((ms_val = static_cast<uint32_t>(extract_float("fan_update_interval_ms"))) > 0) {
-            new_config.fan_update_interval_ms = ms_val;
+static const uint32_t MIN_SENSOR_TIMEOUT_MS = 10000;
+
+bool TemperatureControl::validate_config(const TemperatureControlConfig& c, std::string* error) {
+    auto fail = [error](const char* message) {
+        if (error) *error = message;
+        return false;
+    };
+    // Ranges match the limits in the web UI
+    if (!(c.target_temp_c >= 20.0f && c.target_temp_c <= 70.0f)) return fail("target_temp_c must be 20-70");
+    if (!(c.emergency_temp_c >= 50.0f && c.emergency_temp_c <= 100.0f)) return fail("emergency_temp_c must be 50-100");
+    if (!(c.recovery_temp_c >= 40.0f && c.recovery_temp_c <= 90.0f)) return fail("recovery_temp_c must be 40-90");
+    if (!(c.kp >= 0.0f && c.kp <= 10.0f)) return fail("kp must be 0-10");
+    if (!(c.ki >= 0.0f && c.ki <= 1.0f)) return fail("ki must be 0-1");
+    if (!(c.kd >= 0.0f && c.kd <= 5.0f)) return fail("kd must be 0-5");
+    if (!(c.min_fan_pwm >= 0.0f && c.min_fan_pwm <= 100.0f)) return fail("min_fan_pwm must be 0-100");
+    if (!(c.max_fan_pwm > 0.0f && c.max_fan_pwm <= 100.0f)) return fail("max_fan_pwm must be above 0 and at most 100");
+    if (c.fan_update_interval_ms < 100 || c.fan_update_interval_ms > 10000) return fail("fan_update_interval_ms must be 100-10000");
+    if (c.emergency_delay_ms > 60000) return fail("emergency_delay_ms must be 0-60000");
+    // Readings are stamped when the sensor publishes (every 5 s for the DS18B20s), so a
+    // shorter timeout marks every sensor stale and the emergency check never runs
+    if (c.sensor_timeout_ms < MIN_SENSOR_TIMEOUT_MS || c.sensor_timeout_ms > 60000) return fail("sensor_timeout_ms must be 10000-60000");
+    if (!(c.temp_filter_alpha > 0.0f && c.temp_filter_alpha <= 1.0f)) return fail("temp_filter_alpha must be above 0 and at most 1");
+    if (c.min_fan_pwm > c.max_fan_pwm) return fail("min_fan_pwm must not exceed max_fan_pwm");
+    if (c.recovery_temp_c >= c.emergency_temp_c) return fail("recovery_temp_c must be below emergency_temp_c");
+    if (c.target_temp_c >= c.emergency_temp_c) return fail("target_temp_c must be below emergency_temp_c");
+    return true;
+}
+
+void TemperatureControl::repair_config(TemperatureControlConfig& c) {
+    auto fix = [](const char* name, float& value, float low, float high) {
+        float fixed = std::max(low, std::min(high, value));
+        if (fixed != value) {
+            LOG_WARN("Saved %s %.2f out of range, using %.2f", name, value, fixed);
+            value = fixed;
         }
-        if ((ms_val = static_cast<uint32_t>(extract_float("emergency_delay_ms"))) > 0) {
-            new_config.emergency_delay_ms = ms_val;
+    };
+    auto fix_ms = [](const char* name, uint32_t& value, uint32_t low, uint32_t high) {
+        uint32_t fixed = std::max(low, std::min(high, value));
+        if (fixed != value) {
+            LOG_WARN("Saved %s %u out of range, using %u", name, static_cast<unsigned>(value), static_cast<unsigned>(fixed));
+            value = fixed;
         }
-        if ((ms_val = static_cast<uint32_t>(extract_float("sensor_timeout_ms"))) > 0) {
-            new_config.sensor_timeout_ms = ms_val;
+    };
+    // Never raise the emergency or recovery temperature: lower is the safe side
+    fix("emergency_temp_c", c.emergency_temp_c, 0.0f, 100.0f);
+    fix("recovery_temp_c", c.recovery_temp_c, 0.0f, 90.0f);
+    fix("target_temp_c", c.target_temp_c, 0.0f, 70.0f);
+    if (c.recovery_temp_c >= c.emergency_temp_c) {
+        fix("recovery_temp_c", c.recovery_temp_c, 0.0f, c.emergency_temp_c - 5.0f);
+    }
+    if (c.target_temp_c >= c.emergency_temp_c) {
+        fix("target_temp_c", c.target_temp_c, 0.0f, c.emergency_temp_c - 5.0f);
+    }
+    fix("kp", c.kp, 0.0f, 10.0f);
+    fix("ki", c.ki, 0.0f, 1.0f);
+    fix("kd", c.kd, 0.0f, 5.0f);
+    fix("max_fan_pwm", c.max_fan_pwm, 1.0f, 100.0f);
+    fix("min_fan_pwm", c.min_fan_pwm, 0.0f, c.max_fan_pwm);
+    fix("temp_filter_alpha", c.temp_filter_alpha, 0.01f, 1.0f);
+    fix_ms("fan_update_interval_ms", c.fan_update_interval_ms, 100, 10000);
+    fix_ms("emergency_delay_ms", c.emergency_delay_ms, 0, 60000);
+    fix_ms("sensor_timeout_ms", c.sensor_timeout_ms, MIN_SENSOR_TIMEOUT_MS, 60000);
+}
+
+bool TemperatureControl::import_config_json(const std::string& json, std::string* error, bool repair) {
+    cJSON* root = cJSON_Parse(json.c_str());
+    if (root == nullptr || !cJSON_IsObject(root)) {
+        cJSON_Delete(root);
+        if (error) *error = "Invalid JSON";
+        LOG_WARN("Temperature control config rejected: invalid JSON");
+        return false;
+    }
+
+    TemperatureControlConfig new_config = config_;
+    std::string bad_field;
+
+    // Missing keys keep their current value; a present key must be a finite number
+    auto read_float = [&](const char* key, float& out) {
+        cJSON* item = cJSON_GetObjectItemCaseSensitive(root, key);
+        if (item == nullptr) return;
+        if (!cJSON_IsNumber(item) || !std::isfinite(item->valuedouble)) {
+            if (bad_field.empty()) bad_field = key;
+            return;
         }
-        
-        if ((val = extract_float("temp_filter_alpha")) > 0 && val <= 1.0f) {
-            new_config.temp_filter_alpha = val;
+        out = static_cast<float>(item->valuedouble);
+    };
+    auto read_ms = [&](const char* key, uint32_t& out) {
+        cJSON* item = cJSON_GetObjectItemCaseSensitive(root, key);
+        if (item == nullptr) return;
+        if (!cJSON_IsNumber(item) || !(item->valuedouble >= 0.0 && item->valuedouble <= 4294967295.0)) {
+            if (bad_field.empty()) bad_field = key;
+            return;
         }
-        
-        // Apply the new configuration
+        out = static_cast<uint32_t>(item->valuedouble);
+    };
+
+    read_float("target_temp_c", new_config.target_temp_c);
+    read_float("kp", new_config.kp);
+    read_float("ki", new_config.ki);
+    read_float("kd", new_config.kd);
+    read_float("min_fan_pwm", new_config.min_fan_pwm);
+    read_float("max_fan_pwm", new_config.max_fan_pwm);
+    read_float("emergency_temp_c", new_config.emergency_temp_c);
+    read_float("recovery_temp_c", new_config.recovery_temp_c);
+    read_float("temp_filter_alpha", new_config.temp_filter_alpha);
+    read_ms("fan_update_interval_ms", new_config.fan_update_interval_ms);
+    read_ms("emergency_delay_ms", new_config.emergency_delay_ms);
+    read_ms("sensor_timeout_ms", new_config.sensor_timeout_ms);
+    cJSON_Delete(root);
+
+    if (repair) {
+        // Fields that failed to parse kept their current values
+        if (!bad_field.empty()) {
+            LOG_WARN("Saved temperature setting %s is not a number, keeping current value", bad_field.c_str());
+        }
+        repair_config(new_config);
         set_config(new_config);
-        
-        LOG_INFO("Temperature control configuration imported successfully");
+        LOG_INFO("Temperature control configuration loaded");
         return true;
-        
-    
-    // If we get here, parsing succeeded
+    }
+
+    if (!bad_field.empty()) {
+        if (error) *error = bad_field + " must be a number";
+        LOG_WARN("Temperature control config rejected: %s is not a valid number", bad_field.c_str());
+        return false;
+    }
+
+    std::string validation_error;
+    if (!validate_config(new_config, &validation_error)) {
+        if (error) *error = validation_error;
+        LOG_WARN("Temperature control config rejected: %s", validation_error.c_str());
+        return false;
+    }
+
+    set_config(new_config);
+    LOG_INFO("Temperature control configuration imported successfully");
     return true;
 }
 

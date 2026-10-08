@@ -3,6 +3,12 @@ import react from '@vitejs/plugin-react';
 import viteCompression from 'vite-plugin-compression';
 import { visualizer } from 'rollup-plugin-visualizer';
 
+// The device rejects cross-site POSTs by comparing Origin with Host. The proxy
+// rewrites Host to the device, so drop the browser's localhost Origin.
+const dropOrigin = (proxy: any) => {
+  proxy.on('proxyReq', (proxyReq: any) => proxyReq.removeHeader('origin'));
+};
+
 export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
@@ -73,14 +79,17 @@ export default defineConfig(({ mode }) => ({
       '/api': {
         target: process.env.DEVICE_IP || 'http://192.168.1.100',
         changeOrigin: true,
+        configure: dropOrigin,
       },
       '/switch': {
         target: process.env.DEVICE_IP || 'http://192.168.1.100',
         changeOrigin: true,
+        configure: dropOrigin,
       },
       '/number': {
         target: process.env.DEVICE_IP || 'http://192.168.1.100',
         changeOrigin: true,
+        configure: dropOrigin,
       },
     },
   },
@@ -91,14 +100,17 @@ export default defineConfig(({ mode }) => ({
       '/api': {
         target: process.env.LEDBRICK_IP ? `http://${process.env.LEDBRICK_IP}` : 'http://192.168.1.196',
         changeOrigin: true,
+        configure: dropOrigin,
       },
       '/switch': {
         target: process.env.LEDBRICK_IP ? `http://${process.env.LEDBRICK_IP}` : 'http://192.168.1.196',
         changeOrigin: true,
+        configure: dropOrigin,
       },
       '/number': {
         target: process.env.LEDBRICK_IP ? `http://${process.env.LEDBRICK_IP}` : 'http://192.168.1.196',
         changeOrigin: true,
+        configure: dropOrigin,
       },
     },
   },

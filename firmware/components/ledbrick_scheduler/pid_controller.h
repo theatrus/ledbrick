@@ -68,6 +68,8 @@ private:
     float max_output_;
     
     bool first_run_;    // Flag for first computation
+
+    void clamp_integral();
 };
 
 } // namespace ledbrick

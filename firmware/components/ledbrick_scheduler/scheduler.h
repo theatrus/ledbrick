@@ -81,7 +81,7 @@ public:
     // Channel configuration
     struct ChannelConfig {
         std::string rgb_hex = "#FFFFFF";  // RGB color in hex format
-        float max_current = 2.0f;          // Maximum current in amps (0.1-2.0)
+        float max_current = 2.0f;          // Maximum current in amps (0-MAX_CHANNEL_CURRENT)
         std::string name;                  // Optional channel name
         
         ChannelConfig() = default;
@@ -154,7 +154,8 @@ public:
     bool is_schedule_empty() const { return schedule_points_.empty(); }
     
     // Preset management
-    void load_preset(const std::string& preset_name);
+    // Returns false, leaving the schedule unchanged, for an unknown preset
+    bool load_preset(const std::string& preset_name);
     void save_preset(const std::string& preset_name);
     std::vector<std::string> get_preset_names() const;
     void clear_preset(const std::string& preset_name);
@@ -163,9 +164,14 @@ public:
     SerializedData serialize() const;
     bool deserialize(const SerializedData& data);
     
+    // Highest per-channel current the hardware accepts, in amps
+    static constexpr float MAX_CHANNEL_CURRENT = 2.0f;
+
     // JSON export/import
     std::string export_json() const;
     std::string export_json_minified() const;  // Compact JSON without formatting
+    // Replaces the schedule, channel configs and moon settings. On failure nothing changes.
+    // PWM and current values are clamped to their valid ranges; bad times or types fail.
     bool import_json(const std::string& json_str);
     
     // Built-in preset (only one default)
@@ -198,6 +204,7 @@ private:
     void sort_schedule_points();
     void sort_schedule_points_with_astro(const AstronomicalTimes& astro_times);
     bool validate_point(const SchedulePoint& point) const;
+    bool import_json_into_(const std::string& json_str);
     std::vector<SchedulePoint> resolve_dynamic_points(const AstronomicalTimes& astro_times) const;
     
     // Serialization helpers

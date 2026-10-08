@@ -44,7 +44,7 @@ To build and test the LEDBrick firmware:
 
 7. Upload firmware to device:
    ```bash
-   uv run esphome run ledbrick-plus.yaml --device=COM3
+   uvx --from esphome==2026.9.1 esphome run ledbrick-plus.yaml --device=COM3
    # Replace COM3 with your actual device port
    ```
 
@@ -207,6 +207,7 @@ The project follows a clean separation between core algorithms and ESPHome integ
 - `POST /api/temperature/config` - Update temperature control settings
 - `GET /api/temperature/status` - Get temperature control status
 - `GET /api/temperature/fan-curve` - Get current fan curve points
+- `POST /api/temperature/reset-emergency` - Clear a latched thermal emergency (409 while a sensor is still hot)
 
 ## Hardware Integration
 
@@ -217,8 +218,9 @@ The project follows a clean separation between core algorithms and ESPHome integ
 - **Temperature**: DS18B20 sensors on 1-wire bus (GPIO41)
 
 ### Channel Configuration
-- **8 LED Channels**: PWM control with current limiting
-- **Current Control**: Analog outputs for constant current regulation
+- **8 LED Channels**: TPS922053 drivers. EN/PWM takes 1 kHz PWM dimming (LEDC)
+- **Current Control**: ADIM/HD takes a 10 kHz PWM (MCPWM). The driver reads its duty digitally: LED current = 2 A x duty, 8-bit up to 39 kHz
+- **Hybrid dimming hazard**: if ADIM stays low while EN/PWM pulses, the driver sets the current from the PWM duty alone, up to 2 A. `packages/channel.yaml` holds EN/PWM off while the channel current is below 50 mA
 - **Status LED**: WS2812 RGB LED for system status indication
 
 ## Common Issues and Solutions
@@ -235,8 +237,8 @@ The project follows a clean separation between core algorithms and ESPHome integ
 - **JSON parsing errors**: Check for extra quotes or malformed JSON in API responses
 - **Modal positioning**: Ensure proper z-index and DOM structure
 - **Refresh on control changes**: Remove unnecessary onUpdate() calls
-- **Temperature sensors not reading**: Check 1-wire bus connections and sensor IDs
-- **Emergency recovery bug**: Known issue - emergency_cooldown_ prevents recovery (line 186)
+- **Temperature sensors not reading**: Check 1-wire bus connections and sensor IDs. Some failed reads (scratch pad CRC errors) are normal on a noisy bus: a sensor that keeps reporting holds its last good value through 5 failed reads in a row, while one that stops reporting times out after `sensor_timeout_ms`
+- **Thermal emergency stays latched**: It starts on the hottest sensor and clears only when every sensor reads at or below `recovery_temp_c`; sensor loss and restarts keep it. "Temperature Control Enable" switches off fan control only, not thermal shutdown. "Reset Thermal Emergency" (HA button, UI banner, or `POST /api/temperature/reset-emergency`) clears a latch only while no working sensor reads above recovery, e.g. after a sensor failed
 - **Fan curve rapid refresh loop**: Fixed - API returns null when temperature control unavailable
 
 ### Debugging
@@ -253,6 +255,7 @@ The project follows a clean separation between core algorithms and ESPHome integ
 - Unit tests ensure correctness before ESPHome integration
 - Clean separation allows testing and development of algorithms independently
 - ESPHome component acts as a thin integration layer
+- Web server handlers run on the ESP-IDF httpd task. Any call into the scheduler or another component must go through `run_in_loop_()` or `respond_from_loop_()`, which run it on the main loop; capture by value, since a request that times out returns before the work runs
 - Both astronomical and scheduler components support serialization
 - Timezone handling is proper with PST/UTC conversion for accurate sun calculations
 - Singapore sunrise can be projected to appear at 10 AM Pacific time using time projection

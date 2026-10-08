@@ -289,6 +289,43 @@ void test_steady_state_error(TestRunner& runner) {
 }
 
 // Main test runner
+void test_negative_gain_windup(TestRunner& runner) {
+    runner.start_suite("Negative Gain Windup Tests");
+
+    // Reverse-acting loop as used for fan cooling: output rises when input > target
+    PIDController pid(-2.0f, -0.1f, 0.0f, 0.0f, 100.0f);
+    pid.set_target(45.0f);
+
+    // Hours below target must not build up integral that later holds the output at 0
+    for (int i = 0; i < 5760; i++) {
+        pid.compute(25.0f, 5000);
+    }
+    runner.assert_equals(0.0f, pid.get_integral(), 0.001f, "Integral clamped while output saturated at minimum");
+
+    float output = pid.compute(52.0f, 5000);
+    runner.assert_true(output > 0.0f, "Output responds as soon as input passes target");
+
+    // Long period above target: the I term stays within the output range
+    for (int i = 0; i < 5760; i++) {
+        pid.compute(80.0f, 5000);
+    }
+    runner.assert_equals(-1000.0f, pid.get_integral(), 0.001f, "Integral clamped while output saturated at maximum");
+}
+
+void test_nan_input(TestRunner& runner) {
+    runner.start_suite("NaN Input Tests");
+
+    PIDController pid(1.0f, 0.5f, 0.1f, 0.0f, 100.0f);
+    pid.set_target(50.0f);
+    float before = pid.compute(40.0f, 1000);
+    float integral_before = pid.get_integral();
+
+    float after = pid.compute(std::nanf(""), 1000);
+    runner.assert_equals(before, after, 0.001f, "NaN input returns previous output");
+    runner.assert_equals(integral_before, pid.get_integral(), 0.001f, "NaN input leaves integral unchanged");
+    runner.assert_true(std::isfinite(pid.compute(40.0f, 1000)), "Next valid input gives finite output");
+}
+
 int main() {
     TestResults results;
     TestRunner runner;
@@ -332,6 +369,12 @@ int main() {
     results.add_suite_results(runner);
     
     test_steady_state_error(runner);
+    results.add_suite_results(runner);
+
+    test_negative_gain_windup(runner);
+    results.add_suite_results(runner);
+
+    test_nan_input(runner);
     results.add_suite_results(runner);
     
     results.print_final_summary("PID Controller");

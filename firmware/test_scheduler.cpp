@@ -67,6 +67,21 @@ void test_presets(TestRunner& runner) {
     auto preset_names = scheduler.get_preset_names();
     runner.assert_equals(1, static_cast<int>(preset_names.size()), "Only one preset available");
     runner.assert_true(preset_names[0] == "default", "Default preset name returned");
+
+    // An unknown preset is reported and leaves the schedule alone
+    size_t loaded_size = scheduler.get_schedule_size();
+    runner.assert_true(scheduler.load_preset("default"), "Known preset reports success");
+    runner.assert_false(scheduler.load_preset("no_such_preset"), "Unknown preset reports failure");
+    runner.assert_equals(static_cast<int>(loaded_size), static_cast<int>(scheduler.get_schedule_size()),
+                         "Unknown preset leaves schedule unchanged");
+
+    // A preset kept with save_preset loads back
+    scheduler.clear_schedule();
+    scheduler.add_schedule_point(LEDScheduler::SchedulePoint(600, {10.0f, 20.0f, 30.0f, 40.0f}, {0.5f, 0.5f, 0.5f, 0.5f}));
+    scheduler.save_preset("mine");
+    scheduler.load_preset("default");
+    runner.assert_true(scheduler.load_preset("mine"), "Saved preset loads");
+    runner.assert_equals(1, static_cast<int>(scheduler.get_schedule_size()), "Saved preset restores its points");
 }
 
 void test_serialization(TestRunner& runner) {
@@ -109,7 +124,8 @@ void test_json_export(TestRunner& runner) {
     runner.assert_true(json.find("\"num_channels\":") != std::string::npos && json.find("2") != std::string::npos, "JSON contains channel count");
     runner.assert_true(json.find("\"time_minutes\":") != std::string::npos && json.find("720") != std::string::npos, "JSON contains time");
     runner.assert_true(json.find("75") != std::string::npos, "JSON contains PWM value");
-    runner.assert_true(json.find("1.70") != std::string::npos, "JSON contains current value");
+    runner.assert_true(json.find("1.7") != std::string::npos, "JSON contains current value");
+    runner.assert_true(json.find("1.7000000476837158") == std::string::npos, "JSON numbers are rounded");
     
     std::cout << "Sample JSON export:\n" << json.substr(0, 200) << "..." << std::endl;
 }
@@ -175,6 +191,7 @@ void test_json_import(TestRunner& runner) {
     
     // Test 3: Import empty schedule
     scheduler.set_schedule_point(720, {50.0f, 50.0f}, {1.0f, 1.0f}); // Add a point first
+    size_t size_before_empty_import = scheduler.get_schedule_size();
     std::string json_empty = R"({
         "num_channels": 2,
         "schedule_points": []
@@ -182,7 +199,8 @@ void test_json_import(TestRunner& runner) {
     
     success = scheduler.import_json(json_empty);
     runner.assert_false(success, "Import empty schedule returns false");
-    runner.assert_equals(0, static_cast<int>(scheduler.get_schedule_size()), "Schedule cleared on failed import");
+    runner.assert_equals(static_cast<int>(size_before_empty_import), static_cast<int>(scheduler.get_schedule_size()),
+                         "Schedule unchanged on failed import");
     
     // Test 4: Import invalid JSON
     std::string json_invalid = "{ invalid json ]";
@@ -842,6 +860,137 @@ void test_moon_simulation(TestRunner& runner) {
                         "Below threshold Ch4 - no moon added (expected: 0.0, actual: " + std::to_string(threshold_result.pwm_values[3]) + ")");
 }
 
+void test_json_import_validation(TestRunner& runner) {
+    runner.start_suite("JSON Import Validation Tests");
+
+    // Out-of-range values are clamped instead of dropped or accepted as-is
+    LEDScheduler scheduler(2);
+    std::string json_out_of_range = R"({
+        "num_channels": 2,
+        "channel_configs": [
+            {"rgb_hex": "#FFFFFF", "max_current": 50.0, "name": "A"},
+            {"rgb_hex": "#0000FF", "max_current": 1.0, "name": "B"}
+        ],
+        "schedule_points": [
+            {"time_type": "fixed", "time_minutes": 600,
+             "pwm_values": [500.0, -5.0], "current_values": [-3.0, 1.5]},
+            {"time_type": "sunrise_relative", "offset_minutes": 0, "time_minutes": 0,
+             "pwm_values": [150.0, 20.0], "current_values": [9.0, 0.5]}
+        ],
+        "moon_simulation": {"enabled": true, "min_current_threshold": 7.0,
+                            "base_intensity": [300.0, 5.0], "base_current": [4.0, -1.0]}
+    })";
+    runner.assert_true(scheduler.import_json(json_out_of_range), "Out-of-range import accepted");
+    runner.assert_equals(LEDScheduler::MAX_CHANNEL_CURRENT, scheduler.get_channel_max_current(0), 0.001f,
+                         "Channel max current clamped to hardware limit");
+    auto points = scheduler.get_schedule_points();
+    runner.assert_equals(2, static_cast<int>(points.size()), "Both points kept");
+    for (const auto& point : points) {
+        bool in_range = true;
+        for (float pwm : point.pwm_values) in_range = in_range && pwm >= 0.0f && pwm <= 100.0f;
+        for (size_t i = 0; i < point.current_values.size(); i++) {
+            in_range = in_range && point.current_values[i] >= 0.0f &&
+                       point.current_values[i] <= scheduler.get_channel_max_current(i);
+        }
+        runner.assert_true(in_range, "Point values clamped");
+    }
+    auto moon = scheduler.get_moon_simulation();
+    runner.assert_equals(100.0f, moon.base_intensity[0], 0.001f, "Moon intensity clamped");
+    runner.assert_equals(0.0f, moon.base_current[1], 0.001f, "Negative moon current clamped");
+    runner.assert_equals(LEDScheduler::MAX_CHANNEL_CURRENT, moon.min_current_threshold, 0.001f,
+                         "Moon threshold clamped");
+
+    // Current above a lowered channel limit keeps the point (it used to be dropped)
+    LEDScheduler lowered(1);
+    std::string json_lowered = R"({
+        "num_channels": 1,
+        "channel_configs": [{"rgb_hex": "#FFFFFF", "max_current": 0.5}],
+        "schedule_points": [{"time_type": "fixed", "time_minutes": 60,
+                             "pwm_values": [50.0], "current_values": [1.5]}]
+    })";
+    runner.assert_true(lowered.import_json(json_lowered), "Import with current above channel limit accepted");
+    runner.assert_equals(1, static_cast<int>(lowered.get_schedule_size()), "Point kept");
+    runner.assert_equals(0.5f, lowered.get_schedule_points()[0].current_values[0], 0.001f, "Current clamped to limit");
+
+    // Structural errors fail the whole import and change nothing
+    LEDScheduler unchanged(2);
+    unchanged.set_schedule_point(480, {10.0f, 20.0f}, {0.5f, 0.5f});
+    unchanged.set_channel_max_current(0, 1.25f);
+    const char* bad_imports[] = {
+        R"({"num_channels": 2, "schedule_points": [{"time_type": "fixed", "time_minutes": 5000,
+            "pwm_values": [1, 1], "current_values": [1, 1]}]})",
+        R"({"num_channels": 2, "schedule_points": [{"time_type": "moonrise_ish", "offset_minutes": 0,
+            "pwm_values": [1, 1], "current_values": [1, 1]}]})",
+        R"({"num_channels": 2, "schedule_points": [{"time_type": "sunset_relative", "offset_minutes": 9999,
+            "pwm_values": [1, 1], "current_values": [1, 1]}]})",
+        R"({"num_channels": 99, "schedule_points": []})",
+        R"([1, 2, 3])",
+    };
+    for (const char* bad : bad_imports) {
+        runner.assert_false(unchanged.import_json(bad), "Bad import rejected");
+    }
+    runner.assert_equals(1, static_cast<int>(unchanged.get_schedule_size()), "Schedule unchanged after bad imports");
+    runner.assert_equals(2, static_cast<int>(unchanged.get_num_channels()), "Channel count unchanged after bad imports");
+    runner.assert_equals(1.25f, unchanged.get_channel_max_current(0), 0.001f, "Channel config unchanged after bad imports");
+}
+
+void test_exact_point_time(TestRunner& runner) {
+    runner.start_suite("Exact Point Time Tests");
+
+    // On a point's exact minute the result must still get the current clamp and moonlight
+    LEDScheduler scheduler(2);
+    scheduler.set_schedule_point(600, {0.0f, 0.0f}, {2.0f, 2.0f});
+    scheduler.set_schedule_point(700, {0.0f, 0.0f}, {2.0f, 2.0f});
+    scheduler.set_channel_max_current(0, 0.5f);
+
+    LEDScheduler::MoonSimulation moon;
+    moon.enabled = true;
+    moon.phase_scaling_pwm = false;
+    moon.phase_scaling_current = false;
+    moon.base_intensity = {5.0f, 5.0f};
+    moon.base_current = {0.1f, 0.1f};
+    scheduler.set_moon_simulation(moon);
+
+    LEDScheduler::AstronomicalTimes astro;
+    astro.moonrise_minutes = 1;
+    astro.moonset_minutes = 1438;
+    astro.moon_phase = 0.5f;
+    astro.valid = true;
+    scheduler.set_astronomical_times(astro);
+
+    auto before = scheduler.get_values_at_time_with_astro(599, astro);
+    auto exact = scheduler.get_values_at_time_with_astro(600, astro);
+    auto after = scheduler.get_values_at_time_with_astro(601, astro);
+    runner.assert_true(before.pwm_values[0] > 0.0f, "Moonlight on before the point");
+    runner.assert_equals(before.pwm_values[0], exact.pwm_values[0], 0.001f, "Moonlight unchanged on the point's minute");
+    runner.assert_equals(after.pwm_values[0], exact.pwm_values[0], 0.001f, "Moonlight unchanged after the point");
+
+    // Without moonlight, the exact minute is still limited to the channel maximum
+    scheduler.enable_moon_simulation(false);
+    auto clamped = scheduler.get_values_at_time_with_astro(600, astro);
+    runner.assert_equals(0.5f, clamped.current_values[0], 0.001f, "Current clamped on the point's minute");
+}
+
+void test_json_export_size(TestRunner& runner) {
+    runner.start_suite("JSON Export Size Tests");
+
+    // The firmware stores the minified export in an 8 KB flash slot
+    LEDScheduler scheduler(8);
+    for (int p = 0; p < 30; p++) {
+        std::vector<float> pwm, current;
+        for (int c = 0; c < 8; c++) {
+            pwm.push_back(0.65f * static_cast<float>(p + c + 1));
+            current.push_back(0.137f * static_cast<float>((p + c) % 14));
+        }
+        scheduler.set_schedule_point(static_cast<uint16_t>(p * 45), pwm, current);
+    }
+    runner.assert_true(scheduler.export_json_minified().size() < 7000, "30 eight-channel points fit in under 7000 bytes");
+
+    LEDScheduler round_trip(8);
+    runner.assert_true(round_trip.import_json(scheduler.export_json_minified()), "Minified export imports");
+    runner.assert_equals(30, static_cast<int>(round_trip.get_schedule_size()), "All points survive the round trip");
+}
+
 int main() {
     TestResults results;
     TestRunner runner;
@@ -864,6 +1013,15 @@ int main() {
     results.add_suite_results(runner);
     
     test_json_import(runner);
+    results.add_suite_results(runner);
+
+    test_json_import_validation(runner);
+    results.add_suite_results(runner);
+
+    test_json_export_size(runner);
+    results.add_suite_results(runner);
+
+    test_exact_point_time(runner);
     results.add_suite_results(runner);
     
     test_edge_cases(runner);

@@ -17,6 +17,10 @@ ledbrick_web_server:
   # Optional authentication - uncomment to enable
   # username: admin
   # password: !secret web_password
+  # The server answers to its IP address, <name> and <name>.local. Add any other
+  # DNS name or reverse proxy you use to reach it; other host names get 403.
+  # allowed_hosts:
+  #   - ledbrick.home.lan
   # Wire INA228 sensors if available
   voltage_sensor_id: ina228_bus_voltage
   current_sensor_id: ina228_current

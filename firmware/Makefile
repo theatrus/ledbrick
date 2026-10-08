@@ -1,6 +1,10 @@
 # LEDBrick Firmware Test Suite
 # Builds and runs unit tests for standalone components
 
+# ESPHome release the firmware is built against (keep in sync with CI and min_version)
+ESPHOME_VERSION := 2026.9.1
+ESPHOME := uvx --from esphome==$(ESPHOME_VERSION) esphome
+
 # Compiler settings
 CXX := g++
 CXXFLAGS := -std=c++11 -Wall -Wextra -O2
@@ -114,12 +118,12 @@ test-verbose: $(ALL_TESTS)
 # ESPHome compilation (depends on web build)
 esphome: web
 	@echo "🏗️  Compiling ESPHome firmware..."
-	uv run esphome compile ledbrick-plus.yaml
+	$(ESPHOME) compile ledbrick-plus.yaml
 
 # ESPHome compilation with non-minified web UI (for debugging)
 esphome-debug: web-debug
 	@echo "🐛 Compiling ESPHome firmware (with non-minified web UI)..."
-	uv run esphome compile ledbrick-plus.yaml
+	$(ESPHOME) compile ledbrick-plus.yaml
 
 # Build React web UI
 web:

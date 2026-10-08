@@ -64,7 +64,7 @@ jobs:
       id: esphome-build
       with:
         yaml-file: firmware/ledbrick-plus.yaml
-        version: 'latest'
+        version: '2026.9.1'
       env:
         # Mock secrets for compilation - valid format required for build
         SECRETS_api_encryption_key: "0InzFsPpuTBIm6B6HVhVupBRBwBTY2oT3fRnc3JATdM="

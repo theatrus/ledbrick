@@ -8,7 +8,9 @@
 #ifdef USE_ESP_IDF
 #include <esp_http_server.h>
 #include "esphome/components/json/json_util.h"
+#include <functional>
 #include <map>
+#include <memory>
 #include <string>
 
 namespace esphome {
@@ -24,7 +26,10 @@ class LEDBrickWebServer : public Component {
   float get_setup_priority() const override { return setup_priority::WIFI; }
   
   void set_port(uint16_t port) { this->port_ = port; }
+  void set_max_open_sockets(uint8_t max_open_sockets) { this->max_open_sockets_ = max_open_sockets; }
   void set_username(const std::string &username) { this->username_ = username; }
+  // Extra host names the server answers to, besides IP addresses, <name> and <name>.local
+  void add_allowed_host(const std::string &host);
   void set_password(const std::string &password) { this->password_ = password; }
   
   // Sensor setters for INA280
@@ -44,8 +49,10 @@ class LEDBrickWebServer : public Component {
   ledbrick_scheduler::LEDBrickScheduler *scheduler_;
   httpd_handle_t server_{nullptr};
   uint16_t port_{80};
+  uint8_t max_open_sockets_{5};
   std::string username_;
   std::string password_;
+  std::vector<std::string> allowed_hosts_;  // Lower case
   
   // Request handlers
   static esp_err_t handle_index(httpd_req_t *req);
@@ -75,12 +82,22 @@ class LEDBrickWebServer : public Component {
   static esp_err_t handle_api_temperature_config_post(httpd_req_t *req);
   static esp_err_t handle_api_temperature_status_get(httpd_req_t *req);
   static esp_err_t handle_api_fan_curve_get(httpd_req_t *req);
+  static esp_err_t handle_api_temperature_reset_emergency(httpd_req_t *req);
   static esp_err_t handle_not_found(httpd_req_t *req);
   
   // Helper methods
   static LEDBrickWebServer *get_instance(httpd_req_t *req);
   static std::unique_ptr<char[]> read_request_body(httpd_req_t *req);
+  // Checks credentials when configured, and rejects cross-site POSTs
   bool check_auth(httpd_req_t *req);
+  bool host_allowed_(httpd_req_t *req);
+  bool origin_allowed_(httpd_req_t *req);
+  void send_unauthorized_(httpd_req_t *req);
+  // Handlers run on the httpd task. Anything that touches the scheduler or other
+  // components goes through these, which run it on the main loop and wait for it.
+  bool run_in_loop_(std::function<void()> &&work);
+  esp_err_t respond_from_loop_(httpd_req_t *req, std::function<int(JsonDocument &)> &&build);
+  static const char *status_line_(int status);
   void send_json_response(httpd_req_t *req, int status, const JsonDocument &doc);
   void send_error(httpd_req_t *req, int status, const std::string &message);
   void send_compressed_content(httpd_req_t *req, const uint8_t *compressed_data, 

@@ -13,7 +13,9 @@ struct TemperatureSensor {
     std::string name;
     float temperature_c;
     bool valid;
-    uint32_t last_update_ms;
+    uint32_t last_update_ms;      // Last good reading
+    uint32_t last_report_ms;      // Last reading of any kind, good or failed
+    uint32_t failed_readings;     // Failed readings in a row since the last good one
 };
 
 // Using standalone PIDController from pid_controller.h
@@ -62,7 +64,8 @@ struct TemperatureHardwareState {
 // Temperature control status for monitoring (combines controller state + hardware state)
 struct TemperatureControlStatus {
     bool enabled = false;
-    float current_temp_c = 0.0f;
+    float current_temp_c = 0.0f;   // Filtered average of valid sensors (drives the fan)
+    float max_temp_c = 0.0f;       // Hottest valid sensor (drives the thermal emergency)
     float target_temp_c = 0.0f;
     float pid_error = 0.0f;
     float pid_output = 0.0f;
@@ -86,6 +89,11 @@ public:
     // Sensor management
     void add_temperature_sensor(const std::string& name);
     void update_temperature_sensor(const std::string& name, float temp_c, uint32_t timestamp_ms);
+    // A read that failed (CRC error, NaN, out of range). 1-Wire buses are noisy, so a sensor
+    // that keeps reporting holds its last good reading through MAX_FAILED_READINGS of these
+    // in a row; a sensor that stops reporting still times out after sensor_timeout_ms.
+    void report_failed_reading(const std::string& name, uint32_t timestamp_ms);
+    static constexpr uint32_t MAX_FAILED_READINGS = 5;  // 25 s at the DS18B20's 5 s interval
     std::vector<TemperatureSensor> get_sensors() const;
     
     // Fan control callbacks
@@ -102,6 +110,10 @@ public:
     
     // Hardware state management (called by outer layer)
     void update_hardware_state(const TemperatureHardwareState& hardware_state);
+    
+    // Whether a latched emergency may be cleared by hand: only when no working
+    // sensor reads above the recovery temperature
+    bool emergency_reset_allowed() const;
     
     // Safety evaluation (testable, independent function)
     static TemperatureControlCommand evaluate_safety_conditions(
@@ -123,7 +135,13 @@ public:
     
     // Configuration serialization
     std::string export_config_json() const;
-    bool import_config_json(const std::string& json);
+    // Fields missing from the JSON keep their current values. Returns false, and changes
+    // nothing, when a field has the wrong type, is out of range, or the result is inconsistent.
+    // With repair (for settings saved by older firmware), bad fields are skipped and values
+    // are moved into range on the safe side instead; only invalid JSON fails.
+    bool import_config_json(const std::string& json, std::string* error = nullptr, bool repair = false);
+    static bool validate_config(const TemperatureControlConfig& config, std::string* error = nullptr);
+    static void repair_config(TemperatureControlConfig& config);
     
     // Fan curve data for visualization
     struct FanCurvePoint {
@@ -138,15 +156,16 @@ private:
     PIDController pid_controller_;
     
     // Internal controller state (not hardware state)
-    bool emergency_cooldown_;
+    bool emergency_countdown_active_;
     uint32_t emergency_triggered_ms_;
-    
+
     std::vector<TemperatureSensor> sensors_;
-    
+
     uint32_t last_update_ms_;
     uint32_t last_fan_update_ms_;
     uint32_t last_valid_temp_ms_;
     uint32_t last_pid_compute_temp_ms_;  // Timestamp of temp data used for last PID compute
+    bool pid_has_computed_;              // last_pid_compute_temp_ms_ is set
 
     float filtered_temperature_;
     bool ever_had_valid_temp_;

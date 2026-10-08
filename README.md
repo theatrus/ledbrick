@@ -31,7 +31,7 @@ The **LEDBrick Plus** is a modern, high-performance 8-channel LED driver designe
 - **High Current Capability**: Up to 2A per channel (scalable design)
 - **Wide Voltage Range**: Supports up to 60V input
 - **ESP32-S3 Microcontroller**: Dual-core with Wi-Fi connectivity
-- **Advanced PWM**: 39kHz flicker-free operation (17 total PWM channels)
+- **Two dimming controls per channel**: 1 kHz PWM dimming plus a 10 kHz current setpoint (17 PWM outputs including the fan)
 - **Precision Current Control**: TPS922053 LED driver chips with 0-2A regulation
 - **Environmental Monitoring**: INA228 power monitoring, I2C temperature sensors
 - **Fan Control**: 4-wire fan control with RPM monitoring
@@ -115,7 +115,7 @@ The LEDBrick Plus includes a professional web interface for complete control and
 
 **Microcontroller**: ESP32-S3 (Dual-core, 240MHz, Wi-Fi)
 **LED Drivers**: 8× TPS922053 constant current drivers
-**PWM Frequency**: 39kHz (MCPWM) + 16kHz (LEDC)
+**PWM Frequency**: 1 kHz LED dimming (LEDC), 10 kHz current setpoint (MCPWM), 16 kHz fan (MCPWM)
 **Current Range**: 0-2A per channel (1A default limit)
 **Input Voltage**: 12-60V DC
 **Communication**: Wi-Fi, USB-C, I2C expansion
