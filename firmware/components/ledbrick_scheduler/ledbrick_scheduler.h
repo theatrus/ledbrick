@@ -164,6 +164,18 @@ class LEDBrickScheduler : public PollingComponent {
   
   // Manual channel control (only works when scheduler is disabled and there is no thermal emergency)
   bool set_channel_manual_control(uint8_t channel, float pwm, float current);
+  // Manual control of a curve-mode channel by level (0-1), through its LED curves
+  bool set_channel_manual_level(uint8_t channel, float level);
+
+  // Dimming (led_dimming.h). Changing the mode converts the channel's schedule; the caller saves.
+  bool set_channel_dimming(uint8_t channel, ledbrick::DimMode mode, ledbrick::DimPriority priority,
+                           float floor_current, const std::vector<ledbrick::LedGroup> &leds, std::string *error);
+  bool is_curve_channel(uint8_t channel) const { return scheduler_.is_curve_channel(channel); }
+  // Level (0-1) a curve-mode channel was last driven at; negative for manual channels
+  float get_channel_level(uint8_t channel) const;
+  // Temperature used for the LED curves: the board sensors' filtered average, or the
+  // 25 C reference (no compensation) without a working sensor
+  float get_led_temperature_c() const;
   
   // Update timezone offset from time source
   void update_timezone_from_time_source();
@@ -298,6 +310,7 @@ class LEDBrickScheduler : public PollingComponent {
   uint32_t last_discovery_check_ms_{0};
   std::vector<float> last_pwm_values_;
   std::vector<float> last_current_values_;
+  std::vector<float> last_levels_;  // curve channels: level last driven (0-1); -1 for manual
   std::map<uint8_t, std::string> last_colors_;
   
   // Internal methods

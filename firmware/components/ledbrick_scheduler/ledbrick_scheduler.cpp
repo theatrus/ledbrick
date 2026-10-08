@@ -383,6 +383,57 @@ InterpolationResult LEDBrickScheduler::get_current_values() const {
   return scheduler_.get_values_at_seconds_with_astro(get_current_time_seconds(), scheduler_.get_astronomical_times());
 }
 
+float LEDBrickScheduler::get_led_temperature_c() const {
+  // The emitter's sensors sit on the board near the LEDs' pads. Without a working one,
+  // use the reference temperature, which leaves the output uncompensated.
+  const auto &status = temp_control_.get_status();
+  if (status.sensors_valid_count > 0 && std::isfinite(status.current_temp_c) && status.current_temp_c > 0.0f) {
+    return status.current_temp_c;
+  }
+  return 25.0f;
+}
+
+float LEDBrickScheduler::get_channel_level(uint8_t channel) const {
+  if (!scheduler_.is_curve_channel(channel) || channel >= last_levels_.size()) {
+    return -1.0f;
+  }
+  return last_levels_[channel];
+}
+
+bool LEDBrickScheduler::set_channel_dimming(uint8_t channel, ledbrick::DimMode mode, ledbrick::DimPriority priority,
+                                            float floor_current, const std::vector<ledbrick::LedGroup> &leds,
+                                            std::string *error) {
+  if (!scheduler_.set_channel_dimming(channel, mode, priority, floor_current, leds, error)) {
+    return false;
+  }
+  ESP_LOGI(TAG, "Channel %u dimming: %s, %s first, floor %.3f A, %s LEDs", channel + 1,
+           mode == ledbrick::DimMode::CURVE ? "curve" : "manual",
+           priority == ledbrick::DimPriority::PWM_FIRST ? "PWM" : "current", floor_current,
+           leds.empty() ? "default" : "custom");
+  // Drive the channel the new way at the next update, without a transition
+  force_next_update_ = true;
+  return true;
+}
+
+bool LEDBrickScheduler::set_channel_manual_level(uint8_t channel, float level) {
+  if (!scheduler_.is_curve_channel(channel)) {
+    ESP_LOGW(TAG, "Manual level rejected - channel %u is not in curve mode", channel);
+    return false;
+  }
+  level = std::max(0.0f, std::min(level, 1.0f));
+  ledbrick::DriveLimits limits;
+  limits.max_current_a = scheduler_.get_channel_max_current(channel);
+  ledbrick::Drive drive = scheduler_.channel_dimmer(channel).drive_for_level(level, limits, get_led_temperature_c());
+  if (!set_channel_manual_control(channel, drive.pwm * 100.0f, drive.current_a)) {
+    return false;
+  }
+  if (last_levels_.size() != num_channels_) {
+    last_levels_.assign(num_channels_, -1.0f);
+  }
+  last_levels_[channel] = level;
+  return true;
+}
+
 InterpolationResult LEDBrickScheduler::get_actual_channel_values() const {
   InterpolationResult result;
   result.pwm_values.resize(num_channels_, 0.0f);
@@ -471,26 +522,52 @@ void LEDBrickScheduler::apply_values(const InterpolationResult &values) {
            num_channels_, values.pwm_values.size(), 
            values.pwm_values.empty() ? 0.0f : values.pwm_values[0]);
   
+  const float led_temp = get_led_temperature_c();
   for (uint8_t channel = 0; channel < num_channels_; channel++) {
     if (channel >= values.pwm_values.size() || channel >= values.current_values.size()) {
       ESP_LOGW(TAG, "Schedule has %zu channels, expected %u", values.pwm_values.size(), num_channels_);
       break;
     }
 
-    // Apply current control with limiting
-    // We need to do this before applying PWM to ensure LED controller enters the right state
     auto current_it = current_controls_.find(channel);
     auto max_current_it = max_current_controls_.find(channel);
-    
-    if (current_it != current_controls_.end() && current_it->second) {
-      float target_current = values.current_values[channel];
-      
-      // Apply maximum current limiting
-      if (max_current_it != max_current_controls_.end() && max_current_it->second) {
-        float max_current = max_current_it->second->state;
-        target_current = std::min(target_current, max_current);
+    float max_current = scheduler_.get_channel_max_current(channel);
+    if (max_current_it != max_current_controls_.end() && max_current_it->second) {
+      max_current = max_current_it->second->state;
+    }
+
+    // Manual channels: the schedule sets the PWM and current. Curve channels: it sets a
+    // level, and the channel's LED curves give the current and PWM for it at the LEDs'
+    // temperature.
+    float target_current;
+    float brightness;
+    uint32_t transition_ms = force_next_update_ ? 0 : 1000;
+    const bool curve = scheduler_.is_curve_channel(channel);
+    if (curve) {
+      float level = std::max(0.0f, std::min(values.pwm_values[channel] * pwm_scale_ / 100.0f, 1.0f));
+      ledbrick::DriveLimits limits;
+      limits.max_current_a = max_current;
+      ledbrick::Drive drive = scheduler_.channel_dimmer(channel).drive_for_level(level, limits, led_temp);
+      target_current = drive.current_a;
+      brightness = drive.pwm;
+      if (last_levels_.size() != num_channels_) {
+        last_levels_.assign(num_channels_, -1.0f);
       }
-      
+      last_levels_[channel] = level;
+      // Current and PWM change together; a PWM transition would lag behind the current
+      transition_ms = 0;
+    } else {
+      target_current = std::min(values.current_values[channel], max_current);
+      brightness = values.pwm_values[channel] * pwm_scale_ / 100.0f;
+      if (channel < last_levels_.size()) {
+        last_levels_[channel] = -1.0f;
+      }
+    }
+
+    // Apply current control with limiting
+    // We need to do this before applying PWM to ensure LED controller enters the right state
+    if (current_it != current_controls_.end() && current_it->second) {
+
       // Always update regardless of whether value has changed
       // Set the current control value
       current_it->second->publish_state(target_current);
@@ -518,23 +595,24 @@ void LEDBrickScheduler::apply_values(const InterpolationResult &values) {
     // Apply PWM to light entity
     auto light_it = lights_.find(channel);
     if (light_it != lights_.end() && light_it->second) {
-      // Apply PWM scale factor before converting to 0-1 range
-      float scaled_pwm = values.pwm_values[channel] * pwm_scale_;
-      float brightness = scaled_pwm / 100.0f; // Convert percentage to 0-1
-      
+      float scaled_pwm = brightness * 100.0f;
+
       // Always update regardless of whether value has changed
-      ESP_LOGD(TAG, "Updating light %u: scaled_pwm=%.2f%%, brightness=%.3f (was %.3f)", 
-               channel, scaled_pwm, brightness, 
-               (last_pwm_values_.size() > channel) ? last_pwm_values_[channel] : -1.0f);
-      
-      // Create light call to set brightness
+      ESP_LOGD(TAG, "Updating light %u: scaled_pwm=%.2f%%, brightness=%.3f (was %.3f)%s",
+               channel, scaled_pwm, brightness,
+               (last_pwm_values_.size() > channel) ? last_pwm_values_[channel] : -1.0f,
+               curve ? " [curve]" : "");
+
+      // Create light call to set brightness. Curve channels dim below 0.1% with PWM, so
+      // any duty the dimmer gives turns them on.
+      bool on = curve ? brightness > 0.0f : brightness > 0.001f;
       auto call = light_it->second->make_call();
-      call.set_state(brightness > 0.001f); // Turn on if brightness > 0
-      if (brightness > 0.001f) {
+      call.set_state(on);
+      if (on) {
         call.set_brightness(brightness);
       }
-      // Use 1s transition when not forcing updates, 0 for forced updates
-      call.set_transition_length(force_next_update_ ? 0 : 1000);
+      // Manual channels ease over 1 s; curve channels and forced updates change at once
+      call.set_transition_length(transition_ms);
       call.perform();
       
       ESP_LOGV(TAG, "Light %u call performed", channel);
@@ -617,9 +695,9 @@ bool LEDBrickScheduler::save_schedule_to_flash() {
     flash_load_failed_ = false;  // The stored copy is valid again
     ESP_LOGD(TAG, "Saved schedule to flash (JSON format, %" PRIu32 " bytes)", storage->json_length);
     // ESPHome holds preference writes for up to a minute, so a power cut soon after a change
-    // lost it although the change had been reported saved. Write it out shortly after the
-    // last save; a burst of saves (one per channel, say) is written once.
-    this->set_timeout("flush_schedule", 1000, []() { global_preferences->sync(); });
+    // lost it although the change had been reported saved. Write it out a quarter second
+    // after the last save; a burst of saves (one per channel, say) is written once.
+    this->set_timeout("flush_schedule", 250, []() { global_preferences->sync(); });
   } else {
     ESP_LOGW(TAG, "Failed to save schedule to flash");
   }
