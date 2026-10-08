@@ -1373,6 +1373,7 @@ esp_err_t LEDBrickWebServer::handle_api_temperature_status_get(httpd_req_t *req)
     doc["thermal_emergency"] = status.hardware.thermal_emergency;
     doc["fan_enabled"] = status.hardware.fan_enabled;
     doc["current_temp_c"] = status.current_temp_c;
+    doc["max_temp_c"] = status.max_temp_c;
     doc["target_temp_c"] = status.target_temp_c;
     doc["fan_pwm_percent"] = status.hardware.fan_pwm_percent;
     doc["fan_rpm"] = status.hardware.fan_rpm;

@@ -29,6 +29,27 @@ void LEDBrickScheduler::setup() {
   
   // Initialize persistent storage
   schedule_pref_ = global_preferences->make_preference<ScheduleStorage>(SCHEDULE_HASH);
+  emergency_pref_ = global_preferences->make_preference<bool>(EMERGENCY_HASH);
+  
+  // Set up temperature hardware callbacks (moved from controller to hardware manager)
+  temp_hardware_.set_fan_pwm_callback([this](float pwm) { this->on_fan_pwm_change(pwm); });
+  temp_hardware_.set_fan_enable_callback([this](bool enabled) { this->on_fan_enable_change(enabled); });
+  temp_hardware_.set_emergency_callback([this](bool emergency) { this->on_emergency_change(emergency); });
+  
+  // A thermal emergency survives a restart: keep the LEDs off until a reading confirms recovery.
+  // Restore it before the schedule loads, so nothing turns the outputs on first.
+  bool saved_emergency = false;
+  if (emergency_pref_.load(&saved_emergency) && saved_emergency) {
+    ESP_LOGW(TAG, "Thermal emergency was active before restart; LEDs stay off until temperatures recover");
+    ledbrick::TemperatureControlCommand command;
+    command.fan_enabled = true;
+    command.fan_pwm_percent = 100.0f;
+    command.emergency_state = true;
+    command.override_normal_control = true;
+    command.reason = "Thermal emergency restored after restart";
+    temp_hardware_.apply_command(command, millis());
+    temp_control_.update_hardware_state(temp_hardware_.get_hardware_state());
+  }
   
   // Load schedule from flash storage (includes all settings in JSON)
   load_schedule_from_flash();
@@ -36,13 +57,10 @@ void LEDBrickScheduler::setup() {
   // Initialize temperature control
   temp_control_.set_config(temp_config_);
   
-  // Set up temperature hardware callbacks (moved from controller to hardware manager)
-  temp_hardware_.set_fan_pwm_callback([this](float pwm) { this->on_fan_pwm_change(pwm); });
-  temp_hardware_.set_fan_enable_callback([this](bool enabled) { this->on_fan_enable_change(enabled); });
-  temp_hardware_.set_emergency_callback([this](bool emergency) { this->on_emergency_change(emergency); });
-  
-  // Enable temperature control by default
-  temp_control_.enable(true);
+  // Enable temperature control unless the enable switch already restored a setting
+  if (!temp_control_enable_requested_) {
+    temp_control_.enable(true);
+  }
   temp_control_initialized_ = true;
   
   // Try to get initial timezone from time source
@@ -1515,6 +1533,11 @@ void LEDBrickScheduler::add_temperature_sensor(const std::string &name, sensor::
 }
 
 void LEDBrickScheduler::register_temperature_sensor_(const std::string &name, sensor::Sensor *sensor) {
+  for (const auto &existing : temp_sensors_) {
+    if (existing.sensor == sensor) {
+      return;  // Already registered; a second callback would double each reading
+    }
+  }
   temp_sensors_.push_back({name, sensor});
   temp_control_.add_temperature_sensor(name);
   
@@ -1536,6 +1559,7 @@ void LEDBrickScheduler::on_temperature_reading_(const std::string &name, float t
 }
 
 void LEDBrickScheduler::enable_temperature_control(bool enabled) {
+  temp_control_enable_requested_ = true;
   temp_control_.enable(enabled);
   ESP_LOGI(TAG, "Temperature control %s", enabled ? "enabled" : "disabled");
   
@@ -1750,6 +1774,28 @@ void LEDBrickScheduler::on_emergency_change(bool emergency) {
   if (thermal_emergency_sensor_) {
     thermal_emergency_sensor_->publish_state(emergency);
   }
+  
+  // Write the latch to flash now rather than at the next periodic sync, so a power
+  // cut straight after an emergency still comes back with the LEDs off
+  emergency_pref_.save(&emergency);
+  global_preferences->sync();
+}
+
+void LEDBrickScheduler::reset_thermal_emergency() {
+  if (!is_thermal_emergency()) {
+    return;
+  }
+  // For a latch that cannot clear itself, such as a failed sensor. If a working sensor is
+  // still over the limit, the emergency starts again after emergency_delay_ms.
+  ESP_LOGW(TAG, "Thermal emergency reset by user");
+  ledbrick::TemperatureControlCommand command;
+  command.fan_enabled = true;
+  command.fan_pwm_percent = 100.0f;
+  command.emergency_state = false;
+  command.override_normal_control = true;
+  command.reason = "Thermal emergency reset by user";
+  temp_hardware_.apply_command(command, millis());
+  temp_control_.update_hardware_state(temp_hardware_.get_hardware_state());
 }
 
 } // namespace ledbrick_scheduler

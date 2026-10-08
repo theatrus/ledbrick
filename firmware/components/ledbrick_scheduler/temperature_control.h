@@ -62,7 +62,8 @@ struct TemperatureHardwareState {
 // Temperature control status for monitoring (combines controller state + hardware state)
 struct TemperatureControlStatus {
     bool enabled = false;
-    float current_temp_c = 0.0f;
+    float current_temp_c = 0.0f;   // Filtered average of valid sensors (drives the fan)
+    float max_temp_c = 0.0f;       // Hottest valid sensor (drives the thermal emergency)
     float target_temp_c = 0.0f;
     float pid_error = 0.0f;
     float pid_output = 0.0f;

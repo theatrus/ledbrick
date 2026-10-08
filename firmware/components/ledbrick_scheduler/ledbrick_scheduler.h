@@ -107,6 +107,8 @@ class LEDBrickScheduler : public PollingComponent {
   
   // Thermal emergency control
   void set_thermal_emergency(bool emergency);
+  // Clears a latched emergency by hand, e.g. after a sensor failed during one
+  void reset_thermal_emergency();
   bool is_thermal_emergency() const { return temp_hardware_.get_hardware_state().thermal_emergency; }
   const ledbrick::TemperatureHardwareState& get_temperature_hardware_state() const { return temp_hardware_.get_hardware_state(); }
   void force_channel_output(uint8_t channel, float pwm, float current);
@@ -234,6 +236,9 @@ class LEDBrickScheduler : public PollingComponent {
   
   // Persistent storage
   ESPPreferenceObject schedule_pref_;
+  ESPPreferenceObject emergency_pref_;
+  static constexpr uint32_t EMERGENCY_HASH = 0x4C54454D;  // 'LTEM'
+  bool temp_control_enable_requested_{false};  // The enable switch restored a setting before setup()
   // Use more unique hash based on component name
   static constexpr uint32_t SCHEDULE_HASH = 0x4C454453;  // 'LEDS' in hex
   

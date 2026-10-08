@@ -362,6 +362,18 @@ sensor:
       return id(main_scheduler)->get_temperature_status().pid_output;
     update_interval: 5s
 
+button:
+  # Clears a latched thermal emergency by hand, e.g. after a sensor failed during one.
+  # If a working sensor is still over the limit, the emergency starts again.
+  - platform: template
+    name: "Reset Thermal Emergency"
+    id: reset_thermal_emergency_button
+    icon: "mdi:thermometer-alert"
+    entity_category: config
+    on_press:
+      - lambda: |-
+          id(main_scheduler)->reset_thermal_emergency();
+
 # Binary sensors for temperature control status
 binary_sensor:
   - platform: template

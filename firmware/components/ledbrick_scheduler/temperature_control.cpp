@@ -161,6 +161,7 @@ float TemperatureControl::get_average_temperature(uint32_t current_time_ms) {
     uint32_t valid_count = 0;
     uint32_t total_count = 0;
     uint32_t newest_sensor_time = 0;  // Track the most recent sensor reading time
+    float max_temp = 0.0f;
 
     for (auto& sensor : sensors_) {
         total_count++;
@@ -177,6 +178,9 @@ float TemperatureControl::get_average_temperature(uint32_t current_time_ms) {
             static_cast<uint32_t>(age_ms) <= config_.sensor_timeout_ms &&
             sensor.temperature_c > 0.0f) {  // Reject 0°C or lower (catches NaN too)
             temp_sum += sensor.temperature_c;
+            if (valid_count == 0 || sensor.temperature_c > max_temp) {
+                max_temp = sensor.temperature_c;
+            }
 
             // Track the newest sensor reading timestamp
             if (valid_count == 0 ||
@@ -196,6 +200,7 @@ float TemperatureControl::get_average_temperature(uint32_t current_time_ms) {
         LOG_WARN("No valid temperature sensors available");
         return status_.current_temp_c; // Return last known temperature
     }
+    status_.max_temp_c = max_temp;
 
     // We have at least one valid temperature - update tracking
     // Use the actual sensor reading time (newest sensor), not processing time
@@ -263,12 +268,13 @@ TemperatureControlCommand TemperatureControl::evaluate_emergency_state(uint32_t 
     
     if (!status_.hardware.thermal_emergency) {
         // Check for emergency condition
-        if (status_.current_temp_c >= config_.emergency_temp_c) {
+        // Judge the emergency on the hottest sensor, so one hot spot is not averaged away
+        if (status_.max_temp_c >= config_.emergency_temp_c) {
             if (!emergency_countdown_active_) {
                 emergency_countdown_active_ = true;
                 emergency_triggered_ms_ = current_time_ms;
                 LOG_WARN("Temperature %.1f°C exceeds emergency threshold %.1f°C - starting countdown",
-                         status_.current_temp_c, config_.emergency_temp_c);
+                         status_.max_temp_c, config_.emergency_temp_c);
             } else if (current_time_ms - emergency_triggered_ms_ >= config_.emergency_delay_ms) {
                 should_trigger_emergency = true;
             }
@@ -277,13 +283,15 @@ TemperatureControlCommand TemperatureControl::evaluate_emergency_state(uint32_t 
         }
     } else {
         // Check for recovery condition
-        if (status_.current_temp_c <= config_.recovery_temp_c) {
+        // Every working sensor must be at or below recovery, so losing the hottest
+        // one cannot clear the emergency while it is still hot
+        if (status_.max_temp_c <= config_.recovery_temp_c && status_.sensors_valid_count == status_.sensors_total_count) {
             should_clear_emergency = true;
         }
     }
     
     if (should_trigger_emergency) {
-        LOG_ERROR("THERMAL EMERGENCY ACTIVATED - Temperature: %.1f°C", status_.current_temp_c);
+        LOG_ERROR("THERMAL EMERGENCY ACTIVATED - Temperature: %.1f°C", status_.max_temp_c);
         
         command.fan_enabled = true;
         command.fan_pwm_percent = 100.0f;
@@ -296,7 +304,7 @@ TemperatureControlCommand TemperatureControl::evaluate_emergency_state(uint32_t 
     if (should_clear_emergency) {
         emergency_countdown_active_ = false;
         
-        LOG_INFO("Thermal emergency cleared - Temperature: %.1f°C", status_.current_temp_c);
+        LOG_INFO("Thermal emergency cleared - Temperature: %.1f°C", status_.max_temp_c);
         
         // Reset PID controller; the next compute uses the normal interval, not the
         // time spent in emergency

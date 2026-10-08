@@ -507,6 +507,35 @@ void test_fan_control_across_millis_wrap(TestRunner& runner) {
                        "Fan output follows temperature after wrap");
 }
 
+void test_emergency_uses_hottest_sensor(TestRunner& runner) {
+    runner.start_suite("Hottest Sensor Emergency Tests");
+
+    TemperatureControlTestHelper helper;
+    helper.controller.set_config(emergency_test_config());
+    helper.controller.enable(true);
+    helper.controller.add_temperature_sensor("cool");
+    helper.controller.add_temperature_sensor("hot");
+
+    // Average 62.5°C is below the 70°C trigger, but one sensor is above it
+    helper.controller.update_temperature_sensor("cool", 50.0f, 1000);
+    helper.controller.update_temperature_sensor("hot", 75.0f, 1000);
+    helper.update(1100);
+    helper.update(1101);
+    runner.assert_equals(75.0f, helper.get_status().max_temp_c, 0.001f, "Max temperature tracked");
+    runner.assert_true(helper.get_status().hardware.thermal_emergency, "Emergency triggered by hottest sensor");
+
+    // The hot sensor stops reporting; the cool one alone must not clear the emergency
+    helper.controller.update_temperature_sensor("cool", 60.0f, 15000);
+    helper.update(15100);
+    runner.assert_true(helper.get_status().hardware.thermal_emergency, "Emergency kept while hottest sensor is missing");
+
+    // Both sensors back and below recovery: cleared
+    helper.controller.update_temperature_sensor("cool", 60.0f, 16000);
+    helper.controller.update_temperature_sensor("hot", 64.0f, 16000);
+    helper.update(16100);
+    runner.assert_false(helper.get_status().hardware.thermal_emergency, "Emergency cleared when all sensors recover");
+}
+
 // Main test runner
 int main() {
     TestResults results;
@@ -551,6 +580,9 @@ int main() {
     results.add_suite_results(runner);
 
     test_fan_control_across_millis_wrap(runner);
+    results.add_suite_results(runner);
+
+    test_emergency_uses_hottest_sensor(runner);
     results.add_suite_results(runner);
     
     results.print_final_summary("Temperature Control");
