@@ -804,7 +804,22 @@ bool LEDBrickScheduler::import_schedule_json(const std::string &json_input, std:
   read_bool("astronomical_projection", new_projection, has_projection);
   read_number("latitude", -90.0, 90.0, new_lat, has_lat);
   read_number("longitude", -180.0, 180.0, new_lon, has_lon);
-  read_number("timezone_offset_hours", -14.0, 14.0, new_tz, has_tz);
+  // Older firmware exported negative offsets wrapped by a day (17 for UTC-7), so its exports
+  // were rejected here. The clock replaces this value once it is set, so unwrap it, and skip
+  // one that is still out of range, rather than reject the whole schedule
+  cJSON *tz_item = cJSON_GetObjectItemCaseSensitive(root, "timezone_offset_hours");
+  if (cJSON_IsNumber(tz_item)) {
+    double tz = tz_item->valuedouble;
+    if (tz > 14.0 && tz < 24.0) tz -= 24.0;
+    if (tz >= -14.0 && tz <= 14.0) {
+      new_tz = tz;
+      has_tz = true;
+    } else {
+      ESP_LOGW(TAG, "Ignoring timezone_offset_hours %.2f; the clock sets it", tz_item->valuedouble);
+    }
+  } else if (tz_item != nullptr) {
+    bad_field("timezone_offset_hours");
+  }
   read_number("time_shift_hours", -12.0, 12.0, new_shift_h, has_shift_h);
   read_number("time_shift_minutes", -59.0, 59.0, new_shift_m, has_shift_m);
   // Only the flash copy carries pwm_scale; the web UI posts back a schedule it loaded
