@@ -17,7 +17,7 @@ TEST_DIR := tests
 
 # Source files
 ASTRO_SOURCES := $(COMPONENT_DIR)/astronomical_calculator.cpp
-SCHEDULER_SOURCES := $(COMPONENT_DIR)/scheduler.cpp $(COMPONENT_DIR)/cJSON.c
+SCHEDULER_SOURCES := $(COMPONENT_DIR)/scheduler.cpp $(COMPONENT_DIR)/cJSON.c $(COMPONENT_DIR)/led_dimming.cpp $(COMPONENT_DIR)/led_models.cpp
 PID_SOURCES := $(COMPONENT_DIR)/pid_controller.cpp
 TEMP_CONTROL_SOURCES := $(COMPONENT_DIR)/temperature_control.cpp $(COMPONENT_DIR)/cJSON.c
 LED_DIMMING_SOURCES := $(COMPONENT_DIR)/led_dimming.cpp $(COMPONENT_DIR)/led_models.cpp

@@ -12,6 +12,7 @@ extern "C" {
 }
 
 constexpr float LEDScheduler::MAX_CHANNEL_CURRENT;
+constexpr float LEDScheduler::MIN_FLOOR_CURRENT;
 
 namespace {
 
@@ -26,6 +27,35 @@ float clamp_value(float value, float low, float high) {
 // (0.65f becomes 0.64999997615814209), which bloats the schedule saved to flash.
 double json_number(float value) {
     return std::round(static_cast<double>(value) * 1000.0) / 1000.0;
+}
+
+constexpr float DEFAULT_FLOOR_CURRENT = 0.1f;
+
+const char* dim_mode_name(ledbrick::DimMode mode) {
+    return mode == ledbrick::DimMode::CURVE ? "curve" : "manual";
+}
+
+const char* dim_priority_name(ledbrick::DimPriority priority) {
+    return priority == ledbrick::DimPriority::PWM_FIRST ? "pwm" : "current";
+}
+
+// Known models, 1-100 of each, at most 8 kinds in a string
+bool valid_led_groups(const std::vector<ledbrick::LedGroup>& leds, std::string* error) {
+    if (leds.size() > 8) {
+        if (error) *error = "at most 8 LED models per channel";
+        return false;
+    }
+    for (const auto& group : leds) {
+        if (ledbrick::find_led_model(group.model) == nullptr) {
+            if (error) *error = "unknown LED model " + group.model;
+            return false;
+        }
+        if (group.count < 1 || group.count > 100) {
+            if (error) *error = "LED count must be 1-100";
+            return false;
+        }
+    }
+    return true;
 }
 
 }  // namespace
@@ -923,13 +953,7 @@ std::string LEDScheduler::export_json() const {
     cJSON* channels_array = cJSON_CreateArray();
     if (channels_array) {
         for (uint8_t i = 0; i < num_channels_; i++) {
-            cJSON* channel_obj = cJSON_CreateObject();
-            if (channel_obj) {
-                cJSON_AddStringToObject(channel_obj, "rgb_hex", channel_configs_[i].rgb_hex.c_str());
-                cJSON_AddNumberToObject(channel_obj, "max_current", json_number(channel_configs_[i].max_current));
-                cJSON_AddStringToObject(channel_obj, "name", channel_configs_[i].name.c_str());
-                cJSON_AddItemToArray(channels_array, channel_obj);
-            }
+            add_channel_config_json(channels_array, i, true);
         }
         cJSON_AddItemToObject(root, "channel_configs", channels_array);
     }
@@ -1051,13 +1075,7 @@ std::string LEDScheduler::export_json_minified() const {
     cJSON* channels_array = cJSON_CreateArray();
     if (channels_array) {
         for (uint8_t i = 0; i < num_channels_; i++) {
-            cJSON* channel_obj = cJSON_CreateObject();
-            if (channel_obj) {
-                cJSON_AddStringToObject(channel_obj, "rgb_hex", channel_configs_[i].rgb_hex.c_str());
-                cJSON_AddNumberToObject(channel_obj, "max_current", json_number(channel_configs_[i].max_current));
-                cJSON_AddStringToObject(channel_obj, "name", channel_configs_[i].name.c_str());
-                cJSON_AddItemToArray(channels_array, channel_obj);
-            }
+            add_channel_config_json(channels_array, i, false);
         }
         cJSON_AddItemToObject(root, "channel_configs", channels_array);
     }
@@ -1225,7 +1243,12 @@ bool LEDScheduler::import_json_into_(const std::string& json_str) {
             if (cJSON_IsString(name_item)) {
                 config.name = name_item->valuestring;
             }
-            
+
+            if (!parse_channel_dimming_json(cJSON_GetObjectItem(channel_item, "dimming"),
+                                            static_cast<uint8_t>(channel_idx), config)) {
+                return false;
+            }
+
             // set_channel_config clamps max_current to the hardware limit
             set_channel_config(channel_idx, config);
             channel_idx++;
@@ -1413,6 +1436,216 @@ void LEDScheduler::set_channel_config(uint8_t channel, const ChannelConfig& conf
         channel_configs_[channel] = config;
         channel_configs_[channel].max_current = clamp_value(config.max_current, 0.0f, MAX_CHANNEL_CURRENT);
     }
+}
+
+bool LEDScheduler::is_curve_channel(uint8_t channel) const {
+    return channel < channel_configs_.size() && channel_configs_[channel].dim_mode == ledbrick::DimMode::CURVE;
+}
+
+std::vector<ledbrick::LedGroup> LEDScheduler::channel_leds(uint8_t channel) const {
+    if (channel >= channel_configs_.size()) {
+        return {};
+    }
+    if (!channel_configs_[channel].leds.empty()) {
+        return channel_configs_[channel].leds;
+    }
+    return ledbrick::default_channel_leds(channel, num_channels_);
+}
+
+ledbrick::ChannelDimmer LEDScheduler::channel_dimmer(uint8_t channel, float reference_temp_c) const {
+    if (channel >= channel_configs_.size()) {
+        return ledbrick::ChannelDimmer();
+    }
+    const ChannelConfig& config = channel_configs_[channel];
+    return ledbrick::ChannelDimmer(channel_leds(channel), config.dim_priority, config.floor_current,
+                                   reference_temp_c);
+}
+
+bool LEDScheduler::set_channel_dimming(uint8_t channel, ledbrick::DimMode mode, ledbrick::DimPriority priority,
+                                       float floor_current, const std::vector<ledbrick::LedGroup>& leds,
+                                       std::string* error) {
+    auto fail = [error](const std::string& message) {
+        if (error) *error = message;
+        return false;
+    };
+    if (channel >= num_channels_) {
+        return fail("invalid channel");
+    }
+    if (!(floor_current >= MIN_FLOOR_CURRENT && floor_current <= MAX_CHANNEL_CURRENT)) {
+        return fail("floor_current must be 0.05-2 A");
+    }
+    std::string led_error;
+    if (!valid_led_groups(leds, &led_error)) {
+        return fail(led_error);
+    }
+
+    const ledbrick::ChannelDimmer old_dimmer = channel_dimmer(channel);
+    const std::vector<ledbrick::LedGroup> new_leds =
+        leds.empty() ? ledbrick::default_channel_leds(channel, num_channels_) : leds;
+    const ledbrick::ChannelDimmer new_dimmer(new_leds, priority, floor_current);
+    if (mode == ledbrick::DimMode::CURVE && !new_dimmer.valid()) {
+        return fail("curve mode needs the channel's LEDs");
+    }
+
+    // Convert the channel's values so the schedule gives the same light in the new mode
+    ChannelConfig& config = channel_configs_[channel];
+    if (config.dim_mode != mode) {
+        ledbrick::DriveLimits limits;
+        limits.max_current_a = config.max_current;
+        auto convert = [&](float& pwm, float& current) {
+            if (mode == ledbrick::DimMode::CURVE) {
+                pwm = new_dimmer.level_for_drive(pwm / 100.0f, current, limits) * 100.0f;
+                current = 0.0f;
+            } else if (old_dimmer.valid()) {
+                ledbrick::Drive drive = old_dimmer.drive_for_level(pwm / 100.0f, limits, 25.0f);
+                pwm = drive.pwm * 100.0f;
+                current = drive.current_a;
+            } else {
+                current = config.max_current;  // no curve to go by: keep the level as the PWM
+            }
+        };
+        for (auto& point : schedule_points_) {
+            if (channel < point.pwm_values.size() && channel < point.current_values.size()) {
+                convert(point.pwm_values[channel], point.current_values[channel]);
+            }
+        }
+        if (channel < moon_simulation_.base_intensity.size()) {
+            float current = channel < moon_simulation_.base_current.size() ? moon_simulation_.base_current[channel] : 0.0f;
+            convert(moon_simulation_.base_intensity[channel], current);
+            if (channel < moon_simulation_.base_current.size()) {
+                moon_simulation_.base_current[channel] = current;
+            }
+        }
+    }
+
+    config.dim_mode = mode;
+    config.dim_priority = priority;
+    config.floor_current = floor_current;
+    config.leds = leds;
+    return true;
+}
+
+void LEDScheduler::add_channel_config_json(cJSON* channels_array, uint8_t channel, bool full) const {
+    const ChannelConfig& config = channel_configs_[channel];
+    cJSON* channel_obj = cJSON_CreateObject();
+    if (!channel_obj) {
+        return;
+    }
+    cJSON_AddStringToObject(channel_obj, "rgb_hex", config.rgb_hex.c_str());
+    cJSON_AddNumberToObject(channel_obj, "max_current", json_number(config.max_current));
+    cJSON_AddStringToObject(channel_obj, "name", config.name.c_str());
+
+    // The full export always has the dimming settings, with the LEDs in use. The saved
+    // copy only has settings that differ from the defaults, to fit the flash slot.
+    bool customized = config.dim_mode != ledbrick::DimMode::MANUAL ||
+                      config.dim_priority != ledbrick::DimPriority::CURRENT_FIRST ||
+                      std::fabs(config.floor_current - DEFAULT_FLOOR_CURRENT) > 1e-4f || !config.leds.empty();
+    if (full || customized) {
+        cJSON* dimming = cJSON_CreateObject();
+        if (dimming) {
+            cJSON_AddStringToObject(dimming, "mode", dim_mode_name(config.dim_mode));
+            cJSON_AddStringToObject(dimming, "priority", dim_priority_name(config.dim_priority));
+            cJSON_AddNumberToObject(dimming, "floor_current", json_number(config.floor_current));
+            if (full || !config.leds.empty()) {
+                cJSON* leds = cJSON_CreateArray();
+                if (leds) {
+                    for (const auto& group : full ? channel_leds(channel) : config.leds) {
+                        cJSON* item = cJSON_CreateObject();
+                        if (item) {
+                            cJSON_AddStringToObject(item, "model", group.model.c_str());
+                            cJSON_AddNumberToObject(item, "count", group.count);
+                            cJSON_AddItemToArray(leds, item);
+                        }
+                    }
+                    cJSON_AddItemToObject(dimming, "leds", leds);
+                }
+                if (full) {
+                    cJSON_AddBoolToObject(dimming, "leds_default", config.leds.empty());
+                }
+            }
+            cJSON_AddItemToObject(channel_obj, "dimming", dimming);
+        }
+    }
+    cJSON_AddItemToArray(channels_array, channel_obj);
+}
+
+bool LEDScheduler::parse_channel_dimming_json(const cJSON* item, uint8_t channel, ChannelConfig& config) const {
+    if (item == nullptr) {
+        // Clients that predate dimming leave it out: keep the channel's settings
+        if (channel < channel_configs_.size()) {
+            const ChannelConfig& existing = channel_configs_[channel];
+            config.dim_mode = existing.dim_mode;
+            config.dim_priority = existing.dim_priority;
+            config.floor_current = existing.floor_current;
+            config.leds = existing.leds;
+        }
+        return true;
+    }
+    if (!cJSON_IsObject(item)) {
+        return false;
+    }
+
+    config.dim_mode = ledbrick::DimMode::MANUAL;
+    const cJSON* mode = cJSON_GetObjectItemCaseSensitive(item, "mode");
+    if (mode != nullptr) {
+        if (!cJSON_IsString(mode)) return false;
+        if (strcmp(mode->valuestring, "curve") == 0) {
+            config.dim_mode = ledbrick::DimMode::CURVE;
+        } else if (strcmp(mode->valuestring, "manual") != 0) {
+            return false;
+        }
+    }
+
+    config.dim_priority = ledbrick::DimPriority::CURRENT_FIRST;
+    const cJSON* priority = cJSON_GetObjectItemCaseSensitive(item, "priority");
+    if (priority != nullptr) {
+        if (!cJSON_IsString(priority)) return false;
+        if (strcmp(priority->valuestring, "pwm") == 0) {
+            config.dim_priority = ledbrick::DimPriority::PWM_FIRST;
+        } else if (strcmp(priority->valuestring, "current") != 0) {
+            return false;
+        }
+    }
+
+    config.floor_current = DEFAULT_FLOOR_CURRENT;
+    const cJSON* floor_current = cJSON_GetObjectItemCaseSensitive(item, "floor_current");
+    if (floor_current != nullptr) {
+        if (!cJSON_IsNumber(floor_current) || !(floor_current->valuedouble >= MIN_FLOOR_CURRENT) ||
+            floor_current->valuedouble > MAX_CHANNEL_CURRENT) {
+            return false;
+        }
+        config.floor_current = static_cast<float>(floor_current->valuedouble);
+    }
+
+    // The full export marks the emitter's LEDs as defaults, so they stay defaults
+    config.leds.clear();
+    const cJSON* leds_default = cJSON_GetObjectItemCaseSensitive(item, "leds_default");
+    const cJSON* leds = cJSON_GetObjectItemCaseSensitive(item, "leds");
+    if (!cJSON_IsTrue(leds_default) && leds != nullptr) {
+        if (!cJSON_IsArray(leds)) return false;
+        const cJSON* entry = nullptr;
+        cJSON_ArrayForEach(entry, leds) {
+            const cJSON* model = cJSON_GetObjectItemCaseSensitive(entry, "model");
+            const cJSON* count = cJSON_GetObjectItemCaseSensitive(entry, "count");
+            if (!cJSON_IsString(model) || !cJSON_IsNumber(count) ||
+                count->valuedouble != std::floor(count->valuedouble) || count->valuedouble < 1 ||
+                count->valuedouble > 100) {
+                return false;
+            }
+            config.leds.push_back({model->valuestring, static_cast<uint16_t>(count->valuedouble)});
+        }
+        if (!valid_led_groups(config.leds, nullptr)) return false;
+    }
+
+    // Curve mode needs LEDs with known curves
+    if (config.dim_mode == ledbrick::DimMode::CURVE) {
+        std::vector<ledbrick::LedGroup> in_use =
+            config.leds.empty() ? ledbrick::default_channel_leds(channel, num_channels_) : config.leds;
+        if (!ledbrick::ChannelDimmer(in_use, config.dim_priority, config.floor_current).valid()) {
+            return false;
+        }
+    }
+    return true;
 }
 
 LEDScheduler::ChannelConfig LEDScheduler::get_channel_config(uint8_t channel) const {

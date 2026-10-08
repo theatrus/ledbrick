@@ -5,6 +5,10 @@
 #include <map>
 #include <cstdint>
 
+#include "led_dimming.h"
+
+struct cJSON;
+
 /**
  * Standalone LED Scheduler
  * Pure C++ implementation with no external dependencies
@@ -83,6 +87,14 @@ public:
         std::string rgb_hex = "#FFFFFF";  // RGB color in hex format
         float max_current = 2.0f;          // Maximum current in amps (0-MAX_CHANNEL_CURRENT)
         std::string name;                  // Optional channel name
+        
+        // How the channel is dimmed (led_dimming.h). In CURVE mode a schedule point's
+        // pwm_values entry is the channel's level (0-100% of its light output at max_current)
+        // and its current_values entry is unused (0).
+        ledbrick::DimMode dim_mode = ledbrick::DimMode::MANUAL;
+        ledbrick::DimPriority dim_priority = ledbrick::DimPriority::CURRENT_FIRST;
+        float floor_current = 0.1f;            // Current-first: lowest current before PWM takes over (A)
+        std::vector<ledbrick::LedGroup> leds;  // Empty: the emitter's LEDs for this channel
         
         ChannelConfig() = default;
         ChannelConfig(const std::string& color, float current, const std::string& n = "")
@@ -184,6 +196,20 @@ public:
     void set_channel_config(uint8_t channel, const ChannelConfig& config);
     ChannelConfig get_channel_config(uint8_t channel) const;
     std::vector<ChannelConfig> get_all_channel_configs() const { return channel_configs_; }
+    
+    // Dimming
+    static constexpr float MIN_FLOOR_CURRENT = 0.05f;  // the board keeps EN/PWM off below 50 mA
+    bool is_curve_channel(uint8_t channel) const;
+    // The channel's LEDs: as configured, or the emitter's defaults
+    std::vector<ledbrick::LedGroup> channel_leds(uint8_t channel) const;
+    ledbrick::ChannelDimmer channel_dimmer(uint8_t channel, float reference_temp_c = 25.0f) const;
+    // Changes how a channel is dimmed. Switching between manual and curve mode converts the
+    // channel's schedule points and moonlight, so the light they give stays the same.
+    // Returns false and changes nothing for an unknown LED model, a bad count or floor
+    // current, or curve mode without known LEDs.
+    bool set_channel_dimming(uint8_t channel, ledbrick::DimMode mode, ledbrick::DimPriority priority,
+                             float floor_current, const std::vector<ledbrick::LedGroup>& leds,
+                             std::string* error = nullptr);
     void set_channel_color(uint8_t channel, const std::string& rgb_hex);
     void set_channel_max_current(uint8_t channel, float max_current);
     std::string get_channel_color(uint8_t channel) const;
@@ -208,6 +234,11 @@ private:
     void sort_schedule_points_with_astro(const AstronomicalTimes& astro_times);
     bool validate_point(const SchedulePoint& point) const;
     bool import_json_into_(const std::string& json_str);
+    // JSON for one channel config; full adds the dimming defaults the saved copy leaves out
+    void add_channel_config_json(struct cJSON* channels_array, uint8_t channel, bool full) const;
+    // Dimming settings from a channel config's "dimming" object; false when invalid.
+    // Without one, the channel keeps its current settings.
+    bool parse_channel_dimming_json(const struct cJSON* item, uint8_t channel, ChannelConfig& config) const;
     std::vector<SchedulePoint> resolve_dynamic_points(const AstronomicalTimes& astro_times) const;
     
     // Serialization helpers

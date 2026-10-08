@@ -33,6 +33,23 @@ float curve_lookup(const std::vector<CurvePoint>& curve, float x) {
     return curve.back().y;
 }
 
+std::vector<LedGroup> default_channel_leds(uint8_t channel, uint8_t num_channels) {
+    if (num_channels != 8) {
+        return {};
+    }
+    switch (channel) {
+        case 0: return {{"luxeon_c_mint", 4}, {"luxeon_c_cyan", 4}};                                      // CyMint
+        case 1: return {{"luxeon_c_white_5900k", 8}};                                                     // CW
+        case 2: return {{"luxeon_c_white_3900k", 4}, {"luxeon_c_deep_red", 2}, {"luxeon_c_pc_amber", 2}};  // WW
+        case 3: return {{"luxeon_c_pc_blue", 8}, {"luxeon_c_blue", 4}};                                   // PC blue
+        case 4: return {{"luxeon_rubix_royal_blue", 13}};                                                 // Royal blue, centre
+        case 5: return {{"luxeon_c_violet", 6}};                                                          // Violet (+2 UV)
+        case 6: return {{"luxeon_c_white_5900k", 6}, {"luxeon_c_royal_blue", 4}};                        // White + blue
+        case 7: return {{"luxeon_rubix_royal_blue", 13}};                                                 // Royal blue, outer
+        default: return {};
+    }
+}
+
 const LedModel* find_led_model(const std::string& id) {
     for (const auto& model : builtin_led_models()) {
         if (model.id == id) {
@@ -76,15 +93,29 @@ float ChannelDimmer::output(float current_a, float temp_c) const {
                                                       : curve_lookup(curve, current_a);
         const auto& thermal = led.model->output_vs_temp;
         if (!thermal.empty()) {
-            float at_reference = curve_lookup(thermal, reference_temp_c_);
-            if (at_reference > 0.0f) {
-                relative *= curve_lookup(thermal, temp_c) / at_reference;
+            // The current curve is at a fixed junction temperature; scale it to this LED's
+            // junction, which runs above the pad by its thermal resistance times its power
+            float junction_c = temp_c;
+            if (led.model->rth_c_per_w > 0.0f && !led.model->vf_vs_current.empty()) {
+                junction_c += led.model->rth_c_per_w * curve_lookup(led.model->vf_vs_current, current_a) * current_a;
+            }
+            float at_curve = curve_lookup(thermal, led.model->curve_temp_c);
+            if (at_curve > 0.0f) {
+                relative *= curve_lookup(thermal, junction_c) / at_curve;
             }
         }
         sum += led.weight * relative;
         weights += led.weight;
     }
     return weights > 0.0f ? sum / weights : 0.0f;
+}
+
+float ChannelDimmer::characterized_current() const {
+    float lowest = 0.0f;
+    for (const auto& led : leds_) {
+        lowest = std::max(lowest, led.model->output_vs_current.front().x);
+    }
+    return lowest;
 }
 
 float ChannelDimmer::max_current(const DriveLimits& limits) const {
@@ -103,9 +134,11 @@ int ChannelDimmer::max_step(const DriveLimits& limits) const {
 }
 
 int ChannelDimmer::min_step(const DriveLimits& limits) const {
+    // Below the lowest current the datasheets characterize, the output is unknown, so the
+    // PWM takes over there however low the floor is set
     float floor_a = limits.min_current_a;
     if (priority_ == DimPriority::CURRENT_FIRST) {
-        floor_a = std::max(floor_a, floor_current_a_);
+        floor_a = std::max(floor_a, std::max(floor_current_a_, characterized_current()));
     }
     return static_cast<int>(std::ceil(floor_a / limits.current_step_a - 1e-4f));
 }

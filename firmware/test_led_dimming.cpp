@@ -16,6 +16,7 @@ LedModel make_blue() {
     m.max_current_a = 1.0f;
     m.output_vs_current = {{0.05f, 0.16f}, {0.10f, 0.31f}, {0.35f, 1.0f}, {0.70f, 1.85f}, {1.0f, 2.5f}};
     m.output_vs_temp = {{25.0f, 1.0f}, {85.0f, 0.9f}};
+    m.curve_temp_c = 25.0f;
     return m;
 }
 
@@ -28,6 +29,7 @@ LedModel make_red() {
     m.max_current_a = 0.7f;
     m.output_vs_current = {{0.05f, 0.13f}, {0.35f, 1.0f}, {0.70f, 1.9f}};
     m.output_vs_temp = {{25.0f, 1.0f}, {85.0f, 0.7f}};
+    m.curve_temp_c = 25.0f;
     return m;
 }
 
@@ -194,6 +196,92 @@ void test_level_conversion(TestRunner& runner) {
     runner.assert_equals(0.0f, dimmer.level_for_drive(0.0f, 0.5f, l), 1e-6f, "PWM 0 is level 0");
 }
 
+void test_junction_heating(TestRunner& runner) {
+    runner.start_suite("Junction Heating Tests");
+    // Same part, now with a thermal resistance and Vf: the junction runs above the pad by
+    // Rth x Vf x I, so output drops faster with current
+    LedModel plain = make_blue();
+    LedModel heated = make_blue();
+    heated.rth_c_per_w = 10.0f;
+    heated.vf_vs_current = {{0.0f, 3.0f}, {1.0f, 3.0f}};
+    ChannelDimmer a({{&plain, 1}}, DimPriority::CURRENT_FIRST, 0.1f);
+    ChannelDimmer b({{&heated, 1}}, DimPriority::CURRENT_FIRST, 0.1f);
+    // At 1 A: junction 30 C above the pad, output 0.9 + 0.1 * (1 - 30/60) per the curve
+    float expected = a.output(1.0f, 55.0f);
+    runner.assert_equals(expected, b.output(1.0f, 25.0f), 1e-4f, "1 A heats the junction by 30 C");
+    runner.assert_true(b.output(0.1f, 25.0f) > 0.99f * a.output(0.1f, 25.0f), "Little heating at 0.1 A");
+
+    // The dimmer still delivers the exact level with self-heating
+    DriveLimits l = limits(1.0f);
+    Drive full = b.drive_for_level(1.0f, l, 25.0f);
+    float reference = delivered(b, full, l, 25.0f);
+    Drive half = b.drive_for_level(0.5f, l, 25.0f);
+    runner.assert_equals(0.5f * reference, delivered(b, half, l, 25.0f), 1e-4f * reference, "Exact level with self-heating");
+}
+
+void test_characterized_floor(TestRunner& runner) {
+    runner.start_suite("Characterized Floor Tests");
+    // The curve starts at 0.2 A: below that the output is unknown, so the floor rises to it
+    LedModel late = make_blue();
+    late.output_vs_current = {{0.2f, 0.6f}, {0.35f, 1.0f}, {1.0f, 2.5f}};
+    ChannelDimmer dimmer({{&late, 4}}, DimPriority::CURRENT_FIRST, 0.1f);
+    runner.assert_equals(0.2f, dimmer.characterized_current(), 1e-6f, "Characterized from 0.2 A");
+    Drive low = dimmer.drive_for_level(0.01f, limits(1.0f), 25.0f);
+    runner.assert_true(low.current_a >= 0.2f, "Floor raised to the characterized current");
+
+    // Mixed string: the highest of the parts' starting currents
+    LedModel early = make_blue();
+    ChannelDimmer mixed({{&late, 1}, {&early, 1}}, DimPriority::CURRENT_FIRST, 0.1f);
+    runner.assert_equals(0.2f, mixed.characterized_current(), 1e-6f, "Mixed string uses the highest start");
+}
+
+void test_builtin_models(TestRunner& runner) {
+    runner.start_suite("Built-in Model Tests");
+    // Every emitter channel's default LEDs have curves, normalized at their test current
+    for (uint8_t ch = 0; ch < 8; ch++) {
+        auto groups = default_channel_leds(ch, 8);
+        runner.assert_true(!groups.empty(), "Channel " + std::to_string(ch + 1) + " has default LEDs");
+        for (const auto& g : groups) {
+            const LedModel* m = find_led_model(g.model);
+            runner.assert_true(m != nullptr, "Model known: " + g.model);
+            if (m) {
+                runner.assert_equals(1.0f, curve_lookup(m->output_vs_current, m->test_current_a), 0.003f,
+                                     g.model + " is 1.0 at its test current");
+                runner.assert_equals(1.0f, curve_lookup(m->output_vs_temp, 85.0f), 0.003f,
+                                     g.model + " is 1.0 at 85 C");
+            }
+        }
+        ChannelDimmer dimmer(groups, DimPriority::CURRENT_FIRST, 0.1f);
+        runner.assert_true(dimmer.valid(), "Channel " + std::to_string(ch + 1) + " dimmer is valid");
+    }
+    runner.assert_true(default_channel_leds(0, 4).empty(), "No defaults for other channel counts");
+
+    // The WW string's deep red LEDs are rated 700 mA, so the channel cannot go above it
+    ChannelDimmer ww(default_channel_leds(2, 8), DimPriority::CURRENT_FIRST, 0.1f);
+    runner.assert_equals(0.7f, ww.max_current(limits(1.0f)), 1e-6f, "WW channel capped at the deep red's 700 mA");
+
+    // Real curves give a smooth, exact ramp too. Level 1 is the output at 25 C, so at 45 C
+    // the top of the range saturates at the maximum current.
+    ChannelDimmer rubix(default_channel_leds(4, 8), DimPriority::CURRENT_FIRST, 0.1f);
+    DriveLimits l = limits(1.2f);
+    float reference = delivered(rubix, rubix.drive_for_level(1.0f, l, 25.0f), l, 25.0f);
+    float achievable = delivered(rubix, rubix.drive_for_level(1.0f, l, 45.0f), l, 45.0f);
+    runner.assert_true(achievable < reference, "Less light available at 45 C");
+    bool exact = true;
+    bool monotonic = true;
+    float previous = -1.0f;
+    for (int i = 1; i <= 2000; i++) {
+        float level = i / 2000.0f;
+        float light = delivered(rubix, rubix.drive_for_level(level, l, 45.0f), l, 45.0f);
+        if (std::fabs(light - std::min(level * reference, achievable)) > 1e-4f * reference) exact = false;
+        if (light < previous) monotonic = false;
+        previous = light;
+    }
+    runner.assert_true(exact, "Rubix at 45 C holds each level until the maximum current");
+    runner.assert_true(monotonic, "Rubix ramp never steps backwards");
+    runner.assert_true(rubix.characterized_current() > 0.15f, "Rubix floor at its characterized current");
+}
+
 int main() {
     TestResults results;
     TestRunner runner;
@@ -216,6 +304,15 @@ int main() {
     results.add_suite_results(runner);
 
     test_level_conversion(runner);
+    results.add_suite_results(runner);
+
+    test_junction_heating(runner);
+    results.add_suite_results(runner);
+
+    test_characterized_floor(runner);
+    results.add_suite_results(runner);
+
+    test_builtin_models(runner);
     results.add_suite_results(runner);
 
     results.print_final_summary("LED Dimming");

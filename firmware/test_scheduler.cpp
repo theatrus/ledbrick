@@ -1006,6 +1006,120 @@ void test_interpolation_to_the_second(TestRunner& runner) {
     runner.assert_true(scheduler.get_values_at_seconds_with_astro(1440 * 60 - 1, astro).valid, "Last second of the day is valid");
 }
 
+void test_channel_dimming(TestRunner& runner) {
+    runner.start_suite("Channel Dimming Tests");
+    using ledbrick::DimMode;
+    using ledbrick::DimPriority;
+
+    LEDScheduler scheduler(8);
+    for (uint8_t c = 0; c < 8; c++) scheduler.set_channel_max_current(c, 1.0f);
+    std::vector<float> pwm = {50, 50, 50, 50, 50, 50, 50, 50};
+    std::vector<float> cur = {0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f};
+    scheduler.set_schedule_point(600, pwm, cur);
+    runner.assert_false(scheduler.is_curve_channel(4), "Channels start in manual mode");
+
+    // Manual to curve: the point becomes a level and the current is no longer used
+    auto dimmer_before = scheduler.channel_dimmer(4);
+    ledbrick::DriveLimits limits;
+    limits.max_current_a = 1.0f;
+    float expected_level = dimmer_before.level_for_drive(0.5f, 0.5f, limits) * 100.0f;
+    std::string error;
+    runner.assert_true(scheduler.set_channel_dimming(4, DimMode::CURVE, DimPriority::CURRENT_FIRST, 0.1f, {}, &error),
+                       "Switch channel 5 to curve mode");
+    runner.assert_true(scheduler.is_curve_channel(4), "Channel 5 in curve mode");
+    auto point = scheduler.get_schedule_points()[0];
+    runner.assert_equals(expected_level, point.pwm_values[4], 0.01f, "Point converted to the level");
+    runner.assert_equals(0.0f, point.current_values[4], 1e-6f, "Current cleared in curve mode");
+    runner.assert_equals(50.0f, point.pwm_values[3], 1e-6f, "Other channels untouched");
+
+    // Curve back to manual gives the same light: delivered output matches
+    runner.assert_true(scheduler.set_channel_dimming(4, DimMode::MANUAL, DimPriority::CURRENT_FIRST, 0.1f, {}, &error),
+                       "Switch back to manual");
+    point = scheduler.get_schedule_points()[0];
+    float light_before = 0.5f * dimmer_before.output(0.5f, 25.0f);
+    float step = limits.current_step_a;
+    float landed = std::floor(point.current_values[4] / step) * step;
+    float light_after = point.pwm_values[4] / 100.0f * dimmer_before.output(landed, 25.0f);
+    runner.assert_equals(light_before, light_after, 0.01f * light_before, "Round trip keeps the light");
+
+    // Bad settings change nothing
+    runner.assert_false(scheduler.set_channel_dimming(4, DimMode::CURVE, DimPriority::CURRENT_FIRST, 0.01f, {}, &error),
+                        "Floor below 50 mA rejected");
+    runner.assert_false(scheduler.set_channel_dimming(4, DimMode::CURVE, DimPriority::CURRENT_FIRST, 0.1f,
+                                                      {{"no_such_led", 3}}, &error), "Unknown LED rejected");
+    runner.assert_false(scheduler.is_curve_channel(4), "Still manual after rejected changes");
+    LEDScheduler small(4);
+    runner.assert_false(small.set_channel_dimming(0, DimMode::CURVE, DimPriority::CURRENT_FIRST, 0.1f, {}, &error),
+                        "Curve mode needs LEDs: no defaults for 4 channels");
+    runner.assert_true(small.set_channel_dimming(0, DimMode::CURVE, DimPriority::PWM_FIRST, 0.1f,
+                                                 {{"luxeon_c_royal_blue", 6}}, &error), "Explicit LEDs work");
+}
+
+void test_channel_dimming_json(TestRunner& runner) {
+    runner.start_suite("Channel Dimming JSON Tests");
+    using ledbrick::DimMode;
+    using ledbrick::DimPriority;
+
+    LEDScheduler scheduler(8);
+    scheduler.set_schedule_point(600, std::vector<float>(8, 40.0f), std::vector<float>(8, 0.5f));
+    size_t manual_size = scheduler.export_json_minified().size();
+
+    std::string error;
+    scheduler.set_channel_dimming(1, DimMode::CURVE, DimPriority::PWM_FIRST, 0.2f, {}, &error);
+    scheduler.set_channel_dimming(6, DimMode::CURVE, DimPriority::CURRENT_FIRST, 0.1f,
+                                  {{"luxeon_c_white_5900k", 5}, {"luxeon_c_royal_blue", 4}}, &error);
+
+    // Saved copy: only the changed channels carry dimming settings
+    std::string saved = scheduler.export_json_minified();
+    runner.assert_true(saved.find("\"dimming\"") != std::string::npos, "Saved copy has dimming settings");
+    runner.assert_true(saved.size() < manual_size + 400, "Saved copy stays small");
+    runner.assert_true(saved.find("leds_default") == std::string::npos, "Saved copy leaves out defaults");
+
+    // Full export: every channel, with the LEDs in use
+    std::string full = scheduler.export_json();
+    size_t count = 0;
+    for (size_t pos = full.find("\"leds_default\""); pos != std::string::npos; pos = full.find("\"leds_default\"", pos + 1)) count++;
+    runner.assert_equals(8, static_cast<int>(count), "Full export describes every channel");
+
+    // Both forms load back to the same settings
+    for (const std::string& json : {saved, full}) {
+        LEDScheduler loaded(8);
+        runner.assert_true(loaded.import_json(json), "Export imports");
+        auto ch2 = loaded.get_channel_config(1);
+        auto ch7 = loaded.get_channel_config(6);
+        runner.assert_true(ch2.dim_mode == DimMode::CURVE && ch2.dim_priority == DimPriority::PWM_FIRST, "Channel 2 settings kept");
+        runner.assert_equals(0.2f, ch2.floor_current, 1e-4f, "Channel 2 floor kept");
+        runner.assert_true(ch2.leds.empty(), "Channel 2 still on default LEDs");
+        runner.assert_equals(2, static_cast<int>(ch7.leds.size()), "Channel 7 custom LEDs kept");
+        runner.assert_equals(5, static_cast<int>(ch7.leds[0].count), "Channel 7 LED count kept");
+        runner.assert_false(loaded.is_curve_channel(0), "Channel 1 still manual");
+    }
+
+    // A client that predates dimming leaves it out: settings are kept
+    std::string old_client = "{\"num_channels\":8,\"channel_configs\":[{\"rgb_hex\":\"#112233\",\"max_current\":1,\"name\":\"a\"},"
+                             "{\"rgb_hex\":\"#112233\",\"max_current\":1,\"name\":\"b\"}],"
+                             "\"schedule_points\":[{\"time_minutes\":600,\"pwm_values\":[1,2,3,4,5,6,7,8],"
+                             "\"current_values\":[0,0,0,0,0,0,0,0]}]}";
+    runner.assert_true(scheduler.import_json(old_client), "Import without dimming");
+    runner.assert_true(scheduler.is_curve_channel(1), "Curve mode kept when the field is missing");
+    runner.assert_true(scheduler.get_channel_config(1).name == "b", "Other fields still imported");
+
+    // Invalid settings reject the whole import
+    LEDScheduler strict(8);
+    strict.set_schedule_point(600, std::vector<float>(8, 10.0f), std::vector<float>(8, 0.5f));
+    auto bad = [&](const std::string& dimming) {
+        return "{\"num_channels\":8,\"channel_configs\":[{\"rgb_hex\":\"#fff\",\"max_current\":1,\"name\":\"a\","
+               "\"dimming\":" + dimming + "}],\"schedule_points\":[]}";
+    };
+    runner.assert_false(strict.import_json(bad("{\"mode\":\"dimmer\"}")), "Unknown mode rejected");
+    runner.assert_false(strict.import_json(bad("{\"mode\":\"curve\",\"priority\":\"fast\"}")), "Unknown priority rejected");
+    runner.assert_false(strict.import_json(bad("{\"mode\":\"curve\",\"floor_current\":5}")), "Floor out of range rejected");
+    runner.assert_false(strict.import_json(bad("{\"mode\":\"curve\",\"leds\":[{\"model\":\"x\",\"count\":2}]}")), "Unknown LED rejected");
+    runner.assert_false(strict.import_json(bad("{\"mode\":\"curve\",\"leds\":[{\"model\":\"luxeon_c_blue\",\"count\":1.5}]}")), "Fractional count rejected");
+    runner.assert_false(strict.import_json(bad("\"curve\"")), "Non-object rejected");
+    runner.assert_equals(static_cast<size_t>(1), strict.get_schedule_points().size(), "Schedule untouched after rejects");
+}
+
 void test_json_export_size(TestRunner& runner) {
     runner.start_suite("JSON Export Size Tests");
 
@@ -1060,6 +1174,12 @@ int main() {
     results.add_suite_results(runner);
 
     test_interpolation_to_the_second(runner);
+    results.add_suite_results(runner);
+
+    test_channel_dimming(runner);
+    results.add_suite_results(runner);
+
+    test_channel_dimming_json(runner);
     results.add_suite_results(runner);
     
     test_edge_cases(runner);
