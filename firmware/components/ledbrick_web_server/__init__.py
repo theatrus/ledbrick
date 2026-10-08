@@ -6,6 +6,7 @@ from esphome.components.esp32 import include_builtin_idf_component
 from esphome.coroutine import CoroPriority
 from esphome.core import coroutine_with_priority
 import os
+import re
 import subprocess
 
 DEPENDENCIES = ["network", "ledbrick_scheduler"]
@@ -22,9 +23,21 @@ CONF_FAN_STATE_SENSOR_ID = "fan_state_sensor_id"
 CONF_TEMPERATURE_SENSORS = "temperature_sensors"
 CONF_SENSOR_ID = "sensor_id"
 CONF_NAME = "name"
+CONF_ALLOWED_HOSTS = "allowed_hosts"
 
 # Concurrent client connections the HTTP server accepts (httpd max_open_sockets)
 MAX_OPEN_SOCKETS = 5
+
+HOST_NAME_RE = re.compile(r"[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*")
+
+
+def validate_host_name(value):
+    """A DNS name, single label or dotted, compared case-insensitively."""
+    value = cv.string_strict(value).lower()
+    if not HOST_NAME_RE.fullmatch(value):
+        raise cv.Invalid(f"Invalid host name: {value}")
+    return value
+
 
 TEMPERATURE_SENSOR_SCHEMA = cv.Schema(
     {
@@ -41,6 +54,9 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_PORT, default=80): cv.port,
             cv.Optional(CONF_USERNAME): cv.string,
             cv.Optional(CONF_PASSWORD): cv.string,
+            # Host names the server answers to besides IP addresses, <name> and <name>.local,
+            # e.g. a DNS name or reverse proxy. Others get 403, which blocks DNS rebinding.
+            cv.Optional(CONF_ALLOWED_HOSTS, default=[]): cv.ensure_list(validate_host_name),
             cv.Optional(CONF_VOLTAGE_SENSOR_ID): cv.use_id(sensor.Sensor),
             cv.Optional(CONF_CURRENT_SENSOR_ID): cv.use_id(sensor.Sensor),
             cv.Optional(CONF_FAN_SPEED_SENSOR_ID): cv.use_id(sensor.Sensor),
@@ -72,6 +88,8 @@ async def to_code(config):
         cg.add(var.set_username(config[CONF_USERNAME]))
     if CONF_PASSWORD in config:
         cg.add(var.set_password(config[CONF_PASSWORD]))
+    for host in config[CONF_ALLOWED_HOSTS]:
+        cg.add(var.add_allowed_host(host))
     
     # Wire sensors if configured
     if CONF_VOLTAGE_SENSOR_ID in config:

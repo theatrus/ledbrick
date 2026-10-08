@@ -12,6 +12,8 @@
 #include <ctime>
 #include <cstdlib>
 #include <cctype>
+#include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <strings.h>
 #include <sys/socket.h>
@@ -132,9 +134,11 @@ LEDBrickWebServer *LEDBrickWebServer::get_instance(httpd_req_t *req) {
 bool LEDBrickWebServer::run_in_loop_(std::function<void()> &&work) {
   // Shared with the deferred call, so a request that times out leaves nothing dangling.
   // Work functions must capture by value for the same reason.
+  enum : uint8_t { PENDING, RUNNING, ABANDONED };
   struct LoopCall {
     std::function<void()> work;
     SemaphoreHandle_t done{nullptr};
+    std::atomic<uint8_t> state{PENDING};
     ~LoopCall() {
       if (this->done != nullptr) {
         vSemaphoreDelete(this->done);
@@ -150,12 +154,26 @@ bool LEDBrickWebServer::run_in_loop_(std::function<void()> &&work) {
 
   // defer() is safe to call from other tasks
   this->defer([call]() {
+    uint8_t expected = PENDING;
+    if (!call->state.compare_exchange_strong(expected, RUNNING)) {
+      return;  // The request already gave up and told the client so
+    }
     call->work();
     xSemaphoreGive(call->done);
   });
   App.wake_loop_threadsafe();
 
-  return xSemaphoreTake(call->done, pdMS_TO_TICKS(LOOP_CALL_TIMEOUT_MS)) == pdTRUE;
+  if (xSemaphoreTake(call->done, pdMS_TO_TICKS(LOOP_CALL_TIMEOUT_MS)) == pdTRUE) {
+    return true;
+  }
+  // Cancel work that has not started, so a 503 never hides a change that happens later
+  uint8_t expected = PENDING;
+  if (call->state.compare_exchange_strong(expected, ABANDONED)) {
+    return false;
+  }
+  // The work is already running on the main loop; it finishes shortly, so report its result
+  xSemaphoreTake(call->done, portMAX_DELAY);
+  return true;
 }
 
 esp_err_t LEDBrickWebServer::respond_from_loop_(httpd_req_t *req, std::function<int(JsonDocument &)> &&build) {
@@ -221,6 +239,56 @@ std::unique_ptr<char[]> LEDBrickWebServer::read_request_body(httpd_req_t *req) {
   return buf;
 }
 
+void LEDBrickWebServer::add_allowed_host(const std::string &host) {
+  std::string lower = host;
+  std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) { return std::tolower(c); });
+  this->allowed_hosts_.push_back(lower);
+}
+
+bool LEDBrickWebServer::host_allowed_(httpd_req_t *req) {
+  // A DNS rebinding page sends a Host and Origin of its own domain, which pass the Origin
+  // check. Answer only to addresses and to names this device actually has.
+  char host[128];
+  esp_err_t err = httpd_req_get_hdr_value_str(req, "Host", host, sizeof(host));
+  if (err == ESP_ERR_NOT_FOUND) {
+    return true;  // Browsers always send Host; other clients may not
+  }
+  if (err != ESP_OK) {
+    return false;
+  }
+
+  std::string name(host);
+  if (!name.empty() && name[0] == '[') {
+    return true;  // IPv6 address
+  }
+  size_t colon = name.rfind(':');
+  if (colon != std::string::npos) {
+    name.resize(colon);  // Drop the port
+  }
+  std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) { return std::tolower(c); });
+
+  // IPv4 address: four dot-separated numbers
+  int dots = 0;
+  bool numeric = !name.empty();
+  for (char c : name) {
+    if (c == '.') {
+      dots++;
+    } else if (!isdigit(static_cast<unsigned char>(c))) {
+      numeric = false;
+    }
+  }
+  if (numeric && dots == 3) {
+    return true;
+  }
+
+  std::string device = App.get_name().str();
+  std::transform(device.begin(), device.end(), device.begin(), [](unsigned char c) { return std::tolower(c); });
+  if (name == device || name == device + ".local" || name == "localhost") {
+    return true;
+  }
+  return std::find(this->allowed_hosts_.begin(), this->allowed_hosts_.end(), name) != this->allowed_hosts_.end();
+}
+
 bool LEDBrickWebServer::origin_allowed_(httpd_req_t *req) {
   // Browsers send Origin with cross-site POSTs. Requests without it (curl, Home
   // Assistant, the dev proxy) are allowed; requests from another site are not.
@@ -256,6 +324,10 @@ void LEDBrickWebServer::send_unauthorized_(httpd_req_t *req) {
 }
 
 bool LEDBrickWebServer::check_auth(httpd_req_t *req) {
+  if (!this->host_allowed_(req)) {
+    this->send_error(req, 403, "Host name not allowed; add it to allowed_hosts");
+    return false;
+  }
   if (req->method == HTTP_POST && !this->origin_allowed_(req)) {
     this->send_error(req, 403, "Cross-site request rejected");
     return false;
@@ -337,6 +409,11 @@ void LEDBrickWebServer::send_compressed_content(httpd_req_t *req, const uint8_t 
 // Static content handlers
 esp_err_t LEDBrickWebServer::handle_index(httpd_req_t *req) {
   auto *self = get_instance(req);
+  // Say why up front, rather than load a page whose API calls all fail
+  if (!self->host_allowed_(req)) {
+    self->send_error(req, 403, "Host name not allowed; add it to allowed_hosts");
+    return ESP_OK;
+  }
   self->send_compressed_content(req, INDEX_HTML_COMPRESSED, INDEX_HTML_SIZE, INDEX_HTML_TYPE);
   return ESP_OK;
 }

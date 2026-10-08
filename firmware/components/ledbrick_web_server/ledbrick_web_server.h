@@ -28,6 +28,8 @@ class LEDBrickWebServer : public Component {
   void set_port(uint16_t port) { this->port_ = port; }
   void set_max_open_sockets(uint8_t max_open_sockets) { this->max_open_sockets_ = max_open_sockets; }
   void set_username(const std::string &username) { this->username_ = username; }
+  // Extra host names the server answers to, besides IP addresses, <name> and <name>.local
+  void add_allowed_host(const std::string &host);
   void set_password(const std::string &password) { this->password_ = password; }
   
   // Sensor setters for INA280
@@ -50,6 +52,7 @@ class LEDBrickWebServer : public Component {
   uint8_t max_open_sockets_{5};
   std::string username_;
   std::string password_;
+  std::vector<std::string> allowed_hosts_;  // Lower case
   
   // Request handlers
   static esp_err_t handle_index(httpd_req_t *req);
@@ -86,6 +89,7 @@ class LEDBrickWebServer : public Component {
   static std::unique_ptr<char[]> read_request_body(httpd_req_t *req);
   // Checks credentials when configured, and rejects cross-site POSTs
   bool check_auth(httpd_req_t *req);
+  bool host_allowed_(httpd_req_t *req);
   bool origin_allowed_(httpd_req_t *req);
   void send_unauthorized_(httpd_req_t *req);
   // Handlers run on the httpd task. Anything that touches the scheduler or other
