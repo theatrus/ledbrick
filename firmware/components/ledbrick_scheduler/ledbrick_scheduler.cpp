@@ -41,9 +41,9 @@ void LEDBrickScheduler::setup() {
   bool saved_emergency = false;
   if (emergency_pref_.load(&saved_emergency) && saved_emergency) {
     ESP_LOGW(TAG, "Thermal emergency was active before restart; LEDs stay off until temperatures recover");
+    // Only the latch here: the fan component is not set up yet, so the first update()
+    // sends the full-speed fan command once it can take effect
     ledbrick::TemperatureControlCommand command;
-    command.fan_enabled = true;
-    command.fan_pwm_percent = 100.0f;
     command.emergency_state = true;
     command.override_normal_control = true;
     command.reason = "Thermal emergency restored after restart";
@@ -738,7 +738,7 @@ void LEDBrickScheduler::export_schedule_json(std::string &json_output, bool for_
       "\",\"timezone_offset_hours\":" + std::to_string(timezone_offset_hours_) +
       current_time_field +
       ",\"enabled\":" + std::string(enabled_ ? "true" : "false") +
-      ",\"pwm_scale\":" + std::to_string(pwm_scale_) +
+      (for_storage ? ",\"pwm_scale\":" + std::to_string(pwm_scale_) : std::string()) +
       ",\"latitude\":" + std::to_string(latitude_) +
       ",\"longitude\":" + std::to_string(longitude_) +
       ",\"astronomical_projection\":" + std::string(astronomical_projection_ ? "true" : "false") +
@@ -804,7 +804,11 @@ bool LEDBrickScheduler::import_schedule_json(const std::string &json_input, std:
   read_number("timezone_offset_hours", -14.0, 14.0, new_tz, has_tz);
   read_number("time_shift_hours", -12.0, 12.0, new_shift_h, has_shift_h);
   read_number("time_shift_minutes", -59.0, 59.0, new_shift_m, has_shift_m);
-  read_number("pwm_scale", 0.0, 1.0, new_pwm_scale, has_pwm_scale);
+  // Only the flash copy carries pwm_scale; the web UI posts back a schedule it loaded
+  // earlier, which would undo a later brightness change
+  if (from_flash) {
+    read_number("pwm_scale", 0.0, 1.0, new_pwm_scale, has_pwm_scale);
+  }
   
   // Check the temperature control settings on a scratch controller first
   std::string temp_config_json;
@@ -850,7 +854,8 @@ bool LEDBrickScheduler::import_schedule_json(const std::string &json_input, std:
   if (has_shift_m) time_shift_minutes_ = static_cast<int>(new_shift_m);
   if (has_pwm_scale) pwm_scale_ = static_cast<float>(new_pwm_scale);
   if (!temp_config_json.empty()) {
-    if (is_thermal_emergency()) {
+    // Saved settings always load (a latch restored at boot must not swap them for defaults)
+    if (is_thermal_emergency() && !from_flash) {
       // New limits could clear the latched emergency without a real recovery
       ESP_LOGW(TAG, "Thermal emergency active; keeping current temperature control settings");
     } else {
@@ -1791,12 +1796,17 @@ void LEDBrickScheduler::on_emergency_change(bool emergency) {
   global_preferences->sync();
 }
 
-void LEDBrickScheduler::reset_thermal_emergency() {
+bool LEDBrickScheduler::reset_thermal_emergency() {
   if (!is_thermal_emergency()) {
-    return;
+    return true;
   }
-  // For a latch that cannot clear itself, such as a failed sensor. If a working sensor is
-  // still over the limit, the emergency starts again after emergency_delay_ms.
+  // For a latch that cannot clear itself, such as a failed sensor. While a working sensor
+  // still reads above the recovery temperature, keep the LEDs off.
+  if (!temp_control_.emergency_reset_allowed()) {
+    ESP_LOGW(TAG, "Thermal emergency reset refused: a sensor reads %.1f°C, above recovery",
+             temp_control_.get_status().max_temp_c);
+    return false;
+  }
   ESP_LOGW(TAG, "Thermal emergency reset by user");
   ledbrick::TemperatureControlCommand command;
   command.fan_enabled = true;
@@ -1806,6 +1816,7 @@ void LEDBrickScheduler::reset_thermal_emergency() {
   command.reason = "Thermal emergency reset by user";
   temp_hardware_.apply_command(command, millis());
   temp_control_.update_hardware_state(temp_hardware_.get_hardware_state());
+  return true;
 }
 
 } // namespace ledbrick_scheduler

@@ -107,8 +107,9 @@ class LEDBrickScheduler : public PollingComponent {
   
   // Thermal emergency control
   void set_thermal_emergency(bool emergency);
-  // Clears a latched emergency by hand, e.g. after a sensor failed during one
-  void reset_thermal_emergency();
+  // Clears a latched emergency by hand, e.g. after a sensor failed during one. Refused
+  // (returns false) while a working sensor reads above the recovery temperature.
+  bool reset_thermal_emergency();
   bool is_thermal_emergency() const { return temp_hardware_.get_hardware_state().thermal_emergency; }
   const ledbrick::TemperatureHardwareState& get_temperature_hardware_state() const { return temp_hardware_.get_hardware_state(); }
   void force_channel_output(uint8_t channel, float pwm, float current);

@@ -105,20 +105,14 @@ void TemperatureControl::enable(bool enabled) {
 }
 
 TemperatureControlCommand TemperatureControl::compute_control_command(uint32_t current_time_ms) {
-    TemperatureControlCommand command;
-    
-    if (!status_.enabled) {
-        // Disabling control must not end an active emergency: keep the LEDs off and the
-        // fan at full speed until control is re-enabled and the temperature recovers
-        bool emergency = status_.hardware.thermal_emergency;
-        command.fan_enabled = emergency;
-        command.fan_pwm_percent = emergency ? 100.0f : 0.0f;
-        command.emergency_state = emergency;
-        command.override_normal_control = true;
-        command.reason = emergency ? "Temperature control disabled during emergency"
-                                   : "Temperature control disabled";
-        return command;
-    }
+    // "Disabled" turns off fan control only. Thermal shutdown keeps running, so an
+    // emergency can still start, and an active one ends only on a confirmed recovery.
+    TemperatureControlCommand disabled_command;
+    disabled_command.fan_enabled = false;
+    disabled_command.fan_pwm_percent = 0.0f;
+    disabled_command.emergency_state = false;
+    disabled_command.override_normal_control = true;
+    disabled_command.reason = "Temperature control disabled";
     
     // Update timestamp
     last_update_ms_ = current_time_ms;
@@ -139,6 +133,9 @@ TemperatureControlCommand TemperatureControl::compute_control_command(uint32_t c
         // Losing sensors must not end an active emergency; only a confirmed
         // temperature at or below recovery_temp_c clears it
         safety_command.emergency_state = status_.hardware.thermal_emergency;
+        if (!status_.enabled && !safety_command.emergency_state) {
+            return disabled_command;
+        }
         return safety_command;
     }
     
@@ -148,8 +145,19 @@ TemperatureControlCommand TemperatureControl::compute_control_command(uint32_t c
         return emergency_command;
     }
     
+    // No emergency (or it just cleared)
+    if (!status_.enabled) {
+        return disabled_command;
+    }
+    
     // Normal PID control
     return compute_fan_control(current_time_ms);
+}
+
+bool TemperatureControl::emergency_reset_allowed() const {
+    // A manual reset is for a latch that cannot clear itself (no working sensor). While a
+    // working sensor still reads above the recovery temperature, it must not relight the LEDs.
+    return status_.sensors_valid_count == 0 || status_.max_temp_c <= config_.recovery_temp_c;
 }
 
 void TemperatureControl::update_hardware_state(const TemperatureHardwareState& hardware_state) {

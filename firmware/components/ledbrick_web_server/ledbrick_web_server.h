@@ -82,6 +82,7 @@ class LEDBrickWebServer : public Component {
   static esp_err_t handle_api_temperature_config_post(httpd_req_t *req);
   static esp_err_t handle_api_temperature_status_get(httpd_req_t *req);
   static esp_err_t handle_api_fan_curve_get(httpd_req_t *req);
+  static esp_err_t handle_api_temperature_reset_emergency(httpd_req_t *req);
   static esp_err_t handle_not_found(httpd_req_t *req);
   
   // Helper methods

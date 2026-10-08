@@ -536,6 +536,49 @@ void test_emergency_uses_hottest_sensor(TestRunner& runner) {
     runner.assert_false(helper.get_status().hardware.thermal_emergency, "Emergency cleared when all sensors recover");
 }
 
+void test_disabled_control_keeps_shutdown(TestRunner& runner) {
+    runner.start_suite("Disabled Fan Control Tests");
+
+    TemperatureControlTestHelper helper;
+    helper.controller.set_config(emergency_test_config());
+    helper.controller.add_temperature_sensor("sensor1");
+
+    // Disabled: the fan stays off at normal temperatures
+    helper.controller.update_temperature_sensor("sensor1", 50.0f, 1000);
+    helper.update(1100);
+    runner.assert_false(helper.get_status().hardware.fan_enabled, "Fan off while control is disabled");
+
+    // But an overheat still shuts the LEDs down and runs the fan
+    helper.controller.update_temperature_sensor("sensor1", 75.0f, 2000);
+    helper.update(2100);
+    helper.update(2101);
+    runner.assert_true(helper.get_status().hardware.thermal_emergency, "Emergency triggers with control disabled");
+    runner.assert_equals(100.0f, helper.get_status().hardware.fan_pwm_percent, 0.001f, "Fan at full speed in emergency");
+
+    // And it clears on recovery, leaving the fan off again
+    helper.controller.update_temperature_sensor("sensor1", 60.0f, 3000);
+    helper.update(3100);
+    runner.assert_false(helper.get_status().hardware.thermal_emergency, "Emergency clears with control disabled");
+    runner.assert_false(helper.get_status().hardware.fan_enabled, "Fan back off after recovery");
+}
+
+void test_emergency_reset_rule(TestRunner& runner) {
+    runner.start_suite("Emergency Reset Rule Tests");
+
+    TemperatureControlTestHelper helper;
+    trigger_emergency(helper);
+
+    // A working sensor above recovery: no manual reset
+    helper.controller.update_temperature_sensor("sensor1", 68.0f, 3000);
+    helper.update(3100);
+    runner.assert_true(helper.get_status().hardware.thermal_emergency, "Still in emergency");
+    runner.assert_false(helper.controller.emergency_reset_allowed(), "Reset refused while a sensor is hot");
+
+    // Sensor lost: the latch cannot clear itself, so a manual reset is allowed
+    helper.update(30000);
+    runner.assert_true(helper.controller.emergency_reset_allowed(), "Reset allowed with no working sensor");
+}
+
 // Main test runner
 int main() {
     TestResults results;
@@ -583,6 +626,12 @@ int main() {
     results.add_suite_results(runner);
 
     test_emergency_uses_hottest_sensor(runner);
+    results.add_suite_results(runner);
+
+    test_disabled_control_keeps_shutdown(runner);
+    results.add_suite_results(runner);
+
+    test_emergency_reset_rule(runner);
     results.add_suite_results(runner);
     
     results.print_final_summary("Temperature Control");

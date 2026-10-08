@@ -72,6 +72,7 @@ void LEDBrickWebServer::setup() {
     {"/api/temperature/config", HTTP_POST, handle_api_temperature_config_post},
     {"/api/temperature/status", HTTP_GET, handle_api_temperature_status_get},
     {"/api/temperature/fan-curve", HTTP_GET, handle_api_fan_curve_get},
+    {"/api/temperature/reset-emergency", HTTP_POST, handle_api_temperature_reset_emergency},
     // ESPHome-compatible endpoints for scheduler control
     {"/switch/web_scheduler_enable/turn_on", HTTP_POST, handle_scheduler_enable},
     {"/switch/web_scheduler_enable/turn_off", HTTP_POST, handle_scheduler_disable},
@@ -1458,6 +1459,28 @@ esp_err_t LEDBrickWebServer::handle_api_temperature_status_get(httpd_req_t *req)
     doc["pid_output"] = status.pid_output;
     doc["sensors_valid_count"] = status.sensors_valid_count;
     doc["sensors_total_count"] = status.sensors_total_count;
+    return 200;
+  });
+}
+
+esp_err_t LEDBrickWebServer::handle_api_temperature_reset_emergency(httpd_req_t *req) {
+  auto *self = get_instance(req);
+  if (!self->check_auth(req)) return ESP_OK;
+
+  auto *scheduler = self->scheduler_;
+  return self->respond_from_loop_(req, [scheduler](JsonDocument &doc) {
+    if (!scheduler->is_thermal_emergency()) {
+      doc["success"] = true;
+      doc["message"] = "No thermal emergency active";
+      return 200;
+    }
+    if (!scheduler->reset_thermal_emergency()) {
+      doc["error"] = "A sensor still reads above the recovery temperature";
+      doc["code"] = 409;
+      return 409;
+    }
+    doc["success"] = true;
+    doc["message"] = "Thermal emergency reset";
     return 200;
   });
 }

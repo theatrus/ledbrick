@@ -207,6 +207,7 @@ The project follows a clean separation between core algorithms and ESPHome integ
 - `POST /api/temperature/config` - Update temperature control settings
 - `GET /api/temperature/status` - Get temperature control status
 - `GET /api/temperature/fan-curve` - Get current fan curve points
+- `POST /api/temperature/reset-emergency` - Clear a latched thermal emergency (409 while a sensor is still hot)
 
 ## Hardware Integration
 
@@ -236,7 +237,7 @@ The project follows a clean separation between core algorithms and ESPHome integ
 - **Modal positioning**: Ensure proper z-index and DOM structure
 - **Refresh on control changes**: Remove unnecessary onUpdate() calls
 - **Temperature sensors not reading**: Check 1-wire bus connections and sensor IDs
-- **Thermal emergency stays latched**: Only a reading at or below `recovery_temp_c` clears it; sensor loss or disabling temperature control does not
+- **Thermal emergency stays latched**: It starts on the hottest sensor and clears only when every sensor reads at or below `recovery_temp_c`; sensor loss and restarts keep it. "Temperature Control Enable" switches off fan control only, not thermal shutdown. "Reset Thermal Emergency" (HA button, UI banner, or `POST /api/temperature/reset-emergency`) clears a latch only while no working sensor reads above recovery, e.g. after a sensor failed
 - **Fan curve rapid refresh loop**: Fixed - API returns null when temperature control unavailable
 
 ### Debugging

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Status, Schedule } from '../types';
+import { api } from '../api/client';
 import { StatusBarControls } from './StatusBarControls';
 import { ChannelControl } from './ChannelControl';
 import { DEFAULT_CHANNEL_COLORS } from '../constants/colors';
@@ -15,6 +16,20 @@ export function StatusBar({ status, schedule, onUpdate }: StatusBarProps) {
   const [selectedChannel, setSelectedChannel] = useState<number | null>(null);
 
   if (!status) return null;
+
+  const handleEmergencyReset = async () => {
+    if (!window.confirm('Clear the thermal emergency and let the LEDs come back on? Use this only if a ' +
+                        'temperature sensor has failed. The device refuses while a working sensor ' +
+                        'reads above the recovery temperature.')) {
+      return;
+    }
+    try {
+      await api.resetThermalEmergency();
+      onUpdate();
+    } catch (err: any) {
+      alert('Reset refused: ' + (err?.error || 'unknown error'));
+    }
+  };
 
   const handleChannelClick = (channelIndex: number) => {
     // Only allow manual control when scheduler is disabled
@@ -32,6 +47,7 @@ export function StatusBar({ status, schedule, onUpdate }: StatusBarProps) {
           <span className="emergency-temp">
             {status.temperature_control?.current_temp?.toFixed(1) || '--'}°C
           </span>
+          <button className="emergency-reset" onClick={handleEmergencyReset}>Reset</button>
         </div>
       )}
       {/* Time, astronomical info, and sensors */}

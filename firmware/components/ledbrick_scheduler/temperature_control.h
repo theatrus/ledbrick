@@ -104,6 +104,10 @@ public:
     // Hardware state management (called by outer layer)
     void update_hardware_state(const TemperatureHardwareState& hardware_state);
     
+    // Whether a latched emergency may be cleared by hand: only when no working
+    // sensor reads above the recovery temperature
+    bool emergency_reset_allowed() const;
+    
     // Safety evaluation (testable, independent function)
     static TemperatureControlCommand evaluate_safety_conditions(
         const TemperatureControlConfig& config,
