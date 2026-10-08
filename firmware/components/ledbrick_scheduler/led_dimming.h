@@ -30,6 +30,12 @@ struct LedModel {
 
 // Models for the LEDs on LEDBrick emitters (led_models.cpp)
 const std::vector<LedModel>& builtin_led_models();
+
+// The standard LED: the median of the LUXEON C curves. It stands in for any LED without a
+// model, so a channel always has a curve: LEDs with no published curve, boards without an
+// LED map, and a model that is missing (lost from flash, say). A custom model with this id
+// replaces it.
+constexpr const char* STANDARD_LED_MODEL = "standard_led";
 const LedModel* find_led_model(const std::string& id);
 // Looks in custom first, so a custom model with a built-in's id replaces it
 const LedModel* find_led_model(const std::string& id, const std::vector<LedModel>& custom);
@@ -51,11 +57,9 @@ struct LedGroup {
     uint16_t count;     // no default, so {"id", n} works as a C++11 aggregate
 };
 
-// The LEDs in each channel's string on the LEDBrick Plus emitter (8 channels), from its
-// schematic, except WW: built boards have PC ambers where the schematic has deep reds,
-// so WW is 4 LUXEON C 3900K whites and 4 PC ambers. Empty for other channel counts. The two
-// VIOSYS UV LEDs in channel 6's violet string have no Lumileds curve and are left out;
-// they carry the same current.
+// The LEDs in each channel's string on the LEDBrick Plus emitter (8 channels), as built:
+// boards/ledbrick-plus/channels.json, generated into led_models.cpp. Other channel counts get
+// one standard LED.
 std::vector<LedGroup> default_channel_leds(uint8_t channel, uint8_t num_channels);
 
 // How a channel is driven. MANUAL: the schedule sets PWM and current directly.
@@ -83,11 +87,11 @@ struct Drive {
 class ChannelDimmer {
 public:
     ChannelDimmer() = default;
-    // Unknown model ids are skipped; valid() is false when none are known
+    // An unknown model id uses the standard LED. valid() is false only without LEDs.
     ChannelDimmer(const std::vector<LedGroup>& leds, DimPriority priority, float floor_current_a,
                   float reference_temp_c = 25.0f);
-    // Looks the models up in custom first, then the built-in table. The dimmer points into
-    // custom, so it must not outlive a change to it.
+    // Looks the models up in custom first, then the built-in table, then uses the standard
+    // LED. The dimmer points into custom, so it must not outlive a change to it.
     ChannelDimmer(const std::vector<LedGroup>& leds, const std::vector<LedModel>& custom, DimPriority priority,
                   float floor_current_a, float reference_temp_c = 25.0f);
     // For tests and custom parts: models given directly

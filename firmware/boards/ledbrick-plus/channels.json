@@ -1,0 +1,50 @@
+{
+ "board": "LEDBrick Plus emitter (hardware ledbrick_plus_led) on the 8-channel controller (rv_ledbrick_8ch)",
+ "description": "The LEDs in each channel's string, as built. tools/led_curves/gen_led_models.py turns this into default_channel_leds() in led_models.cpp. Models are ids from builtin_led_models(). emitter_netlist.json has the schematic analysis this came from.",
+ "num_channels": 8,
+ "channels": [
+  {
+   "channel": 1,
+   "name": "CyMint",
+   "leds": [{"model": "luxeon_c_mint", "count": 4}, {"model": "luxeon_c_cyan", "count": 4}]
+  },
+  {
+   "channel": 2,
+   "name": "CW",
+   "leds": [{"model": "luxeon_c_white_5900k", "count": 8}]
+  },
+  {
+   "channel": 3,
+   "name": "WW",
+   "leds": [{"model": "luxeon_c_white_3900k", "count": 4}, {"model": "luxeon_c_pc_amber", "count": 4}],
+   "as_built": "The schematic has 2 LUXEON C Deep Red (L1C1-DRD) and 2 PC Amber (L1C1-PCA). Built boards have PC Amber in all 4 places."
+  },
+  {
+   "channel": 4,
+   "name": "PCBlue",
+   "leds": [{"model": "luxeon_c_pc_blue", "count": 8}, {"model": "luxeon_c_blue", "count": 4}],
+   "note": "Also a 0-ohm jumper in the string."
+  },
+  {
+   "channel": 5,
+   "name": "RBCen",
+   "leds": [{"model": "luxeon_rubix_royal_blue", "count": 13}]
+  },
+  {
+   "channel": 6,
+   "name": "V",
+   "leds": [{"model": "luxeon_c_violet", "count": 6}, {"model": "standard_led", "count": 2}],
+   "note": "The 2 UV LEDs (VIOSYS CUN8, full part number not in the design files) have no published curve, so they use the standard LED. Also a 0-ohm jumper in the string."
+  },
+  {
+   "channel": 7,
+   "name": "WBl",
+   "leds": [{"model": "luxeon_c_white_5900k", "count": 6}, {"model": "luxeon_c_royal_blue", "count": 4}]
+  },
+  {
+   "channel": 8,
+   "name": "RBOuter",
+   "leds": [{"model": "luxeon_rubix_royal_blue", "count": 13}]
+  }
+ ]
+}

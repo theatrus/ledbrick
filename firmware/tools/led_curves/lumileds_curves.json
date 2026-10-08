@@ -7,6 +7,35 @@
   "DS309 (2023)": "https://www1.futureelectronics.com/doc/Lumileds/L1RX-5760000000000.pdf"
  },
  "not_published": "Neither DS144 nor DS309 contains peak/dominant-wavelength-shift vs current, or chromaticity/CCT-shift vs current or temperature figures. Only temperature coefficients of wavelength (Table 2a) and of Vf (Table 3) are given.",
+ "standard_model": {
+  "id": "standard_led",
+  "name": "Standard LED (median LUXEON C)",
+  "purpose": "Stands in for an LED without a model: a model lost from flash, LEDs with no published curve (the violet string's UV LEDs), and boards without an LED map.",
+  "method": "Point-wise median of the listed models' curves on a fixed grid, over the range all of them cover (so every point has the same set of curves). Median of their thermal resistances. Deep Red (a different chip type) and the Rubix (normalized at 1500 mA) are left out.",
+  "from": [
+   "luxeon_c_royal_blue",
+   "luxeon_c_blue",
+   "luxeon_c_cyan",
+   "luxeon_c_mint",
+   "luxeon_c_pc_amber",
+   "luxeon_c_violet",
+   "luxeon_c_pc_blue",
+   "luxeon_c_white_5900k",
+   "luxeon_c_white_3900k"
+  ],
+  "test_current_mA": 350,
+  "max_dc_current_mA": 1050,
+  "grid_current_mA": [
+   105,
+   1050,
+   25
+  ],
+  "grid_temp_C": [
+   25,
+   135,
+   5
+  ]
+ },
  "models": [
   {
    "id": "luxeon_c_royal_blue",

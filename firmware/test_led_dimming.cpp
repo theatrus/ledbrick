@@ -74,8 +74,8 @@ void test_channel_output(TestRunner& runner) {
     runner.assert_equals(0.7f, mixed.max_current(limits(1.5f)), 1e-6f, "Lowest LED rating caps the channel");
     runner.assert_equals(0.5f, mixed.max_current(limits(0.5f)), 1e-6f, "Channel limit caps the channel");
 
-    ChannelDimmer empty(std::vector<LedGroup>{{"no_such_led", 4}}, DimPriority::CURRENT_FIRST, 0.1f);
-    runner.assert_false(empty.valid(), "Unknown model gives an invalid dimmer");
+    ChannelDimmer empty(std::vector<LedGroup>(), DimPriority::CURRENT_FIRST, 0.1f);
+    runner.assert_false(empty.valid(), "No LEDs gives an invalid dimmer");
     runner.assert_equals(0.0f, empty.drive_for_level(0.5f, limits(1.0f), 25.0f).pwm, 1e-6f, "Invalid dimmer stays off");
 }
 
@@ -254,7 +254,15 @@ void test_builtin_models(TestRunner& runner) {
         ChannelDimmer dimmer(groups, DimPriority::CURRENT_FIRST, 0.1f);
         runner.assert_true(dimmer.valid(), "Channel " + std::to_string(ch + 1) + " dimmer is valid");
     }
-    runner.assert_true(default_channel_leds(0, 4).empty(), "No defaults for other channel counts");
+    auto other = default_channel_leds(0, 4);
+    runner.assert_true(other.size() == 1 && other[0].model == STANDARD_LED_MODEL && other[0].count == 1,
+                       "Other channel counts get one standard LED");
+
+    // The violet string's UV LEDs have no curve: they are standard LEDs
+    auto violet = default_channel_leds(5, 8);
+    runner.assert_true(violet.size() == 2 && violet[0].model == "luxeon_c_violet" && violet[0].count == 6 &&
+                       violet[1].model == STANDARD_LED_MODEL && violet[1].count == 2,
+                       "V is 6 LUXEON C violets and 2 standard LEDs for the UV");
 
     // WW is 3900K whites and PC ambers, no deep reds
     auto ww_leds = default_channel_leds(2, 8);
@@ -354,8 +362,70 @@ void test_custom_models(TestRunner& runner) {
     runner.assert_equals(1.0f, dimmer.output(0.35f, 25.0f), 1e-4f, "Dimmer uses the custom curve");
     ChannelDimmer replaced({{builtin_id, 4}}, custom, DimPriority::CURRENT_FIRST, 0.1f);
     runner.assert_equals(1.0f, replaced.output(0.35f, 25.0f), 1e-4f, "Dimmer uses the replacement curve");
-    runner.assert_false(ChannelDimmer({{"test_red", 4}}, DimPriority::CURRENT_FIRST, 0.1f).valid(),
-                        "Without the custom list the model is unknown");
+    ChannelDimmer without({{"test_red", 4}}, DimPriority::CURRENT_FIRST, 0.1f);
+    ChannelDimmer standard({{STANDARD_LED_MODEL, 4}}, DimPriority::CURRENT_FIRST, 0.1f);
+    runner.assert_equals(standard.output(0.35f, 25.0f), without.output(0.35f, 25.0f), 1e-6f,
+                         "Without the custom list the model falls back to the standard LED");
+}
+
+void test_standard_model(TestRunner& runner) {
+    runner.start_suite("Standard LED Tests");
+    const LedModel* standard = find_led_model(STANDARD_LED_MODEL);
+    runner.assert_true(standard != nullptr, "Standard LED is built in");
+    if (standard == nullptr) return;
+    std::string error;
+    runner.assert_true(validate_led_model(*standard, &error), "Standard LED passes validation " + error);
+    runner.assert_equals(1.0f, curve_lookup(standard->output_vs_current, 0.35f), 0.01f, "1.0 at 350 mA");
+    runner.assert_equals(1.0f, curve_lookup(standard->output_vs_temp, 85.0f), 0.003f, "1.0 at 85 C");
+    runner.assert_equals(1.05f, standard->max_current_a, 1e-6f, "Rated 1050 mA, like most LUXEON C");
+
+    // A median sits inside the family it comes from
+    const char* family[] = {"luxeon_c_royal_blue", "luxeon_c_blue", "luxeon_c_cyan", "luxeon_c_mint",
+                            "luxeon_c_pc_amber", "luxeon_c_violet", "luxeon_c_pc_blue", "luxeon_c_white_5900k",
+                            "luxeon_c_white_3900k"};
+    bool inside = true;
+    for (float current : {0.15f, 0.3f, 0.5f, 0.7f, 0.9f, 1.05f}) {
+        float low = 1e9f;
+        float high = -1e9f;
+        for (const char* id : family) {
+            float y = curve_lookup(find_led_model(id)->output_vs_current, current);
+            low = std::min(low, y);
+            high = std::max(high, y);
+        }
+        float y = curve_lookup(standard->output_vs_current, current);
+        if (y < low - 1e-3f || y > high + 1e-3f) inside = false;
+    }
+    runner.assert_true(inside, "Standard curve lies within the LUXEON C curves");
+    bool rising = true;
+    for (size_t i = 1; i < standard->vf_vs_current.size(); i++) {
+        if (standard->vf_vs_current[i].y < standard->vf_vs_current[i - 1].y) rising = false;
+    }
+    runner.assert_true(rising, "Standard Vf rises with current");
+
+    // Any unknown model uses it, so a channel always has a curve
+    ChannelDimmer unknown({{"no_such_led", 3}}, DimPriority::CURRENT_FIRST, 0.1f);
+    ChannelDimmer reference({{STANDARD_LED_MODEL, 3}}, DimPriority::CURRENT_FIRST, 0.1f);
+    runner.assert_true(unknown.valid(), "A channel of unknown LEDs still dims");
+    runner.assert_equals(reference.output(0.5f, 40.0f), unknown.output(0.5f, 40.0f), 1e-6f, "on the standard curve");
+    Drive drive = unknown.drive_for_level(0.5f, limits(1.0f), 25.0f);
+    runner.assert_true(drive.current_a > 0.0f && drive.pwm > 0.0f, "and lights at half level");
+    ChannelDimmer mixed({{"luxeon_c_violet", 6}, {"no_such_led", 2}}, DimPriority::CURRENT_FIRST, 0.1f);
+    ChannelDimmer violet({{"luxeon_c_violet", 6}, {STANDARD_LED_MODEL, 2}}, DimPriority::CURRENT_FIRST, 0.1f);
+    runner.assert_equals(violet.output(0.5f, 40.0f), mixed.output(0.5f, 40.0f), 1e-6f,
+                         "Unknown LEDs in a mixed string count as standard LEDs");
+    runner.assert_equals(1.05f, mixed.max_current(limits(2.0f)), 1e-6f, "and are held to its 1050 mA");
+    runner.assert_false(ChannelDimmer(std::vector<LedGroup>(), DimPriority::CURRENT_FIRST, 0.1f).valid(),
+                        "No LEDs at all is still invalid");
+
+    // A custom model can replace the standard LED, for unknown models too
+    LedModel mine = make_blue();
+    mine.id = STANDARD_LED_MODEL;
+    std::vector<LedModel> custom = {mine};
+    std::vector<LedModel> blues = {make_blue()};
+    ChannelDimmer replaced({{"no_such_led", 3}}, custom, DimPriority::CURRENT_FIRST, 0.1f);
+    ChannelDimmer blue({{"test_blue", 3}}, blues, DimPriority::CURRENT_FIRST, 0.1f);
+    runner.assert_equals(blue.output(0.5f, 40.0f), replaced.output(0.5f, 40.0f), 1e-6f,
+                         "A custom standard_led replaces the fallback");
 }
 
 int main() {
@@ -392,6 +462,9 @@ int main() {
     results.add_suite_results(runner);
 
     test_custom_models(runner);
+    results.add_suite_results(runner);
+
+    test_standard_model(runner);
     results.add_suite_results(runner);
 
     results.print_final_summary("LED Dimming");

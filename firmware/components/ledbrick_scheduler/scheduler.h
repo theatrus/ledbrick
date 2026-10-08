@@ -190,8 +190,8 @@ public:
     // error, when given, may say why an import failed. Custom LED models are not part of
     // the schedule (see import_led_models_json). A channel naming a model that is not
     // known fails the import, unless allow_unknown_models is set: then the channel keeps the
-    // name and skips those LEDs until the model is back (for the saved copy, so a lost model
-    // cannot lose the whole schedule).
+    // name and uses the standard LED for it until the model is back (for the saved copy, so
+    // a lost model cannot lose the whole schedule).
     bool import_json(const std::string& json_str, std::string* error = nullptr, bool allow_unknown_models = false);
     
     // Built-in preset (only one default)
@@ -211,7 +211,7 @@ public:
     // Changes how a channel is dimmed. Switching between manual and curve mode converts the
     // channel's schedule points and moonlight, so the light they give stays the same.
     // Returns false and changes nothing for an unknown LED model, a bad count or floor
-    // current, or curve mode without known LEDs.
+    // current, or curve mode without LEDs.
     bool set_channel_dimming(uint8_t channel, ledbrick::DimMode mode, ledbrick::DimPriority priority,
                              float floor_current, const std::vector<ledbrick::LedGroup>& leds,
                              std::string* error = nullptr);

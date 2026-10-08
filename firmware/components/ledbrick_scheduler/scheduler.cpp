@@ -1930,9 +1930,9 @@ bool LEDScheduler::parse_channel_dimming_json(const cJSON* item, uint8_t channel
         if (!valid_led_groups(config.leds, nullptr, allow_unknown_models)) return false;
     }
 
-    // Curve mode needs LEDs with known curves. A saved channel whose models were lost stays
-    // dark until they are back, rather than fail the whole schedule.
-    if (config.dim_mode == ledbrick::DimMode::CURVE && !allow_unknown_models) {
+    // Curve mode needs LEDs to go by. In the saved copy, a model that was lost uses the
+    // standard LED until it is back, rather than fail the whole schedule.
+    if (config.dim_mode == ledbrick::DimMode::CURVE) {
         std::vector<ledbrick::LedGroup> in_use =
             config.leds.empty() ? ledbrick::default_channel_leds(channel, num_channels_) : config.leds;
         if (!ledbrick::ChannelDimmer(in_use, custom_led_models_, config.dim_priority, config.floor_current).valid()) {

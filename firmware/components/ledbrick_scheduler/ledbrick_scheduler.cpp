@@ -58,7 +58,7 @@ void LEDBrickScheduler::setup() {
   load_schedule_from_flash();
   std::string model_error;
   if (!scheduler_.channels_have_models(&model_error)) {
-    ESP_LOGE(TAG, "%s; that channel skips those LEDs until the model is posted to /api/led_models",
+    ESP_LOGE(TAG, "%s; using the standard LED for it until the model is posted to /api/led_models",
              model_error.c_str());
   }
   

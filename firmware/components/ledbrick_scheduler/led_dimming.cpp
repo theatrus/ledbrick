@@ -33,23 +33,6 @@ float curve_lookup(const std::vector<CurvePoint>& curve, float x) {
     return curve.back().y;
 }
 
-std::vector<LedGroup> default_channel_leds(uint8_t channel, uint8_t num_channels) {
-    if (num_channels != 8) {
-        return {};
-    }
-    switch (channel) {
-        case 0: return {{"luxeon_c_mint", 4}, {"luxeon_c_cyan", 4}};                                      // CyMint
-        case 1: return {{"luxeon_c_white_5900k", 8}};                                                     // CW
-        case 2: return {{"luxeon_c_white_3900k", 4}, {"luxeon_c_pc_amber", 4}};                           // WW
-        case 3: return {{"luxeon_c_pc_blue", 8}, {"luxeon_c_blue", 4}};                                   // PC blue
-        case 4: return {{"luxeon_rubix_royal_blue", 13}};                                                 // Royal blue, centre
-        case 5: return {{"luxeon_c_violet", 6}};                                                          // Violet (+2 UV)
-        case 6: return {{"luxeon_c_white_5900k", 6}, {"luxeon_c_royal_blue", 4}};                        // White + blue
-        case 7: return {{"luxeon_rubix_royal_blue", 13}};                                                 // Royal blue, outer
-        default: return {};
-    }
-}
-
 const LedModel* find_led_model(const std::string& id) {
     for (const auto& model : builtin_led_models()) {
         if (model.id == id) {
@@ -162,6 +145,9 @@ ChannelDimmer::ChannelDimmer(const std::vector<LedGroup>& leds, const std::vecto
     : priority_(priority), floor_current_a_(floor_current_a), reference_temp_c_(reference_temp_c) {
     for (const auto& group : leds) {
         const LedModel* model = find_led_model(group.model, custom);
+        if (model == nullptr) {
+            model = find_led_model(STANDARD_LED_MODEL, custom);
+        }
         if (model != nullptr && group.count > 0 && !model->output_vs_current.empty()) {
             leds_.push_back({model, static_cast<float>(group.count)});
         }

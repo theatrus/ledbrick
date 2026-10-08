@@ -1062,8 +1062,8 @@ void test_channel_dimming(TestRunner& runner) {
                                                       {{"no_such_led", 3}}, &error), "Unknown LED rejected");
     runner.assert_false(scheduler.is_curve_channel(4), "Still manual after rejected changes");
     LEDScheduler small(4);
-    runner.assert_false(small.set_channel_dimming(0, DimMode::CURVE, DimPriority::CURRENT_FIRST, 0.1f, {}, &error),
-                        "Curve mode needs LEDs: no defaults for 4 channels");
+    runner.assert_true(small.set_channel_dimming(0, DimMode::CURVE, DimPriority::CURRENT_FIRST, 0.1f, {}, &error),
+                       "A board without an LED map dims on the standard LED");
     runner.assert_true(small.set_channel_dimming(0, DimMode::CURVE, DimPriority::PWM_FIRST, 0.1f,
                                                  {{"luxeon_c_royal_blue", 6}}, &error), "Explicit LEDs work");
 }
@@ -1223,11 +1223,15 @@ void test_custom_led_models(TestRunner& runner) {
                        "Channel keeps its mode and LED names");
     runner.assert_false(missing.channels_have_models(&error), "Missing model reported");
     runner.assert_true(error.find("my_red") != std::string::npos, "Report names the model: " + error);
-    runner.assert_true(missing.channel_dimmer(2).valid(), "Channel dims on the LEDs it still knows");
+    runner.assert_true(missing.channel_dimmer(2).valid(), "Channel dims, the lost model as a standard LED");
     LEDScheduler lost(8);
     lost.import_json(settings("", R"(,"leds":[{"model":"my_red","count":4}])"), nullptr, true);
-    runner.assert_false(lost.channel_dimmer(2).valid(), "With none known the channel stays dark");
-    runner.assert_true(lost.channel_dimmer(2).drive_for_level(0.5f, limits, 25.0f).current_a == 0.0f, "Dark: no current");
+    runner.assert_true(lost.channel_dimmer(2).valid(), "With none known the channel uses the standard LED");
+    ledbrick::Drive lost_drive = lost.channel_dimmer(2).drive_for_level(0.5f, limits, 25.0f);
+    ledbrick::ChannelDimmer standard_dimmer({{ledbrick::STANDARD_LED_MODEL, 4}}, DimPriority::CURRENT_FIRST, 0.1f);
+    ledbrick::Drive standard_drive = standard_dimmer.drive_for_level(0.5f, limits, 25.0f);
+    runner.assert_true(lost_drive.current_a > 0.0f && std::fabs(lost_drive.current_a - standard_drive.current_a) < 1e-6f &&
+                       std::fabs(lost_drive.pwm - standard_drive.pwm) < 1e-6f, "It lights as the standard LED would");
     runner.assert_true(missing.import_led_models_json(R"({"led_models":[]})", &error),
                        "Other model changes still work while a channel waits " + error);
     runner.assert_true(missing.import_led_models_json(red_list, &error), "Posting the model back " + error);
