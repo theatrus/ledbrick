@@ -1566,9 +1566,11 @@ void LEDBrickScheduler::register_temperature_sensor_(const std::string &name, se
 }
 
 void LEDBrickScheduler::on_temperature_reading_(const std::string &name, float temp) {
-  // Basic sanity check on temperature value; NaN fails it too
+  // Basic sanity check on temperature value; NaN fails it too. A noisy 1-Wire bus fails
+  // some reads, so the controller holds the last good value through a few of these
   if (!(temp > -50.0f && temp < 150.0f)) {
-    ESP_LOGW(TAG, "Invalid temperature reading from %s: %.1f°C", name.c_str(), temp);
+    ESP_LOGD(TAG, "Invalid temperature reading from %s: %.1f°C", name.c_str(), temp);
+    temp_control_.report_failed_reading(name, millis());
     return;
   }
   temp_control_.update_temperature_sensor(name, temp, millis());

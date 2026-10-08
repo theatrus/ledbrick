@@ -13,7 +13,9 @@ struct TemperatureSensor {
     std::string name;
     float temperature_c;
     bool valid;
-    uint32_t last_update_ms;
+    uint32_t last_update_ms;      // Last good reading
+    uint32_t last_report_ms;      // Last reading of any kind, good or failed
+    uint32_t failed_readings;     // Failed readings in a row since the last good one
 };
 
 // Using standalone PIDController from pid_controller.h
@@ -87,6 +89,11 @@ public:
     // Sensor management
     void add_temperature_sensor(const std::string& name);
     void update_temperature_sensor(const std::string& name, float temp_c, uint32_t timestamp_ms);
+    // A read that failed (CRC error, NaN, out of range). 1-Wire buses are noisy, so a sensor
+    // that keeps reporting holds its last good reading through MAX_FAILED_READINGS of these
+    // in a row; a sensor that stops reporting still times out after sensor_timeout_ms.
+    void report_failed_reading(const std::string& name, uint32_t timestamp_ms);
+    static constexpr uint32_t MAX_FAILED_READINGS = 5;  // 25 s at the DS18B20's 5 s interval
     std::vector<TemperatureSensor> get_sensors() const;
     
     // Fan control callbacks

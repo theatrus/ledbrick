@@ -236,7 +236,7 @@ The project follows a clean separation between core algorithms and ESPHome integ
 - **JSON parsing errors**: Check for extra quotes or malformed JSON in API responses
 - **Modal positioning**: Ensure proper z-index and DOM structure
 - **Refresh on control changes**: Remove unnecessary onUpdate() calls
-- **Temperature sensors not reading**: Check 1-wire bus connections and sensor IDs
+- **Temperature sensors not reading**: Check 1-wire bus connections and sensor IDs. Some failed reads (scratch pad CRC errors) are normal on a noisy bus: a sensor that keeps reporting holds its last good value through 5 failed reads in a row, while one that stops reporting times out after `sensor_timeout_ms`
 - **Thermal emergency stays latched**: It starts on the hottest sensor and clears only when every sensor reads at or below `recovery_temp_c`; sensor loss and restarts keep it. "Temperature Control Enable" switches off fan control only, not thermal shutdown. "Reset Thermal Emergency" (HA button, UI banner, or `POST /api/temperature/reset-emergency`) clears a latch only while no working sensor reads above recovery, e.g. after a sensor failed
 - **Fan curve rapid refresh loop**: Fixed - API returns null when temperature control unavailable
 

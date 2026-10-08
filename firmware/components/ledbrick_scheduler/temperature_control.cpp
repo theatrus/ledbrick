@@ -62,7 +62,9 @@ void TemperatureControl::add_temperature_sensor(const std::string& name) {
     sensor.temperature_c = 0.0f;
     sensor.valid = false;
     sensor.last_update_ms = 0;
-    
+    sensor.last_report_ms = 0;
+    sensor.failed_readings = 0;
+
     sensors_.push_back(sensor);
     LOG_INFO("Added temperature sensor: %s", name.c_str());
 }
@@ -73,10 +75,30 @@ void TemperatureControl::update_temperature_sensor(const std::string& name, floa
             sensor.temperature_c = temp_c;
             sensor.valid = true;
             sensor.last_update_ms = timestamp_ms;
+            sensor.last_report_ms = timestamp_ms;
+            sensor.failed_readings = 0;
             return;
         }
     }
-    
+
+    LOG_WARN("Temperature sensor '%s' not found for update", name.c_str());
+}
+
+void TemperatureControl::report_failed_reading(const std::string& name, uint32_t timestamp_ms) {
+    for (auto& sensor : sensors_) {
+        if (sensor.name == name) {
+            sensor.last_report_ms = timestamp_ms;
+            if (sensor.failed_readings <= MAX_FAILED_READINGS) {
+                sensor.failed_readings++;
+                if (sensor.failed_readings > MAX_FAILED_READINGS && sensor.valid) {
+                    LOG_WARN("Temperature sensor '%s' failed %u readings in a row; ignoring it until it reads again",
+                             name.c_str(), static_cast<unsigned>(sensor.failed_readings));
+                }
+            }
+            return;
+        }
+    }
+
     LOG_WARN("Temperature sensor '%s' not found for update", name.c_str());
 }
 
@@ -176,14 +198,16 @@ float TemperatureControl::get_average_temperature(uint32_t current_time_ms) {
 
         // Signed difference so a reading stamped slightly after current_time_ms, or one
         // taken across a millis() wrap, does not look about 49 days old
-        int32_t age_ms = static_cast<int32_t>(current_time_ms - sensor.last_update_ms);
+        int32_t age_ms = static_cast<int32_t>(current_time_ms - sensor.last_report_ms);
         if (age_ms < 0) {
             age_ms = 0;
         }
 
-        // Check if sensor data is recent and temperature is valid (> 0°C)
+        // The sensor must still be reporting, and a few failed reads in a row only hold its
+        // last good value; the temperature must be valid (> 0°C)
         if (sensor.valid &&
             static_cast<uint32_t>(age_ms) <= config_.sensor_timeout_ms &&
+            sensor.failed_readings <= MAX_FAILED_READINGS &&
             sensor.temperature_c > 0.0f) {  // Reject 0°C or lower (catches NaN too)
             temp_sum += sensor.temperature_c;
             if (valid_count == 0 || sensor.temperature_c > max_temp) {

@@ -375,6 +375,59 @@ void test_emergency_latched_through_sensor_faults(TestRunner& runner) {
     runner.assert_false(helper.get_status().hardware.thermal_emergency, "Emergency cleared at recovery");
 }
 
+void test_failed_readings_tolerated(TestRunner& runner) {
+    runner.start_suite("Failed Reading Tolerance Tests");
+
+    TemperatureControlTestHelper helper;
+    helper.controller.enable(true);
+    TemperatureControlConfig config;
+    config.sensor_timeout_ms = 10000;
+    helper.controller.set_config(config);
+    helper.controller.add_temperature_sensor("sensor1");
+
+    // A good reading, then failed reads every 5 s, as CRC errors on a noisy 1-Wire bus give.
+    // The last good reading is now older than the timeout, but the sensor is still reporting.
+    helper.controller.update_temperature_sensor("sensor1", 40.0f, 0);
+    uint32_t t = 0;
+    for (uint32_t i = 0; i < TemperatureControl::MAX_FAILED_READINGS; i++) {
+        t += 5000;
+        helper.controller.report_failed_reading("sensor1", t);
+    }
+    helper.update(t + 4000);
+    runner.assert_equals(1, static_cast<int>(helper.get_status().sensors_valid_count),
+                         "Sensor holds its last reading through the allowed failed reads");
+    runner.assert_equals(40.0f, helper.get_status().max_temp_c, 0.001f, "Last good reading kept");
+
+    // One failure too many: the sensor is no longer trusted
+    t += 5000;
+    helper.controller.report_failed_reading("sensor1", t);
+    helper.update(t + 100);
+    runner.assert_equals(0, static_cast<int>(helper.get_status().sensors_valid_count),
+                         "Sensor invalid after too many failed reads in a row");
+    t += 5000;
+    helper.controller.report_failed_reading("sensor1", t);
+    helper.update(t + 100);
+    runner.assert_equals(0, static_cast<int>(helper.get_status().sensors_valid_count),
+                         "Still invalid while reads keep failing");
+
+    // A good reading makes it valid again and restarts the count
+    t += 5000;
+    helper.controller.update_temperature_sensor("sensor1", 41.0f, t);
+    helper.update(t + 100);
+    runner.assert_equals(1, static_cast<int>(helper.get_status().sensors_valid_count),
+                         "Valid again after a good reading");
+    t += 5000;
+    helper.controller.report_failed_reading("sensor1", t);
+    helper.update(t + 100);
+    runner.assert_equals(1, static_cast<int>(helper.get_status().sensors_valid_count),
+                         "Failure count restarts after a good reading");
+
+    // A sensor that stops reporting altogether still times out
+    helper.update(t + config.sensor_timeout_ms + 1);
+    runner.assert_equals(0, static_cast<int>(helper.get_status().sensors_valid_count),
+                         "Silent sensor times out");
+}
+
 void test_disable_keeps_emergency(TestRunner& runner) {
     runner.start_suite("Disable During Emergency Tests");
 
@@ -611,6 +664,9 @@ int main() {
     results.add_suite_results(runner);
 
     test_emergency_latched_through_sensor_faults(runner);
+    results.add_suite_results(runner);
+
+    test_failed_readings_tolerated(runner);
     results.add_suite_results(runner);
 
     test_disable_keeps_emergency(runner);
