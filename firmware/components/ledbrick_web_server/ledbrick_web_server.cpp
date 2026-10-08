@@ -802,8 +802,13 @@ esp_err_t LEDBrickWebServer::handle_pwm_scale_set(httpd_req_t *req) {
 
   auto *scheduler = self->scheduler_;
   float scale = percent / 100.0f;  // Convert from percentage
-  if (!self->run_in_loop_([scheduler, scale]() { scheduler->set_pwm_scale(scale); })) {
+  auto saved = std::make_shared<bool>(true);
+  if (!self->run_in_loop_([scheduler, scale, saved]() { *saved = scheduler->set_pwm_scale(scale); })) {
     self->send_error(req, 503, "Device busy, try again");
+    return ESP_OK;
+  }
+  if (!*saved) {
+    self->send_error(req, 500, "PWM scale applied but the schedule is too large to save; it will be lost on restart");
     return ESP_OK;
   }
   httpd_resp_send(req, "OK", HTTPD_RESP_USE_STRLEN);

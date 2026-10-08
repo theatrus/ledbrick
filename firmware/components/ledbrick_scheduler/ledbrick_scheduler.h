@@ -117,8 +117,8 @@ class LEDBrickScheduler : public PollingComponent {
   void force_channel_output(uint8_t channel, float pwm, float current);
   size_t get_schedule_size() const { return scheduler_.get_schedule_size(); }
   
-  // PWM scaling
-  void set_pwm_scale(float scale);
+  // PWM scaling. Returns false when the new scale applies but could not be saved
+  bool set_pwm_scale(float scale);
   float get_pwm_scale() const { return pwm_scale_; }
   
   // Moon simulation - with auto-save

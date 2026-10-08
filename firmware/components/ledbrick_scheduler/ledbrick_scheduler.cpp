@@ -417,21 +417,23 @@ void LEDBrickScheduler::set_enabled(bool enabled) {
   ESP_LOGI(TAG, "Scheduler %s and saved", enabled ? "enabled" : "disabled");
 }
 
-void LEDBrickScheduler::set_pwm_scale(float scale) {
+bool LEDBrickScheduler::set_pwm_scale(float scale) {
   if (scale < 0.0f) {
     scale = 0.0f;
   } else if (scale > 1.0f) {
     scale = 1.0f;
   }
-  
+
+  bool saved = true;
   if (abs(pwm_scale_ - scale) > 0.001f) {
     pwm_scale_ = scale;
     ESP_LOGI(TAG, "PWM scale set to %.2f (%.0f%%)", pwm_scale_, pwm_scale_ * 100.0f);
-    save_schedule_to_flash();
-    
+    saved = save_schedule_to_flash();
+
     // Force immediate update to apply new scale
     update();
   }
+  return saved;
 }
 
 void LEDBrickScheduler::create_sunrise_sunset_preset_with_astro_data() const {
@@ -603,6 +605,10 @@ bool LEDBrickScheduler::save_schedule_to_flash() {
   if (success) {
     flash_load_failed_ = false;  // The stored copy is valid again
     ESP_LOGD(TAG, "Saved schedule to flash (JSON format, %" PRIu32 " bytes)", storage->json_length);
+    // ESPHome holds preference writes for up to a minute, so a power cut soon after a change
+    // lost it although the change had been reported saved. Write it out shortly after the
+    // last save; a burst of saves (one per channel, say) is written once.
+    this->set_timeout("flush_schedule", 1000, []() { global_preferences->sync(); });
   } else {
     ESP_LOGW(TAG, "Failed to save schedule to flash");
   }
