@@ -248,12 +248,12 @@ How the dimmer works:
 - The current is commanded a quarter step above the step it should land on, so the driver gives that step whether it truncates or rounds ADIM.
 - The floor is never below the lowest current the LEDs' datasheet curves cover (about 100 mA for LUXEON C, 160 mA for the Rubix), nor the 50 mA ADIM gate.
 - Thermal compensation: each LED's junction is the board sensor temperature plus its thermal resistance times its power (Rth x Vf x I). Hotter LEDs get more current or PWM, up to the maximum.
-- The channel maximum is also capped by the LEDs' datasheet maximum. The WW string has deep red LEDs rated 700 mA, so WW cannot exceed 700 mA in curve mode.
+- The channel maximum is also capped by the LEDs' datasheet maximum, for example 1050 mA for LUXEON C Royal Blue or 700 mA for LUXEON C Deep Red.
 - Changing a channel's mode converts its schedule points and moonlight to give the same light. Curve to manual uses PWM at the channel maximum.
 - The PWM scale multiplies the level.
 
 LED data:
-- `default_channel_leds()` (led_dimming.cpp) lists each channel's LEDs on the LEDBrick Plus emitter, from its schematic. Six of eight strings mix parts. The two VIOSYS UV LEDs in the violet string have no curve and are left out.
+- `default_channel_leds()` (led_dimming.cpp) lists each channel's LEDs on the LEDBrick Plus emitter, from its schematic, except WW: built boards carry 8 LUXEON C 3900K whites there, not the schematic's whites, deep reds and PC ambers. Four strings mix parts: CyMint, PCBlue, V and WBl. The two VIOSYS UV LEDs in the violet string have no curve and are left out. A channel's LEDs can be changed in the web UI.
 - `tools/led_curves/lumileds_curves.json` holds the Lumileds curves (DS144 LUXEON C, DS309 LUXEON Rubix) with the figure and page each came from. Run `python3 tools/led_curves/gen_led_models.py` from `firmware/` to regenerate `led_models.cpp` after changing it.
 
 ## Common Issues and Solutions

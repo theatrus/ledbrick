@@ -38,8 +38,10 @@ struct LedGroup {
 };
 
 // The LEDs in each channel's string on the LEDBrick Plus emitter (8 channels), from its
-// schematic. Empty for other channel counts. The two VIOSYS UV LEDs in channel 6's violet
-// string have no Lumileds curve and are left out; they carry the same current.
+// schematic, except WW: built boards carry 8 LUXEON C 3900K whites there, not the
+// schematic's whites, deep reds and PC ambers. Empty for other channel counts. The two
+// VIOSYS UV LEDs in channel 6's violet string have no Lumileds curve and are left out;
+// they carry the same current.
 std::vector<LedGroup> default_channel_leds(uint8_t channel, uint8_t num_channels);
 
 // How a channel is driven. MANUAL: the schedule sets PWM and current directly.

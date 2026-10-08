@@ -256,9 +256,15 @@ void test_builtin_models(TestRunner& runner) {
     }
     runner.assert_true(default_channel_leds(0, 4).empty(), "No defaults for other channel counts");
 
-    // The WW string's deep red LEDs are rated 700 mA, so the channel cannot go above it
-    ChannelDimmer ww(default_channel_leds(2, 8), DimPriority::CURRENT_FIRST, 0.1f);
-    runner.assert_equals(0.7f, ww.max_current(limits(1.0f)), 1e-6f, "WW channel capped at the deep red's 700 mA");
+    // WW is all LUXEON C 3900K whites
+    auto ww_leds = default_channel_leds(2, 8);
+    runner.assert_true(ww_leds.size() == 1 && ww_leds[0].model == "luxeon_c_white_3900k" && ww_leds[0].count == 8,
+                       "WW is 8 LUXEON C 3900K whites");
+
+    // A string with deep reds (rated 700 mA) cannot go above 700 mA, whatever the channel limit
+    ChannelDimmer with_red(std::vector<LedGroup>{{"luxeon_c_white_3900k", 4}, {"luxeon_c_deep_red", 2}},
+                           DimPriority::CURRENT_FIRST, 0.1f);
+    runner.assert_equals(0.7f, with_red.max_current(limits(1.0f)), 1e-6f, "Deep red caps a string at 700 mA");
 
     // Real curves give a smooth, exact ramp too. Level 1 is the output at 25 C, so at 45 C
     // the top of the range saturates at the maximum current.
