@@ -218,8 +218,9 @@ The project follows a clean separation between core algorithms and ESPHome integ
 - **Temperature**: DS18B20 sensors on 1-wire bus (GPIO41)
 
 ### Channel Configuration
-- **8 LED Channels**: PWM control with current limiting
-- **Current Control**: Analog outputs for constant current regulation
+- **8 LED Channels**: TPS922053 drivers. EN/PWM takes 1 kHz PWM dimming (LEDC)
+- **Current Control**: ADIM/HD takes a 10 kHz PWM (MCPWM). The driver reads its duty digitally: LED current = 2 A x duty, 8-bit up to 39 kHz
+- **Hybrid dimming hazard**: if ADIM stays low while EN/PWM pulses, the driver sets the current from the PWM duty alone, up to 2 A. `packages/channel.yaml` holds EN/PWM off while the channel current is below 50 mA
 - **Status LED**: WS2812 RGB LED for system status indication
 
 ## Common Issues and Solutions

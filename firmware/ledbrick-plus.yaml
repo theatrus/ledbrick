@@ -192,6 +192,8 @@ output:
     pin: GPIO37
     frequency: 16000Hz
     inverted: true
+    # The eight LEDC channels drive the LED dimming outputs at 1 kHz
+    driver: mcpwm
 
 switch:
   - platform: gpio
