@@ -70,6 +70,15 @@ double AstronomicalCalculator::calculate_julian_day(const DateTime& dt) const {
     return jd;
 }
 
+float AstronomicalCalculator::moon_illumination_from_phase(float phase) {
+    // The lit share follows the elongation from the sun: (1 - cos) / 2
+    return static_cast<float>(0.5 * (1.0 - std::cos(2.0 * M_PI * phase)));
+}
+
+float AstronomicalCalculator::get_moon_illumination(const DateTime& dt) const {
+    return moon_illumination_from_phase(get_moon_phase(dt));
+}
+
 float AstronomicalCalculator::get_moon_phase(const DateTime& dt) const {
     double jd = calculate_julian_day(dt);
     

@@ -804,7 +804,19 @@ void test_moon_simulation(TestRunner& runner) {
                         "Quarter moon Ch1 - half intensity (expected: 1.5, actual: " + std::to_string(quarter_moon_result.pwm_values[0]) + ")");
     runner.assert_equals(0.75f, quarter_moon_result.pwm_values[3], 0.01f, 
                         "Quarter moon Ch4 - half intensity (expected: 0.75, actual: " + std::to_string(quarter_moon_result.pwm_values[3]) + ")");
-    
+
+    // Crescents and gibbous moons follow the share that is lit, not the position in the
+    // cycle: two days before new moon (0.93) only 4.8% is lit
+    astro_times.moon_phase = 0.93f;
+    auto crescent_result = scheduler.get_values_at_time_with_astro(1320, astro_times);
+    float crescent_lit = 0.5f * (1.0f - std::cos(6.28318531f * 0.93f));
+    runner.assert_equals(3.0f * crescent_lit, crescent_result.pwm_values[0], 0.01f,
+                         "Waning crescent Ch1 - scaled by the share lit (actual: " + std::to_string(crescent_result.pwm_values[0]) + ")");
+    astro_times.moon_phase = 0.4f;
+    auto gibbous_result = scheduler.get_values_at_time_with_astro(1320, astro_times);
+    runner.assert_equals(3.0f * 0.5f * (1.0f - std::cos(6.28318531f * 0.4f)), gibbous_result.pwm_values[0], 0.01f,
+                         "Waxing gibbous Ch1 - scaled by the share lit (actual: " + std::to_string(gibbous_result.pwm_values[0]) + ")");
+
     // Test 5: Moon below horizon at night - no moonlight  
     // Update moon times so moon is NOT visible at night (rises at 6 AM, sets at 6 PM)
     astro_times.moonrise_minutes = 360;   // 6:00 AM

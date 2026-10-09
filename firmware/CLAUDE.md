@@ -190,7 +190,7 @@ The project follows a clean separation between core algorithms and ESPHome integ
 - **Channel Configuration**: Configure channel names, colors, and maximum current limits
 - **Location Settings**: Set latitude/longitude with reef location presets
 - **Time Shift/Projection**: Map remote astronomical times to local timezone
-- **Moon Simulation**: Configure moon phase effects on lighting
+- **Moon Simulation**: Moonlight scaled by the share of the moon that is lit (`moon_illumination` in `/api/status`; `moon_phase` is the position in the cycle, 0 new to 0.5 full)
 - **Manual Control**: Direct channel control when scheduler is disabled
 
 ### Recent Enhancements

@@ -78,7 +78,7 @@ public:
         uint16_t astronomical_dusk_minutes = 1170; // Default 7:30 PM
         uint16_t moonrise_minutes = 0;      // Moon rise time (0-1439)
         uint16_t moonset_minutes = 0;       // Moon set time (0-1439)
-        float moon_phase = 0.0f;            // Moon phase (0=new, 0.5=full, 1=new)
+        float moon_phase = 0.0f;            // Position in the lunar cycle (0=new, 0.5=full, 1=new)
         bool valid = false;  // Whether times have been calculated
     };
 
@@ -106,8 +106,8 @@ public:
         bool enabled = false;
         std::vector<float> base_intensity;  // Base moonlight PWM per channel (0-100%)
         std::vector<float> base_current;    // Base moonlight current per channel (0-max_current)
-        bool phase_scaling_pwm = true;      // Scale PWM by moon phase
-        bool phase_scaling_current = true;  // Scale current by moon phase
+        bool phase_scaling_pwm = true;      // Scale PWM by the share of the moon that is lit
+        bool phase_scaling_current = true;  // Scale current by the share of the moon that is lit
         float min_current_threshold = 0.0f; // Minimum current when phase scaling (0-2A)
         
         MoonSimulation() = default;

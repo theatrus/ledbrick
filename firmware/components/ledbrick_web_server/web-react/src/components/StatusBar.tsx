@@ -5,6 +5,7 @@ import { StatusBarControls } from './StatusBarControls';
 import { ChannelControl } from './ChannelControl';
 import { DEFAULT_CHANNEL_COLORS } from '../constants/colors';
 import { isCurveChannel } from '../utils/dimming';
+import { formatMoon } from '../utils/moon';
 
 interface StatusBarProps {
   status: Status | null;
@@ -75,7 +76,7 @@ export function StatusBar({ status, schedule, onUpdate }: StatusBarProps) {
           )}
           {status.moon_phase !== undefined && status.moon_phase !== null && (
             <div className="status-item">
-              <strong>Moon:</strong> {(status.moon_phase * 100).toFixed(1)}%
+              <strong>Moon:</strong> {formatMoon(status.moon_phase, status.moon_illumination)}
             </div>
           )}
           {status.moonrise_time && (

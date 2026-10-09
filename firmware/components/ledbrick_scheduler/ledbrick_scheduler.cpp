@@ -1097,6 +1097,10 @@ float LEDBrickScheduler::get_moon_phase() const {
   return astro_calc_.get_moon_phase(dt);
 }
 
+float LEDBrickScheduler::get_moon_illumination() const {
+  return AstronomicalCalculator::moon_illumination_from_phase(get_moon_phase());
+}
+
 const LEDBrickScheduler::DailyAstroTimes &LEDBrickScheduler::get_daily_astro_times_() const {
   // The moon search alone takes hundreds of double-precision steps, which the ESP32-S3 does
   // in software; the results only change with the date and settings, so keep them per day
@@ -1567,10 +1571,10 @@ void LEDBrickScheduler::update_astronomical_times_for_scheduler(bool force) {
            astro_times.solar_noon_minutes / 60, astro_times.solar_noon_minutes % 60);
   
   if (moon_times.rise_valid || moon_times.set_valid) {
-    ESP_LOGD(TAG, "Moon data - Rise: %02u:%02u, Set: %02u:%02u, Phase: %.1f%%",
+    ESP_LOGD(TAG, "Moon data - Rise: %02u:%02u, Set: %02u:%02u, %.0f%% lit (cycle %.2f)",
              astro_times.moonrise_minutes / 60, astro_times.moonrise_minutes % 60,
              astro_times.moonset_minutes / 60, astro_times.moonset_minutes % 60,
-             moon_phase * 100.0f);
+             AstronomicalCalculator::moon_illumination_from_phase(moon_phase) * 100.0f, moon_phase);
   }
 }
 

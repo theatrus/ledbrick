@@ -54,7 +54,12 @@ public:
     
     // Core astronomical calculations
     double calculate_julian_day(const DateTime& dt) const;
+    // Position in the lunar cycle: 0 new, 0.25 first quarter, 0.5 full, 0.75 last quarter.
+    // Not how much of the moon is lit; see get_moon_illumination.
     float get_moon_phase(const DateTime& dt) const;
+    // Share of the moon's disc that is lit, 0-1
+    float get_moon_illumination(const DateTime& dt) const;
+    static float moon_illumination_from_phase(float phase);
     
     // Position calculations
     CelestialPosition calculate_sun_position(const DateTime& dt) const;

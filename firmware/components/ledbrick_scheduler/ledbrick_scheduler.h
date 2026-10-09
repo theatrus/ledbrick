@@ -193,7 +193,8 @@ class LEDBrickScheduler : public PollingComponent {
   void update_timezone_from_time_source();
   
   // Astronomical functions (delegated to standalone calculator)
-  float get_moon_phase() const;  // Returns 0.0-1.0 (0=new moon, 0.5=full moon)
+  float get_moon_phase() const;  // Position in the lunar cycle, 0.0-1.0 (0=new moon, 0.5=full moon)
+  float get_moon_illumination() const;  // Share of the moon that is lit, 0.0-1.0
   float get_moon_intensity() const;  // Returns 0.0-1.0 based on altitude (0=below horizon, 1=overhead)
   float get_sun_intensity() const;   // Returns 0.0-1.0 based on altitude (0=below horizon, 1=overhead)
   

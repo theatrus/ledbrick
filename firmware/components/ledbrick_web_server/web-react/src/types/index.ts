@@ -103,7 +103,8 @@ export interface Status {
   astronomical_projection: boolean;
   time_shift_hours: number;
   time_shift_minutes: number;
-  moon_phase?: number;
+  moon_phase?: number;         // position in the lunar cycle: 0 new, 0.5 full
+  moon_illumination?: number;  // share of the moon that is lit, 0-1
   led_temp_c?: number;
   moon_simulation?: MoonSimulation;
   sunrise_time?: string;

@@ -850,15 +850,11 @@ LEDScheduler::InterpolationResult LEDScheduler::apply_moon_simulation(const Inte
         return result;
     }
     
-    // Apply moonlight based on moon phase
-    float moon_brightness = astro_times.moon_phase;
-    
-    // Convert moon phase (0=new, 0.5=full, 1=new) to brightness
-    // Peak brightness at full moon (0.5)
-    if (moon_brightness > 0.5f) {
-        moon_brightness = 1.0f - moon_brightness;
-    }
-    moon_brightness *= 2.0f; // Scale 0-0.5 to 0-1.0
+    // Moonlight scales with the share of the moon that is lit: (1 - cos) / 2 of the
+    // position in the cycle (0=new, 0.5=full). A straight line from new to full overstated
+    // crescents (a 6%-lit moon gave 16%) and understated gibbous moons.
+    constexpr float TWO_PI = 6.28318531f;
+    float moon_brightness = 0.5f * (1.0f - std::cos(TWO_PI * astro_times.moon_phase));
     
     // Apply moon simulation - PWM and current are independent
     for (size_t i = 0; i < num_channels_; i++) {
