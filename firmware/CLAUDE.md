@@ -111,6 +111,7 @@ The web interface is built with React + TypeScript + Vite:
 - `boards/` - Board data (as-built LED map, design analysis), hardware findings, and how to update more boards
 - `tools/board_config.py` - Back up, copy and check a board's settings over the web API
 - `tools/jtag/` - Read the LED driver registers over USB JTAG
+- `tools/ina228_sweep.py` - Measure a channel's current steps and PWM pulse loss with the INA228
 - `test_astronomical.cpp` - Unit test suite for the astronomical calculator  
 - `test_scheduler.cpp` - Unit test suite for the LED scheduler
 - `test_pid_controller.cpp` - Unit test suite for the PID controller
@@ -249,7 +250,8 @@ Each channel has a dimming mode in its `channel_configs` entry (`dimming` object
 How the dimmer works:
 - Current first (`priority: current`): lower the current to the smallest TPS922053 step (8 bits of 2 A) whose output reaches the level, then trim with PWM. Below the floor current, hold the floor and dim with PWM.
 - PWM first (`priority: pwm`): hold the current at the channel maximum and dim with PWM. No current-dependent colour shift.
-- The current is commanded a quarter step above the step it should land on, so the driver gives that step whether it truncates or rounds ADIM.
+- The current is commanded mid-step: the driver rounds the ADIM duty down (measured), so mid-step leaves the most room for rounding.
+- PWM pulse loss: each EN/PWM pulse loses about 19 us of light (1.9% at 1 kHz), less for very short pulses. `DriveLimits` models it, and the dimmer raises pulsed duties to give the intended light and keeps them at or below 97.5%. Manual mode sends PWM as set. See `boards/ledbrick-plus/FINDINGS.md`.
 - The floor is never below the lowest current the LEDs' datasheet curves cover (about 100 mA for LUXEON C, 160 mA for the Rubix), nor the 50 mA ADIM gate.
 - Thermal compensation: each LED's junction is the board sensor temperature plus its thermal resistance times its power (Rth x Vf x I). Hotter LEDs get more current or PWM, up to the maximum.
 - The channel maximum is also capped by the LEDs' datasheet maximum, for example 1050 mA for LUXEON C Royal Blue or 700 mA for LUXEON C Deep Red.

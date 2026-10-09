@@ -1,0 +1,331 @@
+{
+ "channel": 5,
+ "steps": [
+  {
+   "cmd": 0.098,
+   "readings": [
+    0.638084,
+    0.638504
+   ],
+   "status": {
+    "id": 5,
+    "pwm": 100,
+    "current": 0.098,
+    "mode": "manual"
+   },
+   "voltage": 50.91465
+  },
+  {
+   "cmd": 0.1,
+   "readings": [
+    0.63961,
+    0.638237
+   ],
+   "status": {
+    "id": 5,
+    "pwm": 100,
+    "current": 0.1,
+    "mode": "manual"
+   },
+   "voltage": 50.91465
+  },
+  {
+   "cmd": 0.102,
+   "readings": [
+    0.644951,
+    0.644569
+   ],
+   "status": {
+    "id": 5,
+    "pwm": 100,
+    "current": 0.102,
+    "mode": "manual"
+   },
+   "voltage": 50.91367
+  },
+  {
+   "cmd": 0.104,
+   "readings": [
+    0.644417,
+    0.644684
+   ],
+   "status": {
+    "id": 5,
+    "pwm": 100,
+    "current": 0.104,
+    "mode": "manual"
+   },
+   "voltage": 50.91367
+  },
+  {
+   "cmd": 0.106,
+   "readings": [
+    0.644493,
+    0.644073
+   ],
+   "status": {
+    "id": 5,
+    "pwm": 100,
+    "current": 0.106,
+    "mode": "manual"
+   },
+   "voltage": 50.91367
+  },
+  {
+   "cmd": 0.108,
+   "readings": [
+    0.644493,
+    0.644608
+   ],
+   "status": {
+    "id": 5,
+    "pwm": 100,
+    "current": 0.108,
+    "mode": "manual"
+   },
+   "voltage": 50.91348
+  },
+  {
+   "cmd": 0.11,
+   "readings": [
+    0.650101,
+    0.651817
+   ],
+   "status": {
+    "id": 5,
+    "pwm": 100,
+    "current": 0.11,
+    "mode": "manual"
+   },
+   "voltage": 50.9125
+  },
+  {
+   "cmd": 0.112,
+   "readings": [
+    0.650253,
+    0.650406
+   ],
+   "status": {
+    "id": 5,
+    "pwm": 100,
+    "current": 0.112,
+    "mode": "manual"
+   },
+   "voltage": 50.9127
+  },
+  {
+   "cmd": 0.114,
+   "readings": [
+    0.65033,
+    0.650635
+   ],
+   "status": {
+    "id": 5,
+    "pwm": 100,
+    "current": 0.114,
+    "mode": "manual"
+   },
+   "voltage": 50.91289
+  },
+  {
+   "cmd": 0.116,
+   "readings": [
+    0.650864,
+    0.65052
+   ],
+   "status": {
+    "id": 5,
+    "pwm": 100,
+    "current": 0.116,
+    "mode": "manual"
+   },
+   "voltage": 50.91309
+  },
+  {
+   "cmd": 0.118,
+   "readings": [
+    0.65609,
+    0.656166
+   ],
+   "status": {
+    "id": 5,
+    "pwm": 100,
+    "current": 0.118,
+    "mode": "manual"
+   },
+   "voltage": 50.9123
+  },
+  {
+   "cmd": 0.12,
+   "readings": [
+    0.656013,
+    0.65567
+   ],
+   "status": {
+    "id": 5,
+    "pwm": 100,
+    "current": 0.12,
+    "mode": "manual"
+   },
+   "voltage": 50.91211
+  },
+  {
+   "cmd": 0.122,
+   "readings": [
+    0.655251,
+    0.656281
+   ],
+   "status": {
+    "id": 5,
+    "pwm": 100,
+    "current": 0.122,
+    "mode": "manual"
+   },
+   "voltage": 50.91211
+  },
+  {
+   "cmd": 0.124,
+   "readings": [
+    0.655212,
+    0.655708
+   ],
+   "status": {
+    "id": 5,
+    "pwm": 100,
+    "current": 0.124,
+    "mode": "manual"
+   },
+   "voltage": 50.91211
+  },
+  {
+   "cmd": 0.126,
+   "readings": [
+    0.661049,
+    0.660744
+   ],
+   "status": {
+    "id": 5,
+    "pwm": 100,
+    "current": 0.126,
+    "mode": "manual"
+   },
+   "voltage": 50.91133
+  },
+  {
+   "cmd": 0.128,
+   "readings": [
+    0.661125,
+    0.660782
+   ],
+   "status": {
+    "id": 5,
+    "pwm": 100,
+    "current": 0.128,
+    "mode": "manual"
+   },
+   "voltage": 50.91153
+  },
+  {
+   "cmd": 0.13,
+   "readings": [
+    0.660973,
+    0.660896
+   ],
+   "status": {
+    "id": 5,
+    "pwm": 100,
+    "current": 0.13,
+    "mode": "manual"
+   },
+   "voltage": 50.91153
+  },
+  {
+   "cmd": 0.132,
+   "readings": [
+    0.660934,
+    0.661964
+   ],
+   "status": {
+    "id": 5,
+    "pwm": 100,
+    "current": 0.132,
+    "mode": "manual"
+   },
+   "voltage": 50.91113
+  },
+  {
+   "cmd": 0.134,
+   "readings": [
+    0.666733,
+    0.667076
+   ],
+   "status": {
+    "id": 5,
+    "pwm": 100,
+    "current": 0.134,
+    "mode": "manual"
+   },
+   "voltage": 50.91035
+  }
+ ],
+ "before": [
+  {
+   "id": 1,
+   "pwm": 13.80378,
+   "current": 1,
+   "mode": "manual"
+  },
+  {
+   "id": 2,
+   "pwm": 18.68272,
+   "current": 0.72196,
+   "mode": "manual"
+  },
+  {
+   "id": 3,
+   "pwm": 17.04969,
+   "current": 1,
+   "mode": "manual"
+  },
+  {
+   "id": 4,
+   "pwm": 17.84437,
+   "current": 1,
+   "mode": "manual"
+  },
+  {
+   "id": 5,
+   "pwm": 14.82106,
+   "current": 1.2,
+   "mode": "manual"
+  },
+  {
+   "id": 6,
+   "pwm": 16.13079,
+   "current": 1,
+   "mode": "manual"
+  },
+  {
+   "id": 7,
+   "pwm": 12.56165,
+   "current": 1,
+   "mode": "manual"
+  },
+  {
+   "id": 8,
+   "pwm": 14.54815,
+   "current": 1,
+   "mode": "manual"
+  }
+ ],
+ "baseline": [
+  0.638008,
+  0.577888,
+  0.57785
+ ],
+ "baseline_after": [
+  0.57785,
+  0.579262,
+  0.577698
+ ]
+}

@@ -7,10 +7,71 @@ namespace ledbrick {
 
 namespace {
 constexpr float HARDWARE_MAX_CURRENT_A = 2.0f;
-// The current is commanded this far into a driver step, so the driver lands on the
-// step whether it truncates or rounds the ADIM duty, with room for the PWM's rounding
-constexpr float STEP_OFFSET = 0.25f;
+// The current is commanded this far into a driver step. The driver rounds the ADIM duty
+// down (measured), so mid-step leaves the most room either side for the duty's rounding.
+constexpr float STEP_OFFSET = 0.5f;
 }  // namespace
+
+float effective_pwm(float pwm, float pulse_loss, float tail) {
+    if (!(pwm > 0.0f)) {
+        return 0.0f;
+    }
+    if (pwm >= 1.0f) {
+        return 1.0f;
+    }
+    if (!(pulse_loss > 0.0f) || !(tail > 0.0f)) {
+        return pwm;
+    }
+    // The tail is never narrower than the loss, so the share rises with the duty
+    tail = std::max(tail, pulse_loss);
+    return pwm - pulse_loss * (1.0f - std::exp(-pwm / tail));
+}
+
+float pwm_for_effective(float effective, float pulse_loss, float tail) {
+    if (!(effective > 0.0f)) {
+        return 0.0f;
+    }
+    if (!(pulse_loss > 0.0f) || !(tail > 0.0f)) {
+        return std::min(effective, 1.0f);
+    }
+    // The formula's limit just below 100%
+    if (effective >= effective_pwm(1.0f - 1e-6f, pulse_loss, tail)) {
+        return 1.0f;
+    }
+    // effective_pwm rises with d, so bisect; 30 halvings resolve far below one LEDC step
+    float lo = 0.0f;
+    float hi = 1.0f;
+    for (int i = 0; i < 30; i++) {
+        float mid = 0.5f * (lo + hi);
+        if (effective_pwm(mid, pulse_loss, tail) < effective) {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    return hi;
+}
+
+float DriveLimits::pulse_tail(float current_a) const {
+    constexpr float LOW_A = 0.17f;
+    constexpr float HIGH_A = 0.3f;
+    if (current_a <= LOW_A) {
+        return pwm_tail_low_current;
+    }
+    if (current_a >= HIGH_A) {
+        return pwm_tail_high_current;
+    }
+    float t = (current_a - LOW_A) / (HIGH_A - LOW_A);
+    return pwm_tail_low_current + t * (pwm_tail_high_current - pwm_tail_low_current);
+}
+
+float DriveLimits::effective_pwm(float pwm, float current_a) const {
+    return ledbrick::effective_pwm(pwm, pwm_pulse_loss, pulse_tail(current_a));
+}
+
+float DriveLimits::pwm_for_effective(float effective, float current_a) const {
+    return ledbrick::pwm_for_effective(effective, pwm_pulse_loss, pulse_tail(current_a));
+}
 
 float curve_lookup(const std::vector<CurvePoint>& curve, float x) {
     if (curve.empty()) {
@@ -242,17 +303,21 @@ Drive ChannelDimmer::drive_for_level(float level, const DriveLimits& limits, flo
     const int bottom = std::min(min_step(limits), top);
 
     const float target = level * output(top * step, reference_temp_c_);
+    // Pulsing loses light, so the highest pulsed duty gives `pulsed` of a step's output;
+    // only 100% (no pulses) gives all of it
+    // (the tail hardly matters at the highest pulsed duty)
+    const float pulsed = limits.effective_pwm(limits.max_pulsed_pwm, top * step);
     int k = top;
     if (priority_ == DimPriority::CURRENT_FIRST) {
-        if (output(bottom * step, temp_c) >= target) {
+        if (output(bottom * step, temp_c) * pulsed >= target) {
             k = bottom;  // below the floor: hold the floor current and dim with PWM
-        } else if (output(top * step, temp_c) >= target) {
-            // Smallest step that reaches the target; the PWM trims the rest
+        } else if (output(top * step, temp_c) * pulsed >= target) {
+            // Smallest step whose pulsed output reaches the target; the PWM trims the rest
             int lo = bottom;
             int hi = top;
             while (hi - lo > 1) {
                 int mid = lo + (hi - lo) / 2;
-                if (output(mid * step, temp_c) >= target) {
+                if (output(mid * step, temp_c) * pulsed >= target) {
                     hi = mid;
                 } else {
                     lo = mid;
@@ -260,14 +325,22 @@ Drive ChannelDimmer::drive_for_level(float level, const DriveLimits& limits, flo
             }
             k = hi;
         }
-        // Otherwise the LEDs are too hot to reach the level: full current and PWM
+        // Otherwise only the top step at 100% comes near the target (or the LEDs are too
+        // hot to reach it): the top step, trimmed below
     }
 
     float out = output(k * step, temp_c);
     if (!(out > 0.0f)) {
         return drive;
     }
-    float pwm = std::min(target / out, 1.0f);
+    float share = target / out;
+    float pwm;
+    if (share <= pulsed) {
+        pwm = limits.pwm_for_effective(share, k * step);  // the driver gives step k
+    } else {
+        // Between the highest pulsed duty and 100%: whichever is nearer the target
+        pwm = share - pulsed < 1.0f - share ? limits.max_pulsed_pwm : 1.0f;
+    }
     if (pwm < limits.pwm_step * 0.5f) {
         return drive;  // dimmer than one PWM step: off
     }
@@ -286,7 +359,7 @@ float ChannelDimmer::level_for_drive(float pwm, float current_a, const DriveLimi
         return 0.0f;
     }
     current_a = std::min(current_a, max_current(limits));
-    float level = std::min(pwm, 1.0f) * output(current_a, reference_temp_c_) / reference;
+    float level = limits.effective_pwm(pwm, current_a) * output(current_a, reference_temp_c_) / reference;
     return std::max(0.0f, std::min(level, 1.0f));
 }
 

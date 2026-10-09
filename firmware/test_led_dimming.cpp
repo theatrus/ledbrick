@@ -39,10 +39,20 @@ DriveLimits limits(float max_current) {
     return l;
 }
 
-// Light the driver gives for a drive: current lands on the step below the command
+// Light the driver gives for a drive: current lands on the step below the command, and
+// each PWM pulse loses some light
 float delivered(const ChannelDimmer& dimmer, const Drive& d, const DriveLimits& l, float temp) {
     float step_current = std::floor(d.current_a / l.current_step_a) * l.current_step_a;
-    return dimmer.output(step_current, temp) * d.pwm;
+    return dimmer.output(step_current, temp) * l.effective_pwm(d.pwm, step_current);
+}
+
+// The light a target can get: exact, except between the top step's highest pulsed duty and
+// 100%, where it is the nearer of the two
+float reachable(float target, float top_light, const DriveLimits& l) {
+    float pulsed = top_light * l.effective_pwm(l.max_pulsed_pwm, l.max_current_a);
+    if (target <= pulsed) return target;
+    if (target >= top_light) return top_light;
+    return target - pulsed < top_light - target ? pulsed : top_light;
 }
 
 }  // namespace
@@ -110,16 +120,23 @@ void test_current_first(TestRunner& runner) {
     bool monotonic = true;
     bool safe = true;
     float previous = -1.0f;
+    bool pulsed_ok = true;
+    bool mid_step = true;
     for (int i = 1; i <= 20000; i++) {
         float level = i / 20000.0f;
         Drive d = dimmer.drive_for_level(level, l, 25.0f);
         float light = delivered(dimmer, d, l, 25.0f);
-        if (std::fabs(light - level * reference) > 1e-4f * reference) exact = false;
+        if (std::fabs(light - reachable(level * reference, reference, l)) > 1e-4f * reference) exact = false;
         if (light < previous) monotonic = false;
         previous = light;
         if (d.current_a > 1.0f || (d.pwm > 0.0f && d.current_a < l.min_current_a)) safe = false;
+        if (d.pwm < 1.0f && d.pwm > l.max_pulsed_pwm + 1e-6f) pulsed_ok = false;
+        float steps = d.current_a / l.current_step_a;
+        if (d.pwm > 0.0f && std::fabs(steps - std::floor(steps) - 0.5f) > 1e-3f) mid_step = false;
     }
-    runner.assert_true(exact, "Light output is linear in level (within 0.01%)");
+    runner.assert_true(exact, "Light output is linear in level (within 0.01%), allowing for pulse loss");
+    runner.assert_true(pulsed_ok, "No pulsed duty above the highest measured one");
+    runner.assert_true(mid_step, "Current commanded mid-step, since the driver rounds down");
     runner.assert_true(monotonic, "Light output never steps backwards");
     runner.assert_true(safe, "Current within the limit and above the gate whenever lit");
 
@@ -139,9 +156,70 @@ void test_pwm_first(TestRunner& runner) {
     Drive tenth = dimmer.drive_for_level(0.1f, l, 25.0f);
     runner.assert_equals(full.current_a, half.current_a, 1e-6f, "Current held at half level");
     runner.assert_equals(full.current_a, tenth.current_a, 1e-6f, "Current held at a tenth");
-    runner.assert_equals(0.5f, half.pwm, 1e-5f, "PWM is the level");
-    runner.assert_equals(0.1f, tenth.pwm, 1e-5f, "PWM is the level at a tenth");
-    runner.assert_equals(0.0f, dimmer.drive_for_level(1e-6f, l, 25.0f).pwm, 1e-9f, "Below one PWM step: off");
+    float landed = std::floor(full.current_a / l.current_step_a) * l.current_step_a;
+    runner.assert_equals(0.5f, l.effective_pwm(half.pwm, landed), 1e-5f, "Effective PWM is the level");
+    runner.assert_equals(0.1f, l.effective_pwm(tenth.pwm, landed), 1e-5f, "Effective PWM is the level at a tenth");
+    runner.assert_true(half.pwm > 0.51f && tenth.pwm > 0.11f, "PWM raised to make up for the pulse loss");
+    runner.assert_equals(0.0f, dimmer.drive_for_level(1e-8f, l, 25.0f).pwm, 1e-9f, "Dimmer than one PWM step: off");
+
+    // Without pulse loss, PWM is the level
+    DriveLimits ideal = l;
+    ideal.pwm_pulse_loss = 0.0f;
+    runner.assert_equals(0.5f, dimmer.drive_for_level(0.5f, ideal, 25.0f).pwm, 1e-5f, "No loss: PWM is the level");
+}
+
+void test_pulse_loss(TestRunner& runner) {
+    runner.start_suite("PWM Pulse Loss Tests");
+    const float L = 0.019f;
+    runner.assert_equals(0.0f, effective_pwm(0.0f, L, L), 1e-9f, "0% gives nothing");
+    runner.assert_equals(1.0f, effective_pwm(1.0f, L, L), 1e-9f, "100% has no edges: full light");
+    runner.assert_equals(0.5f - L, effective_pwm(0.5f, L, 0.04f), 1e-5f, "Long pulses lose the fixed share");
+    runner.assert_equals(0.1f - L, effective_pwm(0.1f, L, L), 1e-3f, "10% loses about the fixed share");
+    float tiny = 0.002f;
+    runner.assert_equals(tiny * tiny / (2 * L), effective_pwm(tiny, L, L), 1e-5f, "Sharp tail: short pulses give little");
+    runner.assert_equals(tiny * (1.0f - L / 0.04f) + L * tiny * tiny / (2 * 0.04f * 0.04f), effective_pwm(tiny, L, 0.04f), 1e-6f,
+                         "Wide tail: short pulses lose a part of the loss");
+    runner.assert_equals(0.3f, effective_pwm(0.3f, 0.0f, L), 1e-9f, "No loss: proportional");
+
+    DriveLimits l = limits(1.0f);
+    runner.assert_equals(0.04f, l.pulse_tail(0.1f), 1e-9f, "Wide tail at low current");
+    runner.assert_equals(0.019f, l.pulse_tail(1.0f), 1e-9f, "Narrow tail at high current");
+    float between = l.pulse_tail(0.235f);
+    runner.assert_true(between < 0.04f && between > 0.019f, "Between them in between");
+
+    bool rising = true;
+    bool inverse = true;
+    for (float current : {0.1f, 0.2f, 0.5f}) {
+        float previous = 0.0f;
+        for (int i = 1; i < 1000; i++) {
+            float d = i / 1000.0f;
+            float e = l.effective_pwm(d, current);
+            if (e <= previous) rising = false;
+            previous = e;
+            if (std::fabs(l.effective_pwm(l.pwm_for_effective(e, current), current) - e) > 2e-6f) inverse = false;
+        }
+    }
+    runner.assert_true(rising, "Effective share rises with duty");
+    runner.assert_true(inverse, "pwm_for_effective inverts it");
+    runner.assert_equals(1.0f, pwm_for_effective(0.995f, L, L), 1e-9f, "Shares no pulsed duty reaches need 100%");
+    runner.assert_equals(0.0f, pwm_for_effective(0.0f, L, L), 1e-9f, "Share 0 is off");
+
+    // Near the top, a level between the highest pulsed duty and 100% gets the nearer one
+    LedModel blue = make_blue();
+    ChannelDimmer dimmer({{&blue, 13}}, DimPriority::PWM_FIRST, 0.1f);
+    float pulsed = l.effective_pwm(l.max_pulsed_pwm, 1.0f);
+    runner.assert_equals(1.0f, dimmer.drive_for_level(1.0f - 0.2f * (1.0f - pulsed), l, 25.0f).pwm, 1e-6f,
+                         "Just under full: 100%");
+    runner.assert_equals(l.max_pulsed_pwm, dimmer.drive_for_level(pulsed + 0.2f * (1.0f - pulsed), l, 25.0f).pwm, 1e-6f,
+                         "Just above the highest pulsed share: the highest pulsed duty");
+
+    // Manual settings convert to the light they really give
+    float level = dimmer.level_for_drive(0.1f, 1.0f, l);
+    float reference = dimmer.output(dimmer.max_current(l) - 0.5f * l.current_step_a, 25.0f);
+    runner.assert_true(level < 0.1f * dimmer.output(1.0f, 25.0f) / reference, "Manual 10% PWM is less than 10% light");
+    runner.assert_equals(l.effective_pwm(0.1f, 1.0f) * dimmer.output(1.0f, 25.0f) /
+                             dimmer.output(std::floor(dimmer.max_current(l) / l.current_step_a - 0.5f) * l.current_step_a, 25.0f),
+                         level, 1e-4f, "by the pulse loss");
 }
 
 void test_thermal_compensation(TestRunner& runner) {
@@ -170,7 +248,8 @@ void test_thermal_compensation(TestRunner& runner) {
     ChannelDimmer pwm_first({{&blue, 13}}, DimPriority::PWM_FIRST, 0.1f);
     float pwm_cool = pwm_first.drive_for_level(0.5f, l, 25.0f).pwm;
     float pwm_hot = pwm_first.drive_for_level(0.5f, l, 85.0f).pwm;
-    runner.assert_equals(pwm_cool / 0.9f, pwm_hot, 1e-4f, "PWM-first raises PWM when hot");
+    runner.assert_equals(l.effective_pwm(pwm_cool, 1.0f) / 0.9f, l.effective_pwm(pwm_hot, 1.0f), 1e-4f,
+                         "PWM-first raises PWM when hot");
 }
 
 void test_level_conversion(TestRunner& runner) {
@@ -290,7 +369,7 @@ void test_builtin_models(TestRunner& runner) {
     for (int i = 1; i <= 2000; i++) {
         float level = i / 2000.0f;
         float light = delivered(rubix, rubix.drive_for_level(level, l, 45.0f), l, 45.0f);
-        if (std::fabs(light - std::min(level * reference, achievable)) > 1e-4f * reference) exact = false;
+        if (std::fabs(light - reachable(level * reference, achievable, l)) > 1e-4f * reference) exact = false;
         if (light < previous) monotonic = false;
         previous = light;
     }
@@ -462,6 +541,9 @@ int main() {
     results.add_suite_results(runner);
 
     test_custom_models(runner);
+    results.add_suite_results(runner);
+
+    test_pulse_loss(runner);
     results.add_suite_results(runner);
 
     test_standard_model(runner);

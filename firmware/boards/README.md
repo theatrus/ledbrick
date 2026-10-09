@@ -11,6 +11,8 @@ What we know about each LEDBrick board, and how to bring more boards up to date.
 | `../tools/led_curves/lumileds_curves.json` | The digitized Lumileds datasheet curves and the standard LED's definition. The models are built from it. |
 | `../tools/board_config.py` | Back up, copy and check a board's settings over the web API. |
 | `../tools/jtag/` | Read the LED driver registers over USB JTAG, to check what a board outputs. |
+| `../tools/ina228_sweep.py` | Measure a channel's current steps and PWM pulse loss with the board's supply current sensor. |
+| `ledbrick-plus/measurements/` | The raw data behind the findings. |
 
 ## Change the LED data
 
