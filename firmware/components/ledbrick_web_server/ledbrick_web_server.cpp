@@ -608,8 +608,10 @@ esp_err_t LEDBrickWebServer::handle_api_status_get(httpd_req_t *req) {
       doc["sunset_time"] = sunset_str;
     }
 
-    // Add moon phase
-    doc["moon_phase"] = scheduler->get_moon_phase();
+    // Moon: position in the cycle (0 new, 0.5 full) and the share that is lit
+    float moon_phase = scheduler->get_moon_phase();
+    doc["moon_phase"] = moon_phase;
+    doc["moon_illumination"] = AstronomicalCalculator::moon_illumination_from_phase(moon_phase);
     doc["led_temp_c"] = scheduler->get_led_temperature_c();
 
     // Add moon rise/set times

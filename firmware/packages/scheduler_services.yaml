@@ -356,14 +356,15 @@ sensor:
       return values.current_values.size() > 0 ? values.current_values[0] : 0.0f;
     update_interval: 30s
   
-  # Moon phase percentage
+  # Share of the moon that is lit. (The "Moon Phase" text sensor names the phase.)
   - platform: template
-    name: "Moon Phase"
-    id: moon_phase_sensor
-    accuracy_decimals: 1
+    name: "Moon Illumination"
+    id: moon_illumination_sensor
+    icon: "mdi:moon-full"
+    accuracy_decimals: 0
     unit_of_measurement: "%"
     lambda: |-
-      return id(main_scheduler).get_moon_phase() * 100.0f;
+      return id(main_scheduler).get_moon_illumination() * 100.0f;
     update_interval: 3600s  # Update every hour
   
 

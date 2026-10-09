@@ -1,6 +1,8 @@
 #include <iostream>
 #include <iomanip>
 #include <cmath>
+#include <algorithm>
+#include <string>
 #include "astronomical_calculator.h"
 #include "test_framework.h"
 
@@ -41,7 +43,36 @@ void test_moon_phase() {
         "Moon phase in valid range (expected: 0.0-1.0, actual: " + to_string(phase) + ")");
     
     cout << "Moon phase on 2025-01-08: " << fixed << setprecision(3) << phase << endl;
-    
+
+    // Published lunar phases (UTC): the phase is the position in the cycle, the
+    // illumination the share that is lit
+    struct Event { int y, mo, d, h, mi; float phase; float lit; const char* name; };
+    const Event events[] = {
+        {2025, 1, 6, 23, 56, 0.25f, 0.5f, "First quarter 2025-01-06"},
+        {2025, 1, 13, 22, 27, 0.5f, 1.0f, "Full moon 2025-01-13"},
+        {2025, 1, 21, 20, 31, 0.75f, 0.5f, "Last quarter 2025-01-21"},
+        {2025, 1, 29, 12, 36, 0.0f, 0.0f, "New moon 2025-01-29"},
+    };
+    for (const auto& e : events) {
+        AstronomicalCalculator::DateTime when(e.y, e.mo, e.d, e.h, e.mi, 0);
+        float p = calc.get_moon_phase(when);
+        float off = std::fabs(p - e.phase);
+        off = std::min(off, 1.0f - off);  // the cycle wraps at new moon
+        runner.assert_true(off < 0.01f, std::string(e.name) + ": phase " + to_string(p));
+        runner.assert_equals(e.lit, calc.get_moon_illumination(when), 0.02f, std::string(e.name) + ": share lit");
+    }
+
+    // Two days before the new moon of 2026-10-10: a thin waning crescent, not a nearly
+    // full moon, though it is 0.93 of the way through the cycle
+    AstronomicalCalculator::DateTime crescent(2026, 10, 8, 18, 0, 0);
+    float crescent_phase = calc.get_moon_phase(crescent);
+    runner.assert_true(crescent_phase > 0.9f && crescent_phase < 0.96f, "2026-10-08 late in the cycle: " + to_string(crescent_phase));
+    runner.assert_true(calc.get_moon_illumination(crescent) < 0.1f,
+                       "2026-10-08 under 10% lit: " + to_string(calc.get_moon_illumination(crescent)));
+    runner.assert_equals(0.0f, AstronomicalCalculator::moon_illumination_from_phase(0.0f), 1e-6f, "New: none lit");
+    runner.assert_equals(1.0f, AstronomicalCalculator::moon_illumination_from_phase(0.5f), 1e-6f, "Full: all lit");
+    runner.assert_equals(0.5f, AstronomicalCalculator::moon_illumination_from_phase(0.75f), 1e-6f, "Last quarter: half lit");
+
     results.add_suite_results(runner);
 }
 
