@@ -402,10 +402,32 @@ float LEDBrickScheduler::get_led_temperature_c() const {
 }
 
 float LEDBrickScheduler::get_channel_level(uint8_t channel) const {
-  if (!scheduler_.is_curve_channel(channel) || channel >= last_levels_.size()) {
+  if (!scheduler_.is_curve_channel(channel) || channel >= last_levels_.size() || channel >= last_drives_.size() ||
+      last_levels_[channel] < 0.0f) {
+    return -1.0f;
+  }
+  // Thermal shutdown holds the outputs off, whatever level the schedule asks for
+  if (is_thermal_emergency()) {
+    return 0.0f;
+  }
+  // The level stands only while the outputs show what it set: Home Assistant, or a manual
+  // PWM and current, may have changed them since
+  float pwm_percent, current;
+  read_channel_output_(channel, pwm_percent, current);
+  const ledbrick::Drive &drive = last_drives_[channel];
+  if (std::fabs(pwm_percent / 100.0f - drive.pwm) > 1e-3f || std::fabs(current - drive.current_a) > 1e-4f) {
     return -1.0f;
   }
   return last_levels_[channel];
+}
+
+void LEDBrickScheduler::record_level_(uint8_t channel, float level, const ledbrick::Drive &drive) {
+  if (last_levels_.size() != num_channels_ || last_drives_.size() != num_channels_) {
+    last_levels_.assign(num_channels_, -1.0f);
+    last_drives_.assign(num_channels_, ledbrick::Drive());
+  }
+  last_levels_[channel] = level;
+  last_drives_[channel] = drive;
 }
 
 bool LEDBrickScheduler::set_channel_dimming(uint8_t channel, ledbrick::DimMode mode, ledbrick::DimPriority priority,
@@ -452,11 +474,25 @@ bool LEDBrickScheduler::set_channel_manual_level(uint8_t channel, float level) {
   if (!set_channel_manual_control(channel, drive.pwm * 100.0f, drive.current_a)) {
     return false;
   }
-  if (last_levels_.size() != num_channels_) {
-    last_levels_.assign(num_channels_, -1.0f);
-  }
-  last_levels_[channel] = level;
+  record_level_(channel, level, drive);
   return true;
+}
+
+void LEDBrickScheduler::read_channel_output_(uint8_t channel, float &pwm_percent, float &current) const {
+  pwm_percent = 0.0f;
+  current = 0.0f;
+  // The light's target brightness, not a transition's current step; 0% while it is off
+  auto light_it = lights_.find(channel);
+  if (light_it != lights_.end() && light_it->second) {
+    const auto &remote_values = light_it->second->remote_values;
+    if (remote_values.is_on()) {
+      pwm_percent = remote_values.get_brightness() * 100.0f;
+    }
+  }
+  auto current_it = current_controls_.find(channel);
+  if (current_it != current_controls_.end() && current_it->second) {
+    current = current_it->second->state;
+  }
 }
 
 InterpolationResult LEDBrickScheduler::get_actual_channel_values() const {
@@ -464,31 +500,12 @@ InterpolationResult LEDBrickScheduler::get_actual_channel_values() const {
   result.pwm_values.resize(num_channels_, 0.0f);
   result.current_values.resize(num_channels_, 0.0f);
   result.valid = true;
-  
+
   // Get actual values from the ESPHome components
   for (uint8_t channel = 0; channel < num_channels_; channel++) {
-    // Get PWM value from light entity
-    auto light_it = lights_.find(channel);
-    if (light_it != lights_.end() && light_it->second) {
-      // Get actual current state (not the call values)
-      auto remote_values = light_it->second->remote_values;
-      // Check if light is on - if off, report 0% regardless of brightness setting
-      if (remote_values.is_on()) {
-        // Get brightness as percentage (0-100)
-        result.pwm_values[channel] = remote_values.get_brightness() * 100.0f;
-      } else {
-        // Light is off, report 0%
-        result.pwm_values[channel] = 0.0f;
-      }
-    }
-    
-    // Get current value from current control
-    auto current_it = current_controls_.find(channel);
-    if (current_it != current_controls_.end() && current_it->second) {
-      result.current_values[channel] = current_it->second->state;
-    }
+    read_channel_output_(channel, result.pwm_values[channel], result.current_values[channel]);
   }
-  
+
   return result;
 }
 
@@ -575,10 +592,7 @@ void LEDBrickScheduler::apply_values(const InterpolationResult &values) {
       ledbrick::Drive drive = scheduler_.channel_dimmer(channel).drive_for_level(level, limits, led_temp);
       target_current = drive.current_a;
       brightness = drive.pwm;
-      if (last_levels_.size() != num_channels_) {
-        last_levels_.assign(num_channels_, -1.0f);
-      }
-      last_levels_[channel] = level;
+      record_level_(channel, level, drive);
       // Current and PWM change together; a PWM transition would lag behind the current
       transition_ms = 0;
     } else {
@@ -772,10 +786,15 @@ void LEDBrickScheduler::load_led_models_from_flash() {
     return;
   }
   std::string error;
-  if (scheduler_.import_led_models_json(std::string(storage->json_data, storage->json_length), &error)) {
+  std::vector<std::string> skipped;
+  if (scheduler_.import_led_models_json(std::string(storage->json_data, storage->json_length), &error, 0,
+                                        &skipped)) {
     ESP_LOGI(TAG, "Loaded %zu custom LED models", scheduler_.get_custom_led_models().size());
   } else {
     ESP_LOGE(TAG, "Saved LED models could not be loaded: %s", error.c_str());
+  }
+  for (const auto &problem : skipped) {
+    ESP_LOGE(TAG, "Saved LED model left out: %s", problem.c_str());
   }
 }
 
@@ -929,7 +948,10 @@ bool LEDBrickScheduler::import_schedule_json(const std::string &json_input, std:
     if (error) *error = message;
     return false;
   };
-  
+
+  if (LEDScheduler::json_item_bound(json_input) > LEDScheduler::MAX_JSON_ITEMS) {
+    return fail("too many values");
+  }
   cJSON *root = cJSON_Parse(json_input.c_str());
   if (root == nullptr || !cJSON_IsObject(root)) {
     cJSON_Delete(root);
@@ -1029,9 +1051,13 @@ bool LEDBrickScheduler::import_schedule_json(const std::string &json_input, std:
   
   // The standalone import replaces the schedule only when it succeeds
   std::string import_error;
+  std::string import_warning;
   // A saved channel naming a lost LED model keeps its schedule; the model can be posted again
-  if (!scheduler_.import_json(json_input, &import_error, from_flash)) {
+  if (!scheduler_.import_json(json_input, &import_error, from_flash, &import_warning)) {
     return fail(import_error.empty() ? "schedule_points missing or invalid" : import_error);
+  }
+  if (!import_warning.empty()) {
+    ESP_LOGE(TAG, "Saved schedule: %s", import_warning.c_str());
   }
   
   // Apply the settings now that the whole document is accepted
@@ -1242,10 +1268,10 @@ void LEDBrickScheduler::update_timezone_from_time_source() {
   }
 }
 
-void LEDBrickScheduler::set_location(double latitude, double longitude) {
+bool LEDBrickScheduler::set_location(double latitude, double longitude) {
   // Check if location actually changed
   if (abs(latitude_ - latitude) < 0.0001 && abs(longitude_ - longitude) < 0.0001) {
-    return;  // No change, skip save
+    return true;  // No change, skip save
   }
   
   latitude_ = latitude;
@@ -1261,14 +1287,14 @@ void LEDBrickScheduler::set_location(double latitude, double longitude) {
   force_next_update_ = true;
   
   // Save complete schedule (includes all settings)
-  save_schedule_to_flash();
-  ESP_LOGI(TAG, "Location updated to %.4f, %.4f and saved", latitude, longitude);
+  ESP_LOGI(TAG, "Location updated to %.4f, %.4f", latitude, longitude);
+  return save_schedule_to_flash();
 }
 
-void LEDBrickScheduler::set_astronomical_projection(bool enabled) {
+bool LEDBrickScheduler::set_astronomical_projection(bool enabled) {
   // Check if value actually changed
   if (astronomical_projection_ == enabled) {
-    return;  // No change, skip save
+    return true;  // No change, skip save
   }
   
   astronomical_projection_ = enabled;
@@ -1281,14 +1307,14 @@ void LEDBrickScheduler::set_astronomical_projection(bool enabled) {
   force_next_update_ = true;
   
   // Save complete schedule (includes all settings)
-  save_schedule_to_flash();
-  ESP_LOGI(TAG, "Astronomical projection %s and saved", enabled ? "enabled" : "disabled");
+  ESP_LOGI(TAG, "Astronomical projection %s", enabled ? "enabled" : "disabled");
+  return save_schedule_to_flash();
 }
 
-void LEDBrickScheduler::set_time_shift(int hours, int minutes) {
+bool LEDBrickScheduler::set_time_shift(int hours, int minutes) {
   // Check if values actually changed
   if (time_shift_hours_ == hours && time_shift_minutes_ == minutes) {
-    return;  // No change, skip save
+    return true;  // No change, skip save
   }
   
   time_shift_hours_ = hours;
@@ -1302,8 +1328,8 @@ void LEDBrickScheduler::set_time_shift(int hours, int minutes) {
   force_next_update_ = true;
   
   // Save to persistent storage (scheduler JSON)
-  save_schedule_to_flash();
-  ESP_LOGI(TAG, "Time shift updated to %+d:%02d and saved", hours, abs(minutes));
+  ESP_LOGI(TAG, "Time shift updated to %+d:%02d", hours, abs(minutes));
+  return save_schedule_to_flash();
 }
 
 void LEDBrickScheduler::set_channel_config(uint8_t channel, const LEDScheduler::ChannelConfig& config) {
@@ -1434,7 +1460,7 @@ void LEDBrickScheduler::set_moon_base_current(const std::vector<float>& current)
   ESP_LOGI(TAG, "Moon base current updated and saved");
 }
 
-void LEDBrickScheduler::set_moon_simulation(const LEDScheduler::MoonSimulation& config) {
+bool LEDBrickScheduler::set_moon_simulation(const LEDScheduler::MoonSimulation& config) {
   // Check if values actually changed  
   auto current_moon = scheduler_.get_moon_simulation();
   
@@ -1471,15 +1497,15 @@ void LEDBrickScheduler::set_moon_simulation(const LEDScheduler::MoonSimulation& 
     }
     
     if (!changed) {
-      return;  // No change, skip save
+      return true;  // No change, skip save
     }
   }
-  
+
   scheduler_.set_moon_simulation(config);
-  
+
   // Save to persistent storage (scheduler JSON)
-  save_schedule_to_flash();
-  ESP_LOGI(TAG, "Moon simulation configuration updated and saved");
+  ESP_LOGI(TAG, "Moon simulation configuration updated");
+  return save_schedule_to_flash();
 }
 
 void LEDBrickScheduler::update_astronomical_times_for_scheduler(bool force) {

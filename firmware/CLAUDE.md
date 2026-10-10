@@ -290,7 +290,8 @@ Custom LED models:
 ```
 - `output_vs_current` is required: 2-32 `[A, output]` points, currents rising, output never falling, reaching `max_current`. Output is relative to the part's output at its test current, the same scale as the built-ins, so mixed strings weigh each part the same. Below the first point the curve runs linearly to zero; the floor current never goes below that point.
 - `output_vs_temp` (`[junction C, output]`, any scale) adds thermal compensation. `rth` with `vf_vs_current` (`[A, V]`) adds self-heating. Without them the part's output does not change with temperature.
-- Curves are saved with 4 significant digits.
+- Every number in a model is read and saved with 4 significant digits, so a model that is accepted also loads back after a restart. Points that are the same to 4 digits are refused.
+- At boot, a saved model that fails its checks is left out (the log names it) and the rest still load.
 
 ## Common Issues and Solutions
 
@@ -325,6 +326,9 @@ Custom LED models:
 - Clean separation allows testing and development of algorithms independently
 - ESPHome component acts as a thin integration layer
 - Web server handlers run on the ESP-IDF httpd task. Any call into the scheduler or another component must go through `run_in_loop_()` or `respond_from_loop_()`, which run it on the main loop; capture by value, since a request that times out returns before the work runs
+- Request bodies are limited to 32 KB and to `LEDScheduler::MAX_JSON_ITEMS` (3000) JSON values, checked before parsing: each parsed value takes about 50 bytes of heap
+- Settings must load back as they were saved. The saved copy rounds numbers (3 decimals, 4 significant digits for LED models), so check ranges at that precision, and add a test that saves and reloads the edge values. In the saved copy, a channel whose dimming settings fail to load becomes manual rather than failing the whole schedule
+- A channel config without a `dimming` object is a manual channel, as in exports from firmware before curve dimming
 - Both astronomical and scheduler components support serialization
 - Timezone handling is proper with PST/UTC conversion for accurate sun calculations
 - Singapore sunrise can be projected to appear at 10 AM Pacific time using time projection
