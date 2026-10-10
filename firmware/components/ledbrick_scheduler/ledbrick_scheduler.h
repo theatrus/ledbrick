@@ -63,12 +63,13 @@ class LEDBrickScheduler : public PollingComponent {
       timezone_offset_hours_ = 0.0;
     }
   }
-  void set_location(double latitude, double longitude);
+  // These setters save a change; false when it applies but could not be saved
+  bool set_location(double latitude, double longitude);
   double get_latitude() const { return latitude_; }
   double get_longitude() const { return longitude_; }
-  void set_astronomical_projection(bool enabled);
+  bool set_astronomical_projection(bool enabled);
   bool is_astronomical_projection_enabled() const { return astronomical_projection_; }
-  void set_time_shift(int hours, int minutes);
+  bool set_time_shift(int hours, int minutes);
   int get_time_shift_hours() const { return time_shift_hours_; }
   int get_time_shift_minutes() const { return time_shift_minutes_; }
   void set_timezone_offset_hours(double hours) { timezone_offset_hours_ = hours; }
@@ -129,7 +130,8 @@ class LEDBrickScheduler : public PollingComponent {
   void enable_moon_simulation(bool enabled);
   void set_moon_base_intensity(const std::vector<float>& intensity);
   void set_moon_base_current(const std::vector<float>& current);
-  void set_moon_simulation(const LEDScheduler::MoonSimulation& config);
+  // False when the change applies but could not be saved
+  bool set_moon_simulation(const LEDScheduler::MoonSimulation& config);
   bool is_moon_simulation_enabled() const { return scheduler_.get_moon_simulation().enabled; }
   LEDScheduler::MoonSimulation get_moon_simulation() const { return scheduler_.get_moon_simulation(); }
   
@@ -183,7 +185,8 @@ class LEDBrickScheduler : public PollingComponent {
     return scheduler_.export_led_models_json(custom_only);
   }
   size_t get_custom_led_model_count() const { return scheduler_.get_custom_led_models().size(); }
-  // Level (0-1) a curve-mode channel was last driven at; negative for manual channels
+  // Level (0-1) a curve-mode channel is driven at: 0 during a thermal emergency, negative
+  // for manual channels and when something else has set the outputs since
   float get_channel_level(uint8_t channel) const;
   // Temperature used for the LED curves: the board sensors' filtered average, or the
   // 25 C reference (no compensation) without a working sensor
@@ -333,10 +336,14 @@ class LEDBrickScheduler : public PollingComponent {
   std::vector<float> last_pwm_values_;
   std::vector<float> last_current_values_;
   std::vector<float> last_levels_;  // curve channels: level last driven (0-1); -1 for manual
+  std::vector<ledbrick::Drive> last_drives_;  // curve channels: the outputs that level set
   std::map<uint8_t, std::string> last_colors_;
-  
+
   // Internal methods
   void apply_values(const InterpolationResult &values);
+  void record_level_(uint8_t channel, float level, const ledbrick::Drive &drive);
+  // The light's brightness (0-100, 0 while off) and the current control's value
+  void read_channel_output_(uint8_t channel, float &pwm_percent, float &current) const;
   
   // Rise and set times depend only on the date and settings, so compute them once per day
   struct DailyAstroTimes {

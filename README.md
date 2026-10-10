@@ -234,6 +234,9 @@ make help           # Show all available targets
 - **OTA Updates**: Wireless firmware updates via ESPHome
 - **MQTT Support**: Optional MQTT broker integration
 
+#### Upgrade Notes
+- **"Moon Phase" is now "Moon Illumination"** (October 2026): the Home Assistant sensor reports the share of the moon that is lit, not its position in the lunar cycle. Home Assistant sees it as a new entity, so point automations and dashboards at it; the old entity keeps its history.
+
 ### Development Workflow
 
 #### Testing and Quality Assurance

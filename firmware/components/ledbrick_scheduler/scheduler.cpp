@@ -5,6 +5,7 @@
 #include <iomanip>
 #include <cstring>
 #include <cstdio>
+#include <cstdlib>
 
 // Use cJSON for lightweight JSON parsing
 // cJSON is a single-file library perfect for embedded systems
@@ -14,6 +15,7 @@ extern "C" {
 
 constexpr float LEDScheduler::MAX_CHANNEL_CURRENT;
 constexpr float LEDScheduler::MIN_FLOOR_CURRENT;
+constexpr size_t LEDScheduler::MAX_JSON_ITEMS;
 
 namespace {
 
@@ -28,6 +30,15 @@ float clamp_value(float value, float low, float high) {
 // (0.65f becomes 0.64999997615814209), which bloats the schedule saved to flash.
 double json_number(float value) {
     return std::round(static_cast<double>(value) * 1000.0) / 1000.0;
+}
+
+// LED models are saved with 4 significant digits, so they are read and checked at that
+// precision: a model accepted when posted then passes the same checks when loaded back.
+// A double, so cJSON prints it short (0.35, not 0.349999994)
+double model_number(double value) {
+    char text[32];
+    snprintf(text, sizeof(text), "%.4g", value);
+    return strtod(text, nullptr);
 }
 
 constexpr float DEFAULT_FLOOR_CURRENT = 0.1f;
@@ -66,16 +77,18 @@ cJSON* led_model_json(const ledbrick::LedModel& model) {
     cJSON_AddStringToObject(obj, "id", model.id.c_str());
     cJSON_AddStringToObject(obj, "name", model.name.c_str());
     if (model.test_current_a > 0.0f) {
-        cJSON_AddNumberToObject(obj, "test_current", json_number(model.test_current_a));
+        cJSON_AddNumberToObject(obj, "test_current", model_number(model.test_current_a));
     }
-    cJSON_AddNumberToObject(obj, "max_current", json_number(model.max_current_a));
+    // The same 4 digits as the curves: 3 decimals would round 0.6875 A to 0.688, past the
+    // curve's last point at 0.6875
+    cJSON_AddNumberToObject(obj, "max_current", model_number(model.max_current_a));
     cJSON_AddItemToObject(obj, "output_vs_current", curve_json(model.output_vs_current));
     if (!model.output_vs_temp.empty()) {
-        cJSON_AddNumberToObject(obj, "curve_temp", json_number(model.curve_temp_c));
+        cJSON_AddNumberToObject(obj, "curve_temp", model_number(model.curve_temp_c));
         cJSON_AddItemToObject(obj, "output_vs_temp", curve_json(model.output_vs_temp));
     }
     if (model.rth_c_per_w > 0.0f) {
-        cJSON_AddNumberToObject(obj, "rth", json_number(model.rth_c_per_w));
+        cJSON_AddNumberToObject(obj, "rth", model_number(model.rth_c_per_w));
     }
     if (!model.vf_vs_current.empty()) {
         cJSON_AddItemToObject(obj, "vf_vs_current", curve_json(model.vf_vs_current));
@@ -135,7 +148,8 @@ bool parse_curve_json(const cJSON* item, const char* name, std::vector<ledbrick:
         if (!cJSON_IsArray(point) || cJSON_GetArraySize(point) != 2 || !cJSON_IsNumber(x) || !cJSON_IsNumber(y)) {
             return fail_with(error, std::string(name) + " must be a list of [x, y] points");
         }
-        curve.push_back({static_cast<float>(x->valuedouble), static_cast<float>(y->valuedouble)});
+        curve.push_back({static_cast<float>(model_number(x->valuedouble)),
+                         static_cast<float>(model_number(y->valuedouble))});
     }
     return true;
 }
@@ -168,7 +182,7 @@ bool parse_led_model_json(const cJSON* item, ledbrick::LedModel& model, std::str
         if (!cJSON_IsNumber(value)) {
             return fail_with(error, where + key + " must be a number");
         }
-        out = static_cast<float>(value->valuedouble);
+        out = static_cast<float>(model_number(value->valuedouble));
         return true;
     };
     auto read_curve = [&](const char* key, bool required, std::vector<ledbrick::CurvePoint>& out) {
@@ -212,7 +226,10 @@ bool valid_custom_models(const std::vector<ledbrick::LedModel>& models, std::str
     return true;
 }
 
-bool parse_led_models_json(const cJSON* array, std::vector<ledbrick::LedModel>& models, std::string* error) {
+// skipped, when given, takes the error for each model left out, instead of one bad model
+// failing the whole list
+bool parse_led_models_json(const cJSON* array, std::vector<ledbrick::LedModel>& models, std::string* error,
+                           std::vector<std::string>* skipped) {
     models.clear();
     if (!cJSON_IsArray(array)) {
         return fail_with(error, "led_models must be a list");
@@ -223,8 +240,18 @@ bool parse_led_models_json(const cJSON* array, std::vector<ledbrick::LedModel>& 
     const cJSON* item = nullptr;
     cJSON_ArrayForEach(item, array) {
         ledbrick::LedModel model;
-        if (!parse_led_model_json(item, model, error)) {
-            return false;
+        std::string model_error;
+        if (!parse_led_model_json(item, model, &model_error)) {
+            if (skipped == nullptr) {
+                return fail_with(error, model_error);
+            }
+            skipped->push_back(model_error);
+            continue;
+        }
+        if (skipped != nullptr && std::any_of(models.begin(), models.end(),
+                                              [&](const ledbrick::LedModel& m) { return m.id == model.id; })) {
+            skipped->push_back("LED model " + model.id + " is listed twice");
+            continue;
         }
         models.push_back(std::move(model));
     }
@@ -1348,17 +1375,50 @@ std::string LEDScheduler::export_json_minified() const {
     return result;
 }
 
-bool LEDScheduler::import_json(const std::string& json_str, std::string* error, bool allow_unknown_models) {
+bool LEDScheduler::import_json(const std::string& json_str, std::string* error, bool saved_copy,
+                               std::string* warning) {
+    if (json_item_bound(json_str) > MAX_JSON_ITEMS) {
+        return fail_with(error, "too many values");
+    }
     // Build the new state in a copy so a failed import leaves this one untouched
     LEDScheduler staged(*this);
-    if (!staged.import_json_into_(json_str, error, allow_unknown_models)) {
+    if (!staged.import_json_into_(json_str, error, saved_copy, warning)) {
         return false;
     }
     *this = std::move(staged);
     return true;
 }
 
-bool LEDScheduler::import_json_into_(const std::string& json_str, std::string* error, bool allow_unknown_models) {
+size_t LEDScheduler::json_item_bound(const char* json, size_t length) {
+    // Every value after the first in an array or object follows a comma, and the first
+    // follows the bracket that opens it
+    size_t count = 1;
+    bool in_string = false;
+    for (size_t i = 0; i < length; i++) {
+        const char c = json[i];
+        if (in_string) {
+            if (c == '\\') {
+                i++;
+            } else if (c == '"') {
+                in_string = false;
+            }
+        } else if (c == '"') {
+            in_string = true;
+        } else if (c == ',' || c == '[' || c == '{') {
+            count++;
+        }
+    }
+    return count;
+}
+
+// The largest LED model list the firmware takes: every model with three full curves and all
+// its fields, including those that GET /api/led_models adds
+static_assert(ledbrick::MAX_CUSTOM_LED_MODELS * (3 * (3 * ledbrick::MAX_CURVE_POINTS + 1) + 16) + 4 <=
+                  LEDScheduler::MAX_JSON_ITEMS,
+              "MAX_JSON_ITEMS must allow the largest LED model list");
+
+bool LEDScheduler::import_json_into_(const std::string& json_str, std::string* error, bool saved_copy,
+                                     std::string* warning) {
     // Parse JSON using cJSON library
     cJSON* root = cJSON_Parse(json_str.c_str());
     if (!root) {
@@ -1414,9 +1474,20 @@ bool LEDScheduler::import_json_into_(const std::string& json_str, std::string* e
             }
 
             if (!parse_channel_dimming_json(cJSON_GetObjectItem(channel_item, "dimming"),
-                                            static_cast<uint8_t>(channel_idx), config, allow_unknown_models)) {
-                return fail_with(error, "channel " + std::to_string(channel_idx + 1) +
-                                            ": invalid dimming settings or unknown LED model");
+                                            static_cast<uint8_t>(channel_idx), config, saved_copy)) {
+                const std::string problem = "channel " + std::to_string(channel_idx + 1) +
+                                            ": invalid dimming settings or unknown LED model";
+                if (!saved_copy) {
+                    return fail_with(error, problem);
+                }
+                // Losing the whole saved schedule to one channel's settings would run the
+                // default preset at full brightness. Manual with this channel's points leaves
+                // a curve channel dark instead (its currents are 0).
+                parse_channel_dimming_json(nullptr, static_cast<uint8_t>(channel_idx), config, saved_copy);
+                if (warning) {
+                    if (!warning->empty()) *warning += "; ";
+                    *warning += problem + "; using manual mode";
+                }
             }
 
             // set_channel_config clamps max_current to the hardware limit
@@ -1725,13 +1796,17 @@ std::string LEDScheduler::export_led_models_json(bool custom_only) const {
     return print_and_delete(root);
 }
 
-bool LEDScheduler::import_led_models_json(const std::string& json_str, std::string* error, size_t max_saved_size) {
+bool LEDScheduler::import_led_models_json(const std::string& json_str, std::string* error, size_t max_saved_size,
+                                          std::vector<std::string>* skipped) {
+    if (json_item_bound(json_str) > MAX_JSON_ITEMS) {
+        return fail_with(error, "too many values");
+    }
     cJSON* root = cJSON_Parse(json_str.c_str());
     if (!root) {
         return fail_with(error, "invalid JSON");
     }
     std::vector<ledbrick::LedModel> models;
-    bool ok = parse_led_models_json(cJSON_GetObjectItemCaseSensitive(root, "led_models"), models, error);
+    bool ok = parse_led_models_json(cJSON_GetObjectItemCaseSensitive(root, "led_models"), models, error, skipped);
     cJSON_Delete(root);
     if (!ok) {
         return false;
@@ -1759,8 +1834,16 @@ bool LEDScheduler::set_channel_dimming(uint8_t channel, ledbrick::DimMode mode, 
     if (!(floor_current >= MIN_FLOOR_CURRENT && floor_current <= MAX_CHANNEL_CURRENT)) {
         return fail("floor_current must be 0.05-2 A");
     }
+    // The channel's own LEDs may name a model lost from flash. Keeping them must not block
+    // a change to the mode, priority or floor; posting the model again restores it.
+    const std::vector<ledbrick::LedGroup>& current_leds = channel_configs_[channel].leds;
+    const bool same_leds = leds.size() == current_leds.size() &&
+                           std::equal(leds.begin(), leds.end(), current_leds.begin(),
+                                      [](const ledbrick::LedGroup& a, const ledbrick::LedGroup& b) {
+                                          return a.model == b.model && a.count == b.count;
+                                      });
     std::string led_error;
-    if (!valid_led_groups(leds, &led_error)) {
+    if (!valid_led_groups(leds, &led_error, same_leds)) {
         return fail(led_error);
     }
 
@@ -1860,14 +1943,12 @@ void LEDScheduler::add_channel_config_json(cJSON* channels_array, uint8_t channe
 bool LEDScheduler::parse_channel_dimming_json(const cJSON* item, uint8_t channel, ChannelConfig& config,
                                               bool allow_unknown_models) const {
     if (item == nullptr) {
-        // Clients that predate dimming leave it out: keep the channel's settings
-        if (channel < channel_configs_.size()) {
-            const ChannelConfig& existing = channel_configs_[channel];
-            config.dim_mode = existing.dim_mode;
-            config.dim_priority = existing.dim_priority;
-            config.floor_current = existing.floor_current;
-            config.leds = existing.leds;
-        }
+        // The defaults: manual. The saved copy leaves them out, and so do exports from
+        // firmware before curve dimming, whose PWM values are not levels.
+        config.dim_mode = ledbrick::DimMode::MANUAL;
+        config.dim_priority = ledbrick::DimPriority::CURRENT_FIRST;
+        config.floor_current = DEFAULT_FLOOR_CURRENT;
+        config.leds.clear();
         return true;
     }
     if (!cJSON_IsObject(item)) {
@@ -1899,11 +1980,16 @@ bool LEDScheduler::parse_channel_dimming_json(const cJSON* item, uint8_t channel
     config.floor_current = DEFAULT_FLOOR_CURRENT;
     const cJSON* floor_current = cJSON_GetObjectItemCaseSensitive(item, "floor_current");
     if (floor_current != nullptr) {
-        if (!cJSON_IsNumber(floor_current) || !(floor_current->valuedouble >= MIN_FLOOR_CURRENT) ||
-            floor_current->valuedouble > MAX_CHANNEL_CURRENT) {
+        if (!cJSON_IsNumber(floor_current)) {
             return false;
         }
-        config.floor_current = static_cast<float>(floor_current->valuedouble);
+        // Compare as a float, as set_channel_dimming does: 0.05f is a little over 0.05, so
+        // the saved 0.05 would fail a comparison in doubles
+        const float value = static_cast<float>(floor_current->valuedouble);
+        if (!(value >= MIN_FLOOR_CURRENT && value <= MAX_CHANNEL_CURRENT)) {
+            return false;
+        }
+        config.floor_current = value;
     }
 
     // The full export marks the emitter's LEDs as defaults, so they stay defaults

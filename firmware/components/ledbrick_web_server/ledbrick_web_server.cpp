@@ -240,6 +240,13 @@ std::unique_ptr<char[]> LEDBrickWebServer::read_request_body(httpd_req_t *req) {
   }
   buf[received] = '\0';
 
+  // A parser builds a node for every value. A small body of empty arrays can hold
+  // thousands, enough to run the heap out, so refuse it before anything parses it.
+  if (LEDScheduler::json_item_bound(buf.get(), received) > LEDScheduler::MAX_JSON_ITEMS) {
+    self->send_error(req, 413, "Too many values in request");
+    return nullptr;
+  }
+
   return buf;
 }
 
@@ -907,9 +914,12 @@ esp_err_t LEDBrickWebServer::handle_api_location_post(httpd_req_t *req) {
     }
 
     // Update the scheduler location (saves when it changes)
-    scheduler->set_location(latitude, longitude);
+    bool saved = scheduler->set_location(latitude, longitude);
     // set_location skips the save when only the offset changed
-    if (has_timezone_offset && !scheduler->save_schedule_to_flash()) {
+    if (has_timezone_offset) {
+      saved = scheduler->save_schedule_to_flash() && saved;
+    }
+    if (!saved) {
       return save_failed(response);
     }
     ESP_LOGI(TAG, "Updated location to %.4f, %.4f", latitude, longitude);
@@ -958,13 +968,16 @@ esp_err_t LEDBrickWebServer::handle_api_time_shift_post(httpd_req_t *req) {
   auto *scheduler = self->scheduler_;
   return self->respond_from_loop_(req, [scheduler, projection_enabled, time_shift_hours,
                                         time_shift_minutes](JsonDocument &response) {
-    // Update the scheduler settings (auto-saves)
-    scheduler->set_astronomical_projection(projection_enabled);
-    scheduler->set_time_shift(time_shift_hours, time_shift_minutes);
+    // Update the scheduler settings; each saves when it changes
+    bool projection_saved = scheduler->set_astronomical_projection(projection_enabled);
+    bool shift_saved = scheduler->set_time_shift(time_shift_hours, time_shift_minutes);
 
     ESP_LOGI(TAG, "Updated time shift: projection=%s, shift=%+d:%02d",
              projection_enabled ? "enabled" : "disabled",
              time_shift_hours, abs(time_shift_minutes));
+    if (!projection_saved || !shift_saved) {
+      return save_failed(response);
+    }
 
     response["success"] = true;
     response["astronomical_projection"] = projection_enabled;
@@ -1049,14 +1062,17 @@ esp_err_t LEDBrickWebServer::handle_api_moon_simulation_post(httpd_req_t *req) {
 
   auto *scheduler = self->scheduler_;
   return self->respond_from_loop_(req, [scheduler, moon_config](JsonDocument &response) {
-    // Update the scheduler settings (auto-saves)
-    scheduler->set_moon_simulation(moon_config);
+    // Update the scheduler settings (saves when they change)
+    bool saved = scheduler->set_moon_simulation(moon_config);
 
     ESP_LOGI(TAG, "Updated moon simulation: enabled=%s, pwm_scaling=%s, current_scaling=%s, min_current=%.3fA",
              moon_config.enabled ? "true" : "false",
              moon_config.phase_scaling_pwm ? "true" : "false",
              moon_config.phase_scaling_current ? "true" : "false",
              moon_config.min_current_threshold);
+    if (!saved) {
+      return save_failed(response);
+    }
 
     response["success"] = true;
     response["enabled"] = moon_config.enabled;
