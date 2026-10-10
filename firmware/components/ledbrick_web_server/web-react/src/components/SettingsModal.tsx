@@ -417,21 +417,18 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
     
     try {
       if (activeTab === 'channels') {
+        // Reload the schedule when the dialog closes, even after an error: a change can
+        // apply on the device and fail only to save (500). Edits made from a stale copy
+        // would post it back and undo the change.
+        setNeedsReload(true);
         // Save channel configurations
         if (configsChanged || dimmingUpdates.length === 0) {
           await api.updateChannelConfigs(channelConfigs);
           setConfigsChanged(false);
-          setNeedsReload(true);
         }
         // Then each changed channel's dimming. A mode change converts the
         // channel's schedule on the device, so the schedule is reloaded below.
-        for (const update of dimmingUpdates) {
-          try {
-            await api.setChannelDimming(update);
-          } catch (err: any) {
-            throw { error: `${channelName(update.channel)}: ${err?.error || err?.message || 'failed to save dimming'}` };
-          }
-          setNeedsReload(true);
+        const markSaved = (update: ChannelDimmingUpdate) => {
           const form = dimmingForms[update.channel];
           if (form) {
             const nowSaved: ChannelDimming = {
@@ -443,6 +440,17 @@ export function SettingsModal({ isOpen, onClose, schedule, onUpdate }: SettingsM
             };
             setSavedDimming(saved => saved.map((d, i) => (i === update.channel ? nowSaved : d)));
           }
+        };
+        for (const update of dimmingUpdates) {
+          try {
+            await api.setChannelDimming(update);
+          } catch (err: any) {
+            if (err?.code === 500) {
+              markSaved(update);  // applied on the device, not saved
+            }
+            throw { error: `${channelName(update.channel)}: ${err?.error || err?.message || 'failed to save dimming'}` };
+          }
+          markSaved(update);
         }
       } else if (activeTab === 'location') {
         // Save location settings

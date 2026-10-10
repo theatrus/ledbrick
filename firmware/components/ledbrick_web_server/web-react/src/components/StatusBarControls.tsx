@@ -12,6 +12,7 @@ export function StatusBarControls({ enabled, pwmScale, onUpdate }: StatusBarCont
   const [localEnabled, setLocalEnabled] = useState(enabled);
   const [localPwmScale, setLocalPwmScale] = useState(pwmScale);
   const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const popoutRef = useRef<HTMLDivElement>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -57,10 +58,16 @@ export function StatusBarControls({ enabled, pwmScale, onUpdate }: StatusBarCont
     setIsSaving(true);
     try {
       await api.setPwmScale(value);
+      setSaveError(null);
       // Don't call onUpdate - let the status polling handle it
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to set PWM scale:', error);
-      setLocalPwmScale(pwmScale); // Reset on error
+      setSaveError(error?.error || 'Failed to set master brightness');
+      // A 500 means the device took the value but could not save it. Otherwise it kept
+      // the old value, and polling will not move the slider back, since that is unchanged.
+      if (error?.code !== 500) {
+        setLocalPwmScale(pwmScale);
+      }
     } finally {
       setIsSaving(false);
     }
@@ -174,13 +181,19 @@ export function StatusBarControls({ enabled, pwmScale, onUpdate }: StatusBarCont
           </div>
 
           {isSaving && (
-            <div style={{ 
-              marginTop: '15px', 
-              textAlign: 'center', 
+            <div style={{
+              marginTop: '15px',
+              textAlign: 'center',
               color: '#4a9eff',
               fontSize: '13px'
             }}>
               Saving...
+            </div>
+          )}
+
+          {!isSaving && saveError && (
+            <div className="status-message error" style={{ marginTop: '15px', fontSize: '13px' }}>
+              {saveError}
             </div>
           )}
         </div>

@@ -188,11 +188,21 @@ public:
     // Replaces the schedule, channel configs and moon settings. On failure nothing changes.
     // PWM and current values are clamped to their valid ranges; bad times or types fail.
     // error, when given, may say why an import failed. Custom LED models are not part of
-    // the schedule (see import_led_models_json). A channel naming a model that is not
-    // known fails the import, unless allow_unknown_models is set: then the channel keeps the
-    // name and uses the standard LED for it until the model is back (for the saved copy, so
-    // a lost model cannot lose the whole schedule).
-    bool import_json(const std::string& json_str, std::string* error = nullptr, bool allow_unknown_models = false);
+    // the schedule (see import_led_models_json). A channel config without "dimming" is a
+    // manual channel. Invalid dimming settings, or a model that is not known, fail the
+    // import, unless saved_copy is set (the copy in flash, so one channel cannot lose the
+    // whole schedule): then a channel keeps a lost model's name and uses the standard LED
+    // for it until the model is back, and a channel whose settings are invalid becomes
+    // manual. warning, when given, names those channels.
+    bool import_json(const std::string& json_str, std::string* error = nullptr, bool saved_copy = false,
+                     std::string* warning = nullptr);
+    // Most values a posted JSON document may hold. Parsing builds a node for each, about
+    // 50 bytes on the ESP32, so a body is checked before it is parsed. Allows the largest
+    // savable schedule and LED model list.
+    static constexpr size_t MAX_JSON_ITEMS = 3000;
+    // Upper bound on the values in a JSON document, counted without parsing it
+    static size_t json_item_bound(const char* json, size_t length);
+    static size_t json_item_bound(const std::string& json) { return json_item_bound(json.data(), json.size()); }
     
     // Built-in preset (only one default)
     void create_default_astronomical_preset();
@@ -228,9 +238,12 @@ public:
     // custom_only: {"led_models":[...]} with just the custom models, as import takes them.
     std::string export_led_models_json(bool custom_only = false) const;
     // Replaces the custom models from {"led_models":[...]}; see set_custom_led_models.
-    // With max_saved_size, a set whose export_led_models_json(true) is larger is refused.
+    // Numbers are read to the 4 significant digits they are saved with, so a set that is
+    // accepted also loads back. With max_saved_size, a set whose export_led_models_json(true)
+    // is larger is refused. With skipped (for the saved copy), an invalid model is left out,
+    // and its error added there, instead of failing the whole set.
     bool import_led_models_json(const std::string& json_str, std::string* error = nullptr,
-                                size_t max_saved_size = 0);
+                                size_t max_saved_size = 0, std::vector<std::string>* skipped = nullptr);
     // Every channel's LEDs are known, and curve channels have curves; error names the first
     // channel that is not
     bool channels_have_models(std::string* error = nullptr) const;
@@ -259,7 +272,7 @@ private:
     void sort_schedule_points();
     void sort_schedule_points_with_astro(const AstronomicalTimes& astro_times);
     bool validate_point(const SchedulePoint& point) const;
-    bool import_json_into_(const std::string& json_str, std::string* error, bool allow_unknown_models);
+    bool import_json_into_(const std::string& json_str, std::string* error, bool saved_copy, std::string* warning);
     // Known models (any name with allow_unknown), 1-100 of each, at most 8 kinds in a string
     bool valid_led_groups(const std::vector<ledbrick::LedGroup>& leds, std::string* error,
                           bool allow_unknown = false) const;
@@ -268,7 +281,7 @@ private:
     // JSON for one channel config; full adds the dimming defaults the saved copy leaves out
     void add_channel_config_json(struct cJSON* channels_array, uint8_t channel, bool full) const;
     // Dimming settings from a channel config's "dimming" object; false when invalid.
-    // Without one, the channel keeps its current settings.
+    // Without one (item null), the defaults: manual.
     bool parse_channel_dimming_json(const struct cJSON* item, uint8_t channel, ChannelConfig& config,
                                     bool allow_unknown_models) const;
     std::vector<SchedulePoint> resolve_dynamic_points(const AstronomicalTimes& astro_times) const;

@@ -102,6 +102,8 @@ class LEDBrickAPI {
     return response.state === 'ON';
   }
 
+  // Throws { error, code } like request(). A 500 means the device took the value but
+  // could not save it; other errors mean it kept the old one.
   async setPwmScale(value: number) {
     const params = new URLSearchParams();
     params.append('value', value.toString());
@@ -114,7 +116,17 @@ class LEDBrickAPI {
       },
       body: params,
     });
-    return response.text();
+    const text = await response.text();
+    if (!response.ok) {
+      let error;
+      try {
+        error = JSON.parse(text);
+      } catch (e) {
+        error = { error: text, code: response.status };
+      }
+      throw error;
+    }
+    return text;
   }
 
   async getPwmScale(): Promise<number> {

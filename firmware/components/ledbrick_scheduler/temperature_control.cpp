@@ -246,8 +246,8 @@ float TemperatureControl::get_average_temperature(uint32_t current_time_ms) {
 }
 
 TemperatureControlCommand TemperatureControl::evaluate_safety_conditions(
-    const TemperatureControlConfig& config,
-    float current_temp_c,
+    const TemperatureControlConfig& /*config*/,
+    float /*current_temp_c*/,
     bool ever_had_valid_temp,
     uint32_t last_valid_temp_ms,
     uint32_t sensors_valid_count,
