@@ -337,9 +337,35 @@ Drive ChannelDimmer::drive_for_level(float level, const DriveLimits& limits, flo
     float pwm;
     if (share <= pulsed) {
         pwm = limits.pwm_for_effective(share, k * step);  // the driver gives step k
+    } else if (share >= 1.0f) {
+        pwm = 1.0f;  // all the top step gives; hot LEDs may fall short of the level
     } else {
-        // Between the highest pulsed duty and 100%: whichever is nearer the target
-        pwm = share - pulsed < 1.0f - share ? limits.max_pulsed_pwm : 1.0f;
+        // No pulsed duty gives this much of the top step's light, and 100% gives more.
+        // Choosing between those two jumped 4.6% near the top of every ramp. Steps at 100%
+        // are under 1% of the light apart up here, so run the step whose full output is
+        // nearest the target. In PWM-first mode the current drops a few percent at most.
+        int lo = bottom - 1;  // output below the target, or below the range
+        int hi = k;           // output at or above the target
+        while (hi - lo > 1) {
+            int mid = lo + (hi - lo) / 2;
+            if (output(mid * step, temp_c) >= target) {
+                hi = mid;
+            } else {
+                lo = mid;
+            }
+        }
+        const float above = output(hi * step, temp_c);
+        const float below_full = lo >= bottom ? output(lo * step, temp_c) : 0.0f;
+        const float below_pulsed = out * pulsed;
+        if (above - target <= target - std::max(below_full, below_pulsed)) {
+            k = hi;
+            pwm = 1.0f;
+        } else if (below_full > below_pulsed) {
+            k = lo;
+            pwm = 1.0f;
+        } else {
+            pwm = limits.max_pulsed_pwm;
+        }
     }
     if (pwm < limits.pwm_step * 0.5f) {
         return drive;  // dimmer than one PWM step: off
@@ -350,16 +376,23 @@ Drive ChannelDimmer::drive_for_level(float level, const DriveLimits& limits, flo
 }
 
 float ChannelDimmer::level_for_drive(float pwm, float current_a, const DriveLimits& limits) const {
-    if (!valid() || !(pwm > 0.0f) || !(current_a > 0.0f)) {
+    if (!valid() || !(pwm > 0.0f) || !(current_a > 0.0f) || !(limits.current_step_a > 0.0f)) {
         return 0.0f;
     }
+    // The board holds EN/PWM off below the gate, so the channel is dark
+    if (current_a < limits.min_current_a) {
+        return 0.0f;
+    }
+    const float step = limits.current_step_a;
     const int top = max_step(limits);
-    float reference = output(top * limits.current_step_a, reference_temp_c_);
+    float reference = output(top * step, reference_temp_c_);
     if (!(reference > 0.0f)) {
         return 0.0f;
     }
+    // The driver rounds the current down to its step: convert by the light it gives
     current_a = std::min(current_a, max_current(limits));
-    float level = limits.effective_pwm(pwm, current_a) * output(current_a, reference_temp_c_) / reference;
+    const float landed = std::floor(current_a / step + 1e-3f) * step;
+    float level = limits.effective_pwm(pwm, landed) * output(landed, reference_temp_c_) / reference;
     return std::max(0.0f, std::min(level, 1.0f));
 }
 

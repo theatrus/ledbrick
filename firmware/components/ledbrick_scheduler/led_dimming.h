@@ -139,11 +139,14 @@ public:
     // maximum current at the reference temperature, so a level holds its output as the
     // LEDs heat, until the current reaches the maximum. The current is commanded half a
     // step above the driver step it should land on, since the driver rounds down; the PWM
-    // then trims the output to the level, allowing for the light each pulse loses.
+    // then trims the output to the level, allowing for the light each pulse loses. Near the
+    // top, where no pulsed duty gives enough of the top step's light, a step at 100% PWM
+    // gives the nearest light instead (in PWM-first mode too: a few percent less current).
     Drive drive_for_level(float level, const DriveLimits& limits, float temp_c) const;
 
-    // Level that a manual PWM (0-1) and current give at the reference temperature,
-    // allowing for the light each pulse loses
+    // Level that a manual PWM (0-1) and current give at the reference temperature, from the
+    // step the driver lands on and allowing for the light each pulse loses. 0 below the
+    // gate, where the board holds the channel dark.
     float level_for_drive(float pwm, float current_a, const DriveLimits& limits) const;
 
 private:

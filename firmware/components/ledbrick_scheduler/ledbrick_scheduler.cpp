@@ -1653,20 +1653,27 @@ bool LEDBrickScheduler::set_channel_manual_control(uint8_t channel, float pwm, f
     return false;
   }
   
-  ESP_LOGI(TAG, "Setting manual control for channel %u: PWM=%.1f%%, Current=%.2fA", 
+  ESP_LOGI(TAG, "Setting manual control for channel %u: PWM=%.1f%%, Current=%.2fA",
            channel, pwm, current);
-  
+
+  // The current changes at once. On a curve channel the PWM must too: easing it over the
+  // light's default 1 s would run the new current at the old duty, overshooting or
+  // dipping by several percent.
+  const bool curve = scheduler_.is_curve_channel(channel);
+
   // Set light brightness (PWM)
   auto light_it = lights_.find(channel);
   if (light_it != lights_.end() && light_it->second) {
     if (pwm <= 0.001f) {
       // Turn off light when PWM is 0
       auto call = light_it->second->turn_off();
+      if (curve) call.set_transition_length(0);
       call.perform();
     } else {
       // Turn on and set brightness
       auto call = light_it->second->turn_on();
       call.set_brightness(pwm / 100.0f);  // Convert percentage to 0-1
+      if (curve) call.set_transition_length(0);
       call.perform();
     }
   }
