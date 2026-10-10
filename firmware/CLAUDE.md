@@ -252,10 +252,12 @@ How the dimmer works:
 - PWM first (`priority: pwm`): hold the current at the channel maximum and dim with PWM. No current-dependent colour shift.
 - The current is commanded mid-step: the driver rounds the ADIM duty down (measured), so mid-step leaves the most room for rounding.
 - PWM pulse loss: each EN/PWM pulse loses about 19 us of light (1.9% at 1 kHz), less for very short pulses. `DriveLimits` models it, and the dimmer raises pulsed duties to give the intended light and keeps them at or below 97.5%. Manual mode sends PWM as set. See `boards/ledbrick-plus/FINDINGS.md`.
+- Near the top no pulsed duty fits: 97.5% gives about 95.6% of the top step's light and 100% gives all of it. There the dimmer runs the step whose full output is nearest the level, at 100% PWM (a few percent less current, in PWM-first mode too). Ramps move in steps under 1% of full light; choosing between 97.5% and 100% jumped 4.6%.
 - The floor is never below the lowest current the LEDs' datasheet curves cover (about 100 mA for LUXEON C, 160 mA for the Rubix), nor the 50 mA ADIM gate.
 - Thermal compensation: each LED's junction is the board sensor temperature plus its thermal resistance times its power (Rth x Vf x I). Hotter LEDs get more current or PWM, up to the maximum.
 - The channel maximum is also capped by the LEDs' datasheet maximum, for example 1050 mA for LUXEON C Royal Blue or 700 mA for LUXEON C Deep Red.
-- Changing a channel's mode converts its schedule points and moonlight to give the same light. Curve to manual uses PWM at the channel maximum.
+- Changing a channel's mode converts its schedule points and moonlight to give the same light. Curve to manual uses PWM at the channel maximum. Manual to curve goes by the step the driver lands on, below the commanded current; a manual current under the 50 mA gate is dark, so it becomes level 0.
+- Manual control of a curve channel changes the PWM at once, like the current; easing the PWM over the light's 1 s default would run the new current at the old duty.
 - The PWM scale multiplies the level.
 
 LED data:

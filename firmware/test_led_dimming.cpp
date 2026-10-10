@@ -46,13 +46,34 @@ float delivered(const ChannelDimmer& dimmer, const Drive& d, const DriveLimits& 
     return dimmer.output(step_current, temp) * l.effective_pwm(d.pwm, step_current);
 }
 
-// The light a target can get: exact, except between the top step's highest pulsed duty and
-// 100%, where it is the nearer of the two
-float reachable(float target, float top_light, const DriveLimits& l) {
-    float pulsed = top_light * l.effective_pwm(l.max_pulsed_pwm, l.max_current_a);
+// The light a target can get: exact up to the top step's highest pulsed duty. Above that,
+// the nearest of that light and each step's full output at 100% PWM, up to the top step's.
+float reachable(float target, const ChannelDimmer& dimmer, const DriveLimits& l, float temp) {
+    const float step = l.current_step_a;
+    const int top = static_cast<int>(std::floor(dimmer.max_current(l) / step - 0.5f + 1e-4f));
+    const float top_light = dimmer.output(top * step, temp);
+    const float pulsed = top_light * l.effective_pwm(l.max_pulsed_pwm, top * step);
     if (target <= pulsed) return target;
     if (target >= top_light) return top_light;
-    return target - pulsed < top_light - target ? pulsed : top_light;
+    float best = pulsed;
+    const int gate = static_cast<int>(std::ceil(l.min_current_a / step - 1e-4f));
+    for (int j = gate; j <= top; j++) {
+        float light = dimmer.output(j * step, temp);
+        if (std::fabs(light - target) < std::fabs(best - target)) best = light;
+    }
+    return best;
+}
+
+// Largest change in light between neighbouring levels of a fine sweep, as a share of full
+float largest_jump(const ChannelDimmer& dimmer, const DriveLimits& l, float temp, float full) {
+    float largest = 0.0f;
+    float previous = 0.0f;
+    for (int i = 1; i <= 20000; i++) {
+        float light = delivered(dimmer, dimmer.drive_for_level(i / 20000.0f, l, temp), l, temp);
+        largest = std::max(largest, std::fabs(light - previous) / full);
+        previous = light;
+    }
+    return largest;
 }
 
 }  // namespace
@@ -126,7 +147,7 @@ void test_current_first(TestRunner& runner) {
         float level = i / 20000.0f;
         Drive d = dimmer.drive_for_level(level, l, 25.0f);
         float light = delivered(dimmer, d, l, 25.0f);
-        if (std::fabs(light - reachable(level * reference, reference, l)) > 1e-4f * reference) exact = false;
+        if (std::fabs(light - reachable(level * reference, dimmer, l, 25.0f)) > 1e-4f * reference) exact = false;
         if (light < previous) monotonic = false;
         previous = light;
         if (d.current_a > 1.0f || (d.pwm > 0.0f && d.current_a < l.min_current_a)) safe = false;
@@ -139,6 +160,9 @@ void test_current_first(TestRunner& runner) {
     runner.assert_true(mid_step, "Current commanded mid-step, since the driver rounds down");
     runner.assert_true(monotonic, "Light output never steps backwards");
     runner.assert_true(safe, "Current within the limit and above the gate whenever lit");
+    // Near the top no pulsed duty fits; choosing between 97.5% and 100% jumped 4.6%
+    float jump = largest_jump(dimmer, l, 25.0f, reference);
+    runner.assert_true(jump < 0.01f, "No jump over 1% of full light: " + std::to_string(jump * 100.0f) + "%");
 
     // The floor never drops below the board's 50 mA gate
     ChannelDimmer low_floor({{&blue, 13}}, DimPriority::CURRENT_FIRST, 0.0f);
@@ -161,6 +185,22 @@ void test_pwm_first(TestRunner& runner) {
     runner.assert_equals(0.1f, l.effective_pwm(tenth.pwm, landed), 1e-5f, "Effective PWM is the level at a tenth");
     runner.assert_true(half.pwm > 0.51f && tenth.pwm > 0.11f, "PWM raised to make up for the pulse loss");
     runner.assert_equals(0.0f, dimmer.drive_for_level(1e-8f, l, 25.0f).pwm, 1e-9f, "Dimmer than one PWM step: off");
+
+    // The top of the range has no jump either. Where no pulsed duty fits, the current drops
+    // a few steps at 100% PWM, and only there.
+    float reference = delivered(dimmer, full, l, 25.0f);
+    float jump = largest_jump(dimmer, l, 25.0f, reference);
+    runner.assert_true(jump < 0.01f, "No jump over 1% of full light: " + std::to_string(jump * 100.0f) + "%");
+    bool held = true;
+    bool near_top = true;
+    for (int i = 1; i <= 2000; i++) {
+        Drive d = dimmer.drive_for_level(i / 2000.0f, l, 25.0f);
+        if (!(d.pwm > 0.0f)) continue;
+        if (d.pwm < 1.0f && d.current_a != full.current_a) held = false;
+        if (d.current_a < 0.95f * full.current_a) near_top = false;
+    }
+    runner.assert_true(held, "Current held at the top whenever PWM dims");
+    runner.assert_true(near_top, "Current never more than 5% below the top");
 
     // Without pulse loss, PWM is the level
     DriveLimits ideal = l;
@@ -204,14 +244,22 @@ void test_pulse_loss(TestRunner& runner) {
     runner.assert_equals(1.0f, pwm_for_effective(0.995f, L, L), 1e-9f, "Shares no pulsed duty reaches need 100%");
     runner.assert_equals(0.0f, pwm_for_effective(0.0f, L, L), 1e-9f, "Share 0 is off");
 
-    // Near the top, a level between the highest pulsed duty and 100% gets the nearer one
+    // Between the light of the highest pulsed duty and full, a step at 100% gives the light
+    // nearest the level: within half a step's light, where the nearer of 97.5% and 100%
+    // could be 2.2% off
     LedModel blue = make_blue();
     ChannelDimmer dimmer({{&blue, 13}}, DimPriority::PWM_FIRST, 0.1f);
+    const float top_light = delivered(dimmer, dimmer.drive_for_level(1.0f, l, 25.0f), l, 25.0f);
     float pulsed = l.effective_pwm(l.max_pulsed_pwm, 1.0f);
+    float worst = 0.0f;
+    for (int i = 1; i < 100; i++) {
+        float level = pulsed + (1.0f - pulsed) * i / 100.0f;
+        Drive d = dimmer.drive_for_level(level, l, 25.0f);
+        worst = std::max(worst, std::fabs(delivered(dimmer, d, l, 25.0f) / top_light - level));
+    }
+    runner.assert_true(worst < 0.005f, "Near the top, within 0.5% of the level: " + std::to_string(worst * 100.0f) + "%");
     runner.assert_equals(1.0f, dimmer.drive_for_level(1.0f - 0.2f * (1.0f - pulsed), l, 25.0f).pwm, 1e-6f,
-                         "Just under full: 100%");
-    runner.assert_equals(l.max_pulsed_pwm, dimmer.drive_for_level(pulsed + 0.2f * (1.0f - pulsed), l, 25.0f).pwm, 1e-6f,
-                         "Just above the highest pulsed share: the highest pulsed duty");
+                         "Just under full: 100% on a step a little lower");
 
     // Manual settings convert to the light they really give
     float level = dimmer.level_for_drive(0.1f, 1.0f, l);
@@ -260,18 +308,29 @@ void test_level_conversion(TestRunner& runner) {
 
     // A manual setting of full PWM at the top step is level 1
     Drive full = dimmer.drive_for_level(1.0f, l, 25.0f);
-    runner.assert_equals(1.0f, dimmer.level_for_drive(1.0f, full.current_a, l), 0.01f, "Full is level 1");
+    runner.assert_equals(1.0f, dimmer.level_for_drive(1.0f, full.current_a, l), 1e-5f, "Full is level 1");
 
-    // Half PWM at half the test current: output ratio from the curve
-    float level = dimmer.level_for_drive(0.5f, 0.35f, l);
-    float expected = 0.5f * dimmer.output(0.35f, 25.0f) / dimmer.output(126 * l.current_step_a, 25.0f);
-    runner.assert_equals(expected, level, 0.01f, "Half PWM at the test current");
-
-    // Converting back gives the same light
-    Drive back = dimmer.drive_for_level(level, l, 25.0f);
+    // Half PWM at the test current gives the light of the step the driver lands on, below
+    // 0.35 A. The commanded current overstated it, by 6.6% at 0.1 A.
+    const float landed = std::floor(0.35f / l.current_step_a) * l.current_step_a;
     float reference = delivered(dimmer, full, l, 25.0f);
-    runner.assert_equals(0.5f * dimmer.output(0.35f, 25.0f), delivered(dimmer, back, l, 25.0f), 0.01f * reference,
-                         "Round trip keeps the light");
+    float manual_light = l.effective_pwm(0.5f, landed) * dimmer.output(landed, 25.0f);
+    float level = dimmer.level_for_drive(0.5f, 0.35f, l);
+    runner.assert_equals(manual_light / reference, level, 1e-5f, "Half PWM at the test current");
+
+    // Converting back gives the same light, and repeated round trips do not creep up
+    Drive back = dimmer.drive_for_level(level, l, 25.0f);
+    runner.assert_equals(manual_light, delivered(dimmer, back, l, 25.0f), 1e-4f * reference, "Round trip keeps the light");
+    float again = level;
+    for (int i = 0; i < 5; i++) {
+        Drive d = dimmer.drive_for_level(again, l, 25.0f);
+        again = dimmer.level_for_drive(d.pwm, d.current_a, l);
+    }
+    runner.assert_equals(level, again, 1e-4f, "Five round trips keep the level");
+
+    // Below the 50 mA gate the board holds the channel dark
+    runner.assert_equals(0.0f, dimmer.level_for_drive(0.5f, 0.03f, l), 1e-9f, "Manual current below the gate is dark");
+    runner.assert_true(dimmer.level_for_drive(0.5f, l.min_current_a, l) > 0.0f, "At the gate it lights");
     runner.assert_equals(0.0f, dimmer.level_for_drive(0.0f, 0.5f, l), 1e-6f, "PWM 0 is level 0");
 }
 
@@ -369,12 +428,25 @@ void test_builtin_models(TestRunner& runner) {
     for (int i = 1; i <= 2000; i++) {
         float level = i / 2000.0f;
         float light = delivered(rubix, rubix.drive_for_level(level, l, 45.0f), l, 45.0f);
-        if (std::fabs(light - reachable(level * reference, achievable, l)) > 1e-4f * reference) exact = false;
+        if (std::fabs(light - reachable(level * reference, rubix, l, 45.0f)) > 1e-4f * reference) exact = false;
         if (light < previous) monotonic = false;
         previous = light;
     }
     runner.assert_true(exact, "Rubix at 45 C holds each level until the maximum current");
     runner.assert_true(monotonic, "Rubix ramp never steps backwards");
+
+    // Every as-built channel ramps without a visible jump, in both modes
+    for (uint8_t ch = 0; ch < 8; ch++) {
+        for (DimPriority priority : {DimPriority::CURRENT_FIRST, DimPriority::PWM_FIRST}) {
+            ChannelDimmer channel(default_channel_leds(ch, 8), priority, 0.1f);
+            DriveLimits one_amp = limits(1.0f);
+            float full = delivered(channel, channel.drive_for_level(1.0f, one_amp, 25.0f), one_amp, 25.0f);
+            float jump = largest_jump(channel, one_amp, 25.0f, full);
+            runner.assert_true(jump < 0.01f, "Channel " + std::to_string(ch + 1) +
+                                                 (priority == DimPriority::PWM_FIRST ? " PWM first" : " current first") +
+                                                 ": largest jump " + std::to_string(jump * 100.0f) + "%");
+        }
+    }
     runner.assert_true(rubix.characterized_current() > 0.15f, "Rubix floor at its characterized current");
 }
 
